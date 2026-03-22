@@ -4,8 +4,8 @@
 //! `SendStreamingMessage` with configurable SSE events and `SendMessage`
 //! with configurable JSON-RPC results.
 
-use std::net::SocketAddr;
 use std::collections::VecDeque;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use a2a_protocol_core::data::{Message, MessageRole, Part, TaskState, TaskStatus};
@@ -157,7 +157,9 @@ impl MockA2AServerBuilder {
             .route("/", post(handle_jsonrpc))
             .with_state(config.clone());
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind to random port");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind to random port");
         let addr = listener.local_addr().expect("get local addr");
         let url = format!("http://127.0.0.1:{}", addr.port());
 
@@ -208,7 +210,10 @@ async fn handle_jsonrpc(
             };
 
             (
-                [(header::CONTENT_TYPE, "text/event-stream"), (header::CACHE_CONTROL, "no-cache")],
+                [
+                    (header::CONTENT_TYPE, "text/event-stream"),
+                    (header::CACHE_CONTROL, "no-cache"),
+                ],
                 Body::from(sse_body),
             )
                 .into_response()

@@ -2,7 +2,7 @@
 
 use crate::{
     data::task::{Task, TaskState},
-    methods::params::{GetTaskRequest, CancelTaskRequest, ListTasksRequest, ListTasksResponse},
+    methods::params::{CancelTaskRequest, GetTaskRequest, ListTasksRequest, ListTasksResponse},
     services::TaskStorage,
     A2AResult, JsonRpcRequest, JsonRpcResponse,
 };
@@ -93,7 +93,11 @@ pub fn handle_tasks_list(
 
     let result = ListTasksResponse {
         tasks,
-        next_page_token: if has_more { Some("next".to_string()) } else { None },
+        next_page_token: if has_more {
+            Some("next".to_string())
+        } else {
+            None
+        },
         page_size: Some(page_size as u32),
         total_size: Some(total as u32),
     };
@@ -202,7 +206,11 @@ mod tests {
         let storage = Arc::new(InMemoryTaskStorage::new());
         for i in 0..3 {
             let mut task = Task::new(format!("ctx-{}", i));
-            task.update_status(if i % 2 == 0 { TaskState::Working } else { TaskState::Completed });
+            task.update_status(if i % 2 == 0 {
+                TaskState::Working
+            } else {
+                TaskState::Completed
+            });
             storage.store_task(task).unwrap();
         }
 

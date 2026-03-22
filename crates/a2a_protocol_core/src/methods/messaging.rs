@@ -121,9 +121,12 @@ fn create_message_response(
         _ => "utility response received",
     };
 
-    let response_message =
-        Message::new(MessageRole::Agent, vec![Part::text(response_text)], context_id.clone())
-            .with_context(context_id);
+    let response_message = Message::new(
+        MessageRole::Agent,
+        vec![Part::text(response_text)],
+        context_id.clone(),
+    )
+    .with_context(context_id);
 
     Ok(SendMessageResponse::Message(response_message))
 }

@@ -30,8 +30,8 @@ use {
 #[cfg(feature = "observability")]
 use {
     observability::{
-        attr, clear_current_context, get_current_context, metric, set_current_context, span,
-        value, ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+        attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
+        ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
     },
     web_time::Instant,
 };
@@ -254,7 +254,10 @@ impl A2AHttpServer {
         axum::serve(listener, router)
             .with_graceful_shutdown(sigterm_signal())
             .await?;
-        info!("A2A HTTP server shut down gracefully for agent: {}", agent_id);
+        info!(
+            "A2A HTTP server shut down gracefully for agent: {}",
+            agent_id
+        );
         Ok(())
     }
 
@@ -474,8 +477,11 @@ impl A2AHttpServer {
         if method == crate::method::SEND_STREAMING_MESSAGE {
             if let JsonRpcIncoming::Request(req) = &incoming {
                 if self.streaming_port.is_some() {
-                    let prop_headers = protocol_transport_core::sanitize_header_map(&headers).into_map();
-                    return self.handle_send_streaming_message(req.clone(), prop_headers).await;
+                    let prop_headers =
+                        protocol_transport_core::sanitize_header_map(&headers).into_map();
+                    return self
+                        .handle_send_streaming_message(req.clone(), prop_headers)
+                        .await;
                 }
             }
         }
@@ -592,7 +598,11 @@ impl A2AHttpServer {
                             }
                             Err(err) => {
                                 let jsonrpc_error = err.to_jsonrpc_error();
-                                JsonRpcResponse::error(id, jsonrpc_error.code, jsonrpc_error.message)
+                                JsonRpcResponse::error(
+                                    id,
+                                    jsonrpc_error.code,
+                                    jsonrpc_error.message,
+                                )
                             }
                         }
                     } else if method == crate::method::GET_AGENT_CARD {
@@ -600,11 +610,10 @@ impl A2AHttpServer {
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(
                             id,
-                            serde_json::to_value(card)
-                                .map_err(|e| {
-                                    error!("GetAgentCard (async): failed to serialize card: {}", e);
-                                    StatusCode::INTERNAL_SERVER_ERROR
-                                })?,
+                            serde_json::to_value(card).map_err(|e| {
+                                error!("GetAgentCard (async): failed to serialize card: {}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?,
                         )
                     } else {
                         self.protocol
@@ -670,7 +679,11 @@ impl A2AHttpServer {
                             }
                             Err(err) => {
                                 let jsonrpc_error = err.to_jsonrpc_error();
-                                JsonRpcResponse::error(id, jsonrpc_error.code, jsonrpc_error.message)
+                                JsonRpcResponse::error(
+                                    id,
+                                    jsonrpc_error.code,
+                                    jsonrpc_error.message,
+                                )
                             }
                         }
                     } else if method == crate::method::GET_AGENT_CARD {
@@ -678,11 +691,10 @@ impl A2AHttpServer {
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(
                             id,
-                            serde_json::to_value(card)
-                                .map_err(|e| {
-                                    error!("GetAgentCard (sync): failed to serialize card: {}", e);
-                                    StatusCode::INTERNAL_SERVER_ERROR
-                                })?,
+                            serde_json::to_value(card).map_err(|e| {
+                                error!("GetAgentCard (sync): failed to serialize card: {}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?,
                         )
                     } else {
                         self.protocol
@@ -811,11 +823,10 @@ impl A2AHttpServer {
             .clone()
             .ok_or(StatusCode::NOT_IMPLEMENTED)?;
 
-        let params =
-            MessageSendParams::from_json(request.params.clone()).map_err(|e| {
-                error!("SendStreamingMessage: failed to parse params: {}", e);
-                StatusCode::BAD_REQUEST
-            })?;
+        let params = MessageSendParams::from_json(request.params.clone()).map_err(|e| {
+            error!("SendStreamingMessage: failed to parse params: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
         params.validate().map_err(|e| {
             error!("SendStreamingMessage: params validation failed: {}", e);
             StatusCode::BAD_REQUEST
@@ -929,7 +940,9 @@ async fn sigterm_signal() {
 #[cfg(feature = "event-stream")]
 fn a2a_sse_stream(
     events: impl futures_util::Stream<Item = StreamResponse> + Send + 'static,
-) -> axum::response::Sse<impl futures_util::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>> {
+) -> axum::response::Sse<
+    impl futures_util::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>,
+> {
     use async_stream::stream;
     use axum::response::sse::{Event, KeepAlive, Sse};
     use futures_util::StreamExt;
@@ -942,7 +955,11 @@ fn a2a_sse_stream(
             yield Ok::<Event, std::convert::Infallible>(Event::default().event(event.event_name()).data(data));
         }
     };
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)).text(":keepalive"))
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text(":keepalive"),
+    )
 }
 
 #[cfg(test)]

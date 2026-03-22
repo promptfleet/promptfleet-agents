@@ -4,9 +4,9 @@
 //! This trait provides a clean interface between the A2A protocol logic
 //! and the underlying transport implementation (HTTP, WebSocket, etc.).
 
-use crate::A2AResult;
 #[cfg(test)]
 use crate::A2AError;
+use crate::A2AResult;
 use protocol_transport_core::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use serde_json::Value;
 use std::collections::HashMap;

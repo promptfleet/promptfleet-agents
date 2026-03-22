@@ -86,19 +86,13 @@ impl AgentBuilder {
     }
 
     #[cfg(feature = "context-window")]
-    pub fn with_history_summarizer(
-        mut self,
-        summarizer: std::sync::Arc<dyn Summarizer>,
-    ) -> Self {
+    pub fn with_history_summarizer(mut self, summarizer: std::sync::Arc<dyn Summarizer>) -> Self {
         self.history_summarizer = Some(summarizer);
         self
     }
 
     #[cfg(feature = "context-window")]
-    pub fn with_history_memory(
-        mut self,
-        memory: std::sync::Arc<dyn LongTermMemory>,
-    ) -> Self {
+    pub fn with_history_memory(mut self, memory: std::sync::Arc<dyn LongTermMemory>) -> Self {
         self.history_memory = Some(memory);
         self
     }

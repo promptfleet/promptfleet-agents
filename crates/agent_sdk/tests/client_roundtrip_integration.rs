@@ -1,16 +1,22 @@
-#![cfg(all(not(target_arch = "wasm32"), feature = "a2a-client", feature = "a2a-server"))]
+#![cfg(all(
+    not(target_arch = "wasm32"),
+    feature = "a2a-client",
+    feature = "a2a-server"
+))]
 
-use agent_sdk::{a2a::A2aClient, SdkError};
 use a2a_http_server::{A2AHttpServer, AgentCard};
+use agent_sdk::{a2a::A2aClient, SdkError};
 use axum::{routing::get, Json, Router};
 use serde_json::Value;
 use tokio::net::TcpListener;
 
 fn extract_task_id(value: &Value) -> Option<&str> {
-    value
-        .get("id")
-        .and_then(Value::as_str)
-        .or_else(|| value.get("task").and_then(|task| task.get("id")).and_then(Value::as_str))
+    value.get("id").and_then(Value::as_str).or_else(|| {
+        value
+            .get("task")
+            .and_then(|task| task.get("id"))
+            .and_then(Value::as_str)
+    })
 }
 
 fn extract_task_state(value: &Value) -> Option<&str> {

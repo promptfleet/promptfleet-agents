@@ -33,9 +33,9 @@ use crate::{Agent, SdkError, SdkResult};
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 pub use crate::streaming::{
-    ag_ui_sse_response, ag_ui_sse_response_with_summary, agent_io_sse_stream, map_trace_to_agent_io,
-    AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent, IoEventContext, RunStatus,
-    RunSummary, StreamEnricher, SummaryHandle,
+    ag_ui_sse_response, ag_ui_sse_response_with_summary, agent_io_sse_stream,
+    map_trace_to_agent_io, AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent,
+    IoEventContext, RunStatus, RunSummary, StreamEnricher, SummaryHandle,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -170,7 +170,12 @@ impl AgUiState {
         })
     }
 
-    fn record_completed_turn(&self, thread_id: &str, user_message: AgentMessage, assistant_text: &str) {
+    fn record_completed_turn(
+        &self,
+        thread_id: &str,
+        user_message: AgentMessage,
+        assistant_text: &str,
+    ) {
         let mut conversations = self
             .thread_conversations
             .lock()
@@ -252,10 +257,9 @@ async fn agui_run(
     let message_id = format!("msg-{}", Uuid::new_v4());
 
     if let Some(response) = payload.interaction_response.as_ref() {
-        if let Err(err) = state.validate_and_consume_interaction_response(
-            &thread_id,
-            extract_interaction_id(response),
-        ) {
+        if let Err(err) = state
+            .validate_and_consume_interaction_response(&thread_id, extract_interaction_id(response))
+        {
             return agui_validation_error_response(thread_id, run_id, err).into_response();
         }
     }
@@ -267,7 +271,8 @@ async fn agui_run(
         .map(history_item_to_agent_message)
         .collect();
     let history = state.history_for_thread(&thread_id, request_history);
-    let request_headers = Arc::new(protocol_transport_core::sanitize_header_map(&headers).into_map());
+    let request_headers =
+        Arc::new(protocol_transport_core::sanitize_header_map(&headers).into_map());
     let assistant_text = Arc::new(Mutex::new(String::new()));
     let assistant_text_clone = Arc::clone(&assistant_text);
     let state_for_trace = Arc::clone(&state);
@@ -283,10 +288,7 @@ async fn agui_run(
         Ok(stream) => stream,
         Err(err) => {
             return agent_io_sse_stream(futures::stream::iter(vec![
-                AgentIoEvent::RunStarted {
-                    thread_id,
-                    run_id,
-                },
+                AgentIoEvent::RunStarted { thread_id, run_id },
                 AgentIoEvent::RunError {
                     message: err.to_string(),
                     code: Some("AGUI_RUNTIME".to_string()),
@@ -360,7 +362,10 @@ fn history_item_to_agent_message(item: HistoryItem) -> AgentMessage {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-fn build_user_message(message: String, interaction_response: Option<serde_json::Value>) -> AgentMessage {
+fn build_user_message(
+    message: String,
+    interaction_response: Option<serde_json::Value>,
+) -> AgentMessage {
     let mut parts = vec![ContentPart::Text(message)];
     if let Some(response) = interaction_response {
         parts.push(ContentPart::Data(response));
@@ -383,10 +388,7 @@ fn agui_validation_error_response(
     err: ResumeValidationError,
 ) -> Response {
     agent_io_sse_stream(futures::stream::iter(vec![
-        AgentIoEvent::RunStarted {
-            thread_id,
-            run_id,
-        },
+        AgentIoEvent::RunStarted { thread_id, run_id },
         AgentIoEvent::RunError {
             message: err.message().to_string(),
             code: Some(err.as_code().to_string()),

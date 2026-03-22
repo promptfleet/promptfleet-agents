@@ -41,10 +41,7 @@ mod tests {
             client.decide_mode("gpt-5-mini"),
             ApiMode::Responses
         ));
-        assert!(matches!(
-            client.decide_mode("gpt-4o-mini"),
-            ApiMode::Chat
-        ));
+        assert!(matches!(client.decide_mode("gpt-4o-mini"), ApiMode::Chat));
     }
 
     #[test]
@@ -535,11 +532,7 @@ impl OpenAIClient {
             );
         }
 
-        log::info!(
-            "OpenAIClient::llm_stream mode={:?} endpoint={}",
-            mode,
-            path
-        );
+        log::info!("OpenAIClient::llm_stream mode={:?} endpoint={}", mode, path);
 
         let response = self.inner.post_sse(path, payload).await?;
 

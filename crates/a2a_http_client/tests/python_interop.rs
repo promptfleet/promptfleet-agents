@@ -38,7 +38,11 @@ fn user_message(text: &str) -> Message {
 async fn test_well_known_agent_card_http() {
     let url = format!("{}/.well-known/agent-card.json", PYTHON_SERVER_BASE);
     let resp = reqwest::get(&url).await.expect("HTTP GET failed");
-    assert_eq!(resp.status(), 200, "well-known agent card should return 200");
+    assert_eq!(
+        resp.status(),
+        200,
+        "well-known agent card should return 200"
+    );
 
     let card: Value = resp.json().await.expect("failed to parse agent card JSON");
 
@@ -55,11 +59,16 @@ async fn test_well_known_agent_card_http() {
         .find(|i| i["protocolBinding"] == "JSONRPC")
         .expect("should have a JSONRPC interface");
     assert!(
-        jsonrpc_iface["url"].as_str().unwrap().starts_with("http://"),
+        jsonrpc_iface["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("http://"),
         "interface URL should be absolute"
     );
 
-    let skills = card["skills"].as_array().expect("skills should be an array");
+    let skills = card["skills"]
+        .as_array()
+        .expect("skills should be an array");
     assert!(!skills.is_empty(), "should have at least one skill");
 
     println!("PASS: well-known agent card discovery works");
@@ -77,7 +86,11 @@ async fn test_our_get_agent_card_jsonrpc_method_not_found() {
 
     match result {
         Err(e) => {
-            assert_eq!(e.code, -32601, "expected Method Not Found (-32601), got code {}", e.code);
+            assert_eq!(
+                e.code, -32601,
+                "expected Method Not Found (-32601), got code {}",
+                e.code
+            );
             println!(
                 "PASS: GetAgentCard JSON-RPC correctly returns MethodNotFound (Python SDK doesn't implement this method)"
             );
@@ -116,8 +129,14 @@ async fn test_send_message_returns_wrapped_response() {
     if has_task {
         let task = &result["task"];
         assert!(task["id"].is_string(), "task.id should be a string");
-        assert!(task["contextId"].is_string(), "task.contextId should be a string");
-        assert!(task["status"].is_object(), "task.status should be an object");
+        assert!(
+            task["contextId"].is_string(),
+            "task.contextId should be a string"
+        );
+        assert!(
+            task["status"].is_object(),
+            "task.status should be an object"
+        );
 
         let state = task["status"]["state"].as_str().unwrap();
         assert!(
@@ -131,8 +150,14 @@ async fn test_send_message_returns_wrapped_response() {
         println!("  task.status.state: {}", state);
     } else {
         let message = &result["message"];
-        assert!(message["role"].is_string(), "message.role should be a string");
-        assert!(message["parts"].is_array(), "message.parts should be an array");
+        assert!(
+            message["role"].is_string(),
+            "message.role should be a string"
+        );
+        assert!(
+            message["parts"].is_array(),
+            "message.parts should be an array"
+        );
         println!("PASS: SendMessage returned wrapped message");
     }
 }
@@ -166,7 +191,9 @@ async fn test_send_message_echo_content() {
     assert!(!artifacts.is_empty(), "should have at least one artifact");
 
     let first_part = &artifacts[0]["parts"][0];
-    let echo_text = first_part["text"].as_str().expect("artifact part should have text");
+    let echo_text = first_part["text"]
+        .as_str()
+        .expect("artifact part should have text");
     assert!(
         echo_text.contains("interop test payload"),
         "echo should contain our input, got: {}",
@@ -189,9 +216,7 @@ async fn test_get_task_after_send() {
         .await
         .expect("SendMessage should succeed");
 
-    let task_obj = send_result
-        .get("task")
-        .expect("expected wrapped task");
+    let task_obj = send_result.get("task").expect("expected wrapped task");
     let task_id = task_obj["id"]
         .as_str()
         .expect("task.id should be a string")
@@ -230,13 +255,14 @@ async fn test_list_tasks() {
         .expect("SendMessage should succeed");
 
     // List tasks (no filters)
-    let result = client
-        .task_list(Some(ctx_id), None, None, None)
-        .await;
+    let result = client.task_list(Some(ctx_id), None, None, None).await;
 
     match result {
         Ok(val) => {
-            println!("PASS: ListTasks returned: {}", serde_json::to_string_pretty(&val).unwrap());
+            println!(
+                "PASS: ListTasks returned: {}",
+                serde_json::to_string_pretty(&val).unwrap()
+            );
         }
         Err(e) => {
             // Some implementations don't support ListTasks
@@ -259,7 +285,10 @@ async fn test_cancel_nonexistent_task() {
 
     match result {
         Err(e) => {
-            println!("PASS: CancelTask for nonexistent ID returns error: code={}, msg={}", e.code, e.message);
+            println!(
+                "PASS: CancelTask for nonexistent ID returns error: code={}, msg={}",
+                e.code, e.message
+            );
         }
         Ok(task) => {
             println!(
@@ -307,7 +336,10 @@ async fn test_send_streaming_message() {
             }
 
             assert!(event_count > 0, "should receive at least one SSE event");
-            println!("PASS: streaming received {} events, terminal={}", event_count, saw_terminal);
+            println!(
+                "PASS: streaming received {} events, terminal={}",
+                event_count, saw_terminal
+            );
         }
         Err(e) => {
             println!(
@@ -354,8 +386,15 @@ async fn test_raw_jsonrpc_send_message_wire_format() {
     let json: Value = resp.json().await.expect("failed to parse response");
 
     assert_eq!(json["jsonrpc"], "2.0", "jsonrpc version mismatch");
-    assert_eq!(json["id"], "interop-wire-test-1", "request ID should echo back");
-    assert!(json.get("error").is_none(), "should not have error: {:?}", json.get("error"));
+    assert_eq!(
+        json["id"], "interop-wire-test-1",
+        "request ID should echo back"
+    );
+    assert!(
+        json.get("error").is_none(),
+        "should not have error: {:?}",
+        json.get("error")
+    );
 
     let result = &json["result"];
     let has_task = result.get("task").is_some();
@@ -367,7 +406,10 @@ async fn test_raw_jsonrpc_send_message_wire_format() {
     );
 
     println!("PASS: raw wire format validated");
-    println!("  response: {}", serde_json::to_string_pretty(&json).unwrap());
+    println!(
+        "  response: {}",
+        serde_json::to_string_pretty(&json).unwrap()
+    );
 }
 
 #[tokio::test]
@@ -384,16 +426,17 @@ async fn test_task_state_enum_compatibility() {
     let task_json = result.get("task").expect("expected wrapped task");
 
     // Verify the task can be deserialized into our Rust Task struct
-    let task: a2a_protocol_core::data::task::Task =
-        serde_json::from_value(task_json.clone()).expect(
-            &format!(
-                "Python Task JSON should deserialize into Rust Task struct. JSON: {}",
-                serde_json::to_string_pretty(task_json).unwrap()
-            ),
-        );
+    let task: a2a_protocol_core::data::task::Task = serde_json::from_value(task_json.clone())
+        .expect(&format!(
+            "Python Task JSON should deserialize into Rust Task struct. JSON: {}",
+            serde_json::to_string_pretty(task_json).unwrap()
+        ));
 
     assert!(!task.id.is_empty(), "task.id should not be empty");
-    assert!(!task.context_id.is_empty(), "task.context_id should not be empty");
+    assert!(
+        !task.context_id.is_empty(),
+        "task.context_id should not be empty"
+    );
     assert!(
         task.status.state.is_terminal(),
         "echo task should reach terminal state"

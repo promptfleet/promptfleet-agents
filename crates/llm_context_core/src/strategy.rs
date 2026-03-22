@@ -282,9 +282,18 @@ mod tests {
         // won't all fit in 30 tokens.
         let budget = ContextBudget::new(30, 0, None, &[]);
         let msgs = vec![
-            make_msg("user", "First message with some longer text to consume tokens"),
-            make_msg("assistant", "First reply that also has quite a bit of text in it"),
-            make_msg("user", "Second message with additional padding for budget overflow"),
+            make_msg(
+                "user",
+                "First message with some longer text to consume tokens",
+            ),
+            make_msg(
+                "assistant",
+                "First reply that also has quite a bit of text in it",
+            ),
+            make_msg(
+                "user",
+                "Second message with additional padding for budget overflow",
+            ),
             make_msg("assistant", "Final reply with more text to force trimming"),
         ];
         let result = SlidingWindow.apply(&msgs, &budget);
@@ -305,7 +314,10 @@ mod tests {
         let budget = ContextBudget::new(80, 10, None, &[]);
         let msgs = vec![
             make_msg("system", "You are a helpful assistant"),
-            make_msg("user", "First message long enough to force trimming in small budget"),
+            make_msg(
+                "user",
+                "First message long enough to force trimming in small budget",
+            ),
             make_msg("assistant", "Reply that is also fairly long to use tokens"),
             make_msg("user", "Last"),
         ];
@@ -321,10 +333,7 @@ mod tests {
     #[test]
     fn priority_based_fits_all() {
         let budget = ContextBudget::new(100_000, 4_000, None, &[]);
-        let msgs = vec![
-            make_msg("user", "Hello"),
-            make_msg("assistant", "Hi"),
-        ];
+        let msgs = vec![make_msg("user", "Hello"), make_msg("assistant", "Hi")];
         let result = PriorityBased.apply(&msgs, &budget);
         assert_eq!(result.len(), 2);
     }
@@ -341,9 +350,7 @@ mod tests {
         ];
         let result = PriorityBased.apply(&msgs, &budget);
         // System should be kept
-        let has_system = result
-            .iter()
-            .any(|m| m["role"].as_str() == Some("system"));
+        let has_system = result.iter().any(|m| m["role"].as_str() == Some("system"));
         assert!(has_system, "system message should be preserved");
         // Most recent user message should be kept (highest user score)
         let has_new_q = result

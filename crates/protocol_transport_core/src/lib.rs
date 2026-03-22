@@ -30,13 +30,13 @@ pub use transport::*;
 pub use error::{ProtocolError, ProtocolResult, TransportError, TransportResult};
 pub use forward_headers::{sanitize_header_map, sanitize_headers, ForwardedHeaders};
 pub use headers::ProtocolHeaders;
-pub use streaming::{StreamingPolicy, RPC_REQUEST_TIMEOUT};
-#[cfg(not(target_arch = "wasm32"))]
-pub use streaming::IdleTimeoutStream;
 pub use jsonrpc::{
     error_codes, JsonRpcError, JsonRpcId, JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest,
     JsonRpcResponse, JSONRPC_VERSION,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use streaming::IdleTimeoutStream;
+pub use streaming::{StreamingPolicy, RPC_REQUEST_TIMEOUT};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

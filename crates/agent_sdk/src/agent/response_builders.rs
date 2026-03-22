@@ -2,9 +2,9 @@
 //!
 //! Creates different types of runtime responses following clean architecture principles.
 
+use agent_core::{ContentPart, TaskPhase};
 use log::debug;
 use serde_json::Value;
-use agent_core::{ContentPart, TaskPhase};
 
 use super::message::{MessageContext, SkillCall, TaskContext};
 use crate::agent::response::{Response, RuntimeArtifact, RuntimeResponse, TaskOpts};

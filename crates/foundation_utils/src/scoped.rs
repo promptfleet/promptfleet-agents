@@ -501,9 +501,15 @@ mod tests {
         let c3 = counter.clone();
 
         let result = ScopedBuilder::new()
-            .with_resource(10, move |_| { c1.fetch_add(1, Ordering::SeqCst); })
-            .with_resource(20, move |_| { c2.fetch_add(1, Ordering::SeqCst); })
-            .with_resource(30, move |_| { c3.fetch_add(1, Ordering::SeqCst); })
+            .with_resource(10, move |_| {
+                c1.fetch_add(1, Ordering::SeqCst);
+            })
+            .with_resource(20, move |_| {
+                c2.fetch_add(1, Ordering::SeqCst);
+            })
+            .with_resource(30, move |_| {
+                c3.fetch_add(1, Ordering::SeqCst);
+            })
             .execute(|resources| {
                 assert_eq!(resources, &[10, 20, 30]);
                 resources.iter().sum::<i32>()
@@ -521,9 +527,15 @@ mod tests {
         let o3 = order.clone();
 
         ScopedBuilder::new()
-            .with_resource("first", move |r| { o1.lock().unwrap().push(r); })
-            .with_resource("second", move |r| { o2.lock().unwrap().push(r); })
-            .with_resource("third", move |r| { o3.lock().unwrap().push(r); })
+            .with_resource("first", move |r| {
+                o1.lock().unwrap().push(r);
+            })
+            .with_resource("second", move |r| {
+                o2.lock().unwrap().push(r);
+            })
+            .with_resource("third", move |r| {
+                o3.lock().unwrap().push(r);
+            })
             .execute(|_| {});
 
         let cleaned = order.lock().unwrap();
@@ -538,8 +550,12 @@ mod tests {
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             ScopedBuilder::new()
-                .with_resource(1, move |_| { c1.fetch_add(1, Ordering::SeqCst); })
-                .with_resource(2, move |_| { c2.fetch_add(1, Ordering::SeqCst); })
+                .with_resource(1, move |_| {
+                    c1.fetch_add(1, Ordering::SeqCst);
+                })
+                .with_resource(2, move |_| {
+                    c2.fetch_add(1, Ordering::SeqCst);
+                })
                 .execute(|_| panic!("work panicked"))
         }));
 

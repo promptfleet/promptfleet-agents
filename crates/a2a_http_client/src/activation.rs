@@ -230,9 +230,13 @@ mod tests {
         assert!(ActivationConfig::is_retriable_error("Connection refused"));
         assert!(ActivationConfig::is_retriable_error("ECONNREFUSED"));
         assert!(ActivationConfig::is_retriable_error("HTTP error: 503"));
-        assert!(ActivationConfig::is_retriable_error("HTTP error: 504 - timeout"));
+        assert!(ActivationConfig::is_retriable_error(
+            "HTTP error: 504 - timeout"
+        ));
         assert!(!ActivationConfig::is_retriable_error("Not found"));
-        assert!(!ActivationConfig::is_retriable_error("Internal server error"));
+        assert!(!ActivationConfig::is_retriable_error(
+            "Internal server error"
+        ));
     }
 
     #[test]

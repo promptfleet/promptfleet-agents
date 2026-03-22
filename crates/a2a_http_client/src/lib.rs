@@ -23,9 +23,7 @@ mod native_client;
 use native_client as implementation;
 
 // Unified public interface (identical for both targets)
-pub use activation::{
-    activation_delay, idempotency_key, retry_with_activation, ActivationConfig,
-};
+pub use activation::{activation_delay, idempotency_key, retry_with_activation, ActivationConfig};
 pub use implementation::{check_connectivity, Client, ClientError, RpcError};
 
 // Re-export core types for convenience
@@ -62,7 +60,9 @@ impl Client {
 
         for attempt in 0..=config.max_retries {
             if attempt > 0 && start.elapsed() > config.max_cold_start_timeout {
-                return Err(RpcError::internal_error("activation cold-start deadline exceeded"));
+                return Err(RpcError::internal_error(
+                    "activation cold-start deadline exceeded",
+                ));
             }
 
             let _idem_key = idempotency_key(request_id, attempt);

@@ -49,10 +49,7 @@ pub async fn agent_card_get(jsonrpc_url: &str) -> SdkResult<Value> {
             format!("Failed to get agent card from {}: {}", jsonrpc_url, e),
         )
     })?;
-    let name = card_json
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let name = card_json.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let version = card_json
         .get("version")
         .and_then(|v| v.as_str())
@@ -126,7 +123,10 @@ pub async fn a2a_message_send(jsonrpc_url: &str, args: Value) -> SdkResult<Value
     let mut skill_hint: Option<String> = None;
     for p in &message.parts {
         if let Some(data) = &p.data {
-            if let Some(s) = data.get("skill").and_then(|v: &serde_json::Value| v.as_str()) {
+            if let Some(s) = data
+                .get("skill")
+                .and_then(|v: &serde_json::Value| v.as_str())
+            {
                 skill_hint = Some(s.to_string());
                 break;
             }

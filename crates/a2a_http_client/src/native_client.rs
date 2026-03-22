@@ -3,7 +3,7 @@
 use a2a_protocol_core::{data::message::Message, data::task::Task, A2A_PROTOCOL_VERSION};
 use anyhow::Result;
 use protocol_transport_core::{
-    JsonRpcRequest, JsonRpcResponse, StreamingPolicy, RPC_REQUEST_TIMEOUT, JSONRPC_VERSION,
+    JsonRpcRequest, JsonRpcResponse, StreamingPolicy, JSONRPC_VERSION, RPC_REQUEST_TIMEOUT,
 };
 use reqwest;
 use serde_json::{json, Value};
@@ -383,8 +383,9 @@ impl Client {
             jsonrpc: JSONRPC_VERSION.to_string(),
             id: json!(uuid::Uuid::new_v4().to_string()),
             method: "SendStreamingMessage".to_string(),
-            params: serde_json::to_value(params)
-                .map_err(|e| RpcError::internal_error(&format!("serialize params failed: {}", e)))?,
+            params: serde_json::to_value(params).map_err(|e| {
+                RpcError::internal_error(&format!("serialize params failed: {}", e))
+            })?,
         };
 
         let request_body = serde_json::to_string(&request)
@@ -482,10 +483,7 @@ impl Client {
     }
 
     /// **GetTask** — Retrieve task state and artifacts.
-    pub async fn task_get(
-        &self,
-        task_id: String,
-    ) -> Result<Task, RpcError> {
+    pub async fn task_get(&self, task_id: String) -> Result<Task, RpcError> {
         let params = json!({
             "id": task_id,
         });
@@ -496,10 +494,7 @@ impl Client {
     }
 
     /// **CancelTask** — Cancel an ongoing task.
-    pub async fn task_cancel(
-        &self,
-        task_id: String,
-    ) -> Result<Task, RpcError> {
+    pub async fn task_cancel(&self, task_id: String) -> Result<Task, RpcError> {
         let params = json!({
             "id": task_id,
         });
@@ -702,19 +697,17 @@ fn parse_stream_response(
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        let artifact: a2a_protocol_core::data::Artifact = serde_json::from_value(
-            artifact_val
-                .get("artifact")
-                .cloned()
-                .ok_or_else(|| RpcError {
+        let artifact: a2a_protocol_core::data::Artifact =
+            serde_json::from_value(artifact_val.get("artifact").cloned().ok_or_else(|| {
+                RpcError {
                     code: -32000,
                     message: "Invalid artifactUpdate SSE payload: missing artifact".to_string(),
-                })?,
-        )
-        .map_err(|e| RpcError {
-            code: -32000,
-            message: format!("Invalid artifact payload: {}", e),
-        })?;
+                }
+            })?)
+            .map_err(|e| RpcError {
+                code: -32000,
+                message: format!("Invalid artifact payload: {}", e),
+            })?;
         let append = artifact_val.get("append").and_then(Value::as_bool);
         let last_chunk = artifact_val.get("lastChunk").and_then(Value::as_bool);
 
@@ -731,8 +724,8 @@ fn parse_stream_response(
     }
 
     if let Some(task_val) = result.get("task") {
-        let task: a2a_protocol_core::data::task::Task =
-            serde_json::from_value(task_val.clone()).map_err(|e| RpcError {
+        let task: a2a_protocol_core::data::task::Task = serde_json::from_value(task_val.clone())
+            .map_err(|e| RpcError {
                 code: -32000,
                 message: format!("Invalid task payload: {}", e),
             })?;

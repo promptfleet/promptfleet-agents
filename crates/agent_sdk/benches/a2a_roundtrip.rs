@@ -1,13 +1,13 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use a2a_http_client::Client as HttpClient;
 use agent_core::{ContentPart, TaskPhase};
-use agent_sdk::agent::{Response, RuntimeArtifact, TaskOpts};
 use agent_sdk::a2a::{
     A2aClient, A2aServer, Message, MessageRole, MessageSendParams, Part, StreamResponse, TaskState,
 };
+use agent_sdk::agent::{Response, RuntimeArtifact, TaskOpts};
 use agent_sdk::{Agent, SdkError};
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures_util::StreamExt;
@@ -208,10 +208,12 @@ fn make_streaming_events() -> Vec<StreamResponse> {
 }
 
 fn extract_task_id(value: &Value) -> Option<&str> {
-    value
-        .get("id")
-        .and_then(Value::as_str)
-        .or_else(|| value.get("task").and_then(|task| task.get("id")).and_then(Value::as_str))
+    value.get("id").and_then(Value::as_str).or_else(|| {
+        value
+            .get("task")
+            .and_then(|task| task.get("id"))
+            .and_then(Value::as_str)
+    })
 }
 
 fn bench_in_process_router(c: &mut Criterion) {
@@ -221,8 +223,8 @@ fn bench_in_process_router(c: &mut Criterion) {
         TextResponseMode::Task,
         SkillResponseMode::StatusOnlyTask,
     ))
-        .expect("create in-process A2A server")
-        .build_router();
+    .expect("create in-process A2A server")
+    .build_router();
     let artifact_router = A2aServer::with_a2a_methods(build_skill_agent(
         "a2a-inprocess-agent-artifact",
         TextResponseMode::Task,
@@ -477,7 +479,9 @@ fn bench_sdk_client_roundtrip(c: &mut Criterion) {
             async move {
                 let message = Message {
                     role: MessageRole::User,
-                    parts: vec![Part::data(json!({"skill": "lookup", "query": format!("explicit-{seq}")}))],
+                    parts: vec![Part::data(
+                        json!({"skill": "lookup", "query": format!("explicit-{seq}")}),
+                    )],
                     message_id: format!("sdk-msg-artifact-existing-{seq}"),
                     task_id: Some(explicit_skill_task_id),
                     context_id: Some(explicit_skill_context_id),

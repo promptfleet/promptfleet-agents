@@ -39,9 +39,15 @@ fn test_agent_creation_with_config() {
 
     assert_eq!(agent.config().name, "detailed-test-agent");
     assert_eq!(agent_card.name, "detailed-test-agent");
-    assert_eq!(agent_card.description.as_deref(), Some("Agent for detailed testing"));
+    assert_eq!(
+        agent_card.description.as_deref(),
+        Some("Agent for detailed testing")
+    );
     assert_eq!(agent_card.version.as_deref(), Some("2.0.0"));
-    let caps = agent_card.capabilities.as_ref().expect("capabilities should be present");
+    let caps = agent_card
+        .capabilities
+        .as_ref()
+        .expect("capabilities should be present");
     assert!(caps.streaming);
 }
 

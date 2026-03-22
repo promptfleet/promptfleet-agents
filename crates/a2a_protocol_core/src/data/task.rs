@@ -142,7 +142,9 @@ impl Task {
     }
 
     pub fn set_metadata(&mut self, key: String, value: Value) {
-        self.metadata.get_or_insert_with(HashMap::new).insert(key, value);
+        self.metadata
+            .get_or_insert_with(HashMap::new)
+            .insert(key, value);
     }
 
     pub fn is_terminal(&self) -> bool {

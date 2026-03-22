@@ -178,13 +178,11 @@ pub fn runtime_artifact_from_a2a(artifact: Artifact) -> Option<RuntimeArtifact> 
             data,
         })
     } else {
-        artifact
-            .get_text_content()
-            .map(|text| RuntimeArtifact {
-                name,
-                description,
-                data: serde_json::Value::String(text.to_string()),
-            })
+        artifact.get_text_content().map(|text| RuntimeArtifact {
+            name,
+            description,
+            data: serde_json::Value::String(text.to_string()),
+        })
     }
 }
 

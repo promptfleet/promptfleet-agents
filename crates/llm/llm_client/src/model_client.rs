@@ -53,7 +53,10 @@ pub trait ModelClient: Send + Sync {
     fn capabilities(&self) -> ClientCapabilities;
 
     /// Generic non-streaming LLM request (chat, tools, structured output)
-    fn llm_request(&self, request: serde_json::Value) -> impl std::future::Future<Output = ClientResult<serde_json::Value>> + Send;
+    fn llm_request(
+        &self,
+        request: serde_json::Value,
+    ) -> impl std::future::Future<Output = ClientResult<serde_json::Value>> + Send;
 }
 
 /// Default HTTP-backed client (provider-agnostic JSON)
@@ -222,11 +225,7 @@ impl HttpModelClient {
             format!("{}{}", self.config.base_url, path)
         };
 
-        let policy = self
-            .config
-            .streaming
-            .clone()
-            .unwrap_or_default();
+        let policy = self.config.streaming.clone().unwrap_or_default();
 
         log::debug!(
             "HttpModelClient::post_sse url={} payload_keys={} connect_ms={}",

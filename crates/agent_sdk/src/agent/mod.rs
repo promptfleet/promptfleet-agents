@@ -58,9 +58,7 @@ pub mod engine;
 mod tests;
 
 // Re-export public API for convenient access
-pub use config::{
-    AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind,
-};
+pub use config::{AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind};
 pub use core::Agent;
 pub use message::{MessageContext, MessageType, SkillCall, SkillExecutor, TaskContext};
 pub use skill::{
@@ -71,7 +69,9 @@ pub use skill::{
 pub use message_handlers::{MessageHandlerFn, MessageHandlerManager};
 
 // Export specialized builders
-pub use response::{Response, RuntimeArtifact, RuntimeMessage, RuntimeResponse, RuntimeTask, TaskOpts};
+pub use response::{
+    Response, RuntimeArtifact, RuntimeMessage, RuntimeResponse, RuntimeTask, TaskOpts,
+};
 pub use response_builders::ResponseBuilder;
 pub use task_manager::TaskManager;
 

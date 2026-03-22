@@ -4,9 +4,7 @@
 //! without external extension system dependencies.
 
 use crate::error::{Result, StructuredLoggingError};
-use observability_core::{
-    LogEntry, ObservabilityConfig, ObservabilityManager,
-};
+use observability_core::{LogEntry, ObservabilityConfig, ObservabilityManager};
 use serde::{Deserialize, Serialize};
 
 /// Enhanced configuration for structured logging with performance and convenience features

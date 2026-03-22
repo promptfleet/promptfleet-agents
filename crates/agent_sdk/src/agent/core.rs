@@ -110,7 +110,8 @@ impl Agent {
             .clone()
             .unwrap_or_else(|| format!("local:dev:{}", config.name));
         debug!("Agent storage prefix: {}", storage_prefix);
-        let runtime_task_store = super::task_store::build_default_runtime_task_store(storage_prefix)?;
+        let runtime_task_store =
+            super::task_store::build_default_runtime_task_store(storage_prefix)?;
         #[cfg(feature = "context-window")]
         let history_policy_runtime = build_history_policy_runtime(
             config.name.clone(),
@@ -142,10 +143,7 @@ impl Agent {
             stream_runtime: None,
         };
 
-        info!(
-            "Agent '{}' successfully created",
-            agent.config.name,
-        );
+        info!("Agent '{}' successfully created", agent.config.name,);
 
         Ok(agent)
     }
@@ -375,7 +373,9 @@ impl Agent {
         msg_ctx: MessageContext,
         task_ctx: Option<TaskContext>,
     ) -> SdkResult<RuntimeResponse> {
-        self.message_handler_manager.handle_message(msg_ctx, task_ctx).await
+        self.message_handler_manager
+            .handle_message(msg_ctx, task_ctx)
+            .await
     }
 
     #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
@@ -431,7 +431,10 @@ impl Agent {
         self.task_manager.runtime_store()
     }
 
-    pub(crate) fn attach_protocol_task_storage(&self, storage: Arc<dyn TaskStorage>) -> SdkResult<()> {
+    pub(crate) fn attach_protocol_task_storage(
+        &self,
+        storage: Arc<dyn TaskStorage>,
+    ) -> SdkResult<()> {
         self.task_manager.attach_canonical_task_storage(storage)
     }
 

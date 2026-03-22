@@ -195,7 +195,11 @@ impl McpProtocolHandler {
             .map_err(|e| ProtocolError::Parsing(format!("Invalid call_tool request: {}", e)))?;
 
         let result = match &self.tool_provider {
-            Some(provider) => provider.call_tool(&call_request.name, call_request.arguments).await?,
+            Some(provider) => {
+                provider
+                    .call_tool(&call_request.name, call_request.arguments)
+                    .await?
+            }
             None => CallToolResult {
                 content: vec![Content::text("No tool provider configured")],
                 is_error: Some(true),
@@ -301,9 +305,9 @@ impl AsyncProtocolHandler for McpProtocolHandler {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let response = tokio::runtime::Handle::current().block_on(
-                self.handle_mcp_method(method, params, id)
-            ).map_err(|e| ProtocolError::internal_error(&format!("MCP error: {:?}", e)))?;
+            let response = tokio::runtime::Handle::current()
+                .block_on(self.handle_mcp_method(method, params, id))
+                .map_err(|e| ProtocolError::internal_error(&format!("MCP error: {:?}", e)))?;
 
             let response_body =
                 serde_json::to_string(&response).map_err(ProtocolError::Serialization)?;

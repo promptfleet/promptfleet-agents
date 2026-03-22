@@ -258,7 +258,10 @@ impl ScenarioRequestInvoker {
 }
 
 impl LlmInvoker for ScenarioRequestInvoker {
-    fn request(&self, _payload: Value) -> std::pin::Pin<Box<dyn core::future::Future<Output = Result<Value, String>> + Send>> {
+    fn request(
+        &self,
+        _payload: Value,
+    ) -> std::pin::Pin<Box<dyn core::future::Future<Output = Result<Value, String>> + Send>> {
         let turn = self
             .turns
             .lock()
@@ -384,7 +387,10 @@ mod tests {
             .expect("second turn response");
 
         assert_eq!(first["choices"][0]["finish_reason"], "tool_calls");
-        assert_eq!(first["choices"][0]["message"]["tool_calls"][0]["function"]["name"], "echo");
+        assert_eq!(
+            first["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
+            "echo"
+        );
         assert_eq!(second["choices"][0]["message"]["content"], "done");
     }
 
@@ -414,11 +420,19 @@ mod tests {
             .iter()
             .filter(|e| matches!(e, StreamEvent::ToolCallDelta { .. }))
             .collect();
-        assert_eq!(deltas.len(), 3, "expected 3 fragments, got {}", deltas.len());
+        assert_eq!(
+            deltas.len(),
+            3,
+            "expected 3 fragments, got {}",
+            deltas.len()
+        );
 
         let mut reassembled = String::new();
         for d in &deltas {
-            if let StreamEvent::ToolCallDelta { arguments_delta, .. } = d {
+            if let StreamEvent::ToolCallDelta {
+                arguments_delta, ..
+            } = d
+            {
                 reassembled.push_str(arguments_delta);
             }
         }
@@ -430,9 +444,8 @@ mod tests {
     #[test]
     fn test_tool_call_fragmented_single_chunk() {
         let args = json!({"x": 1});
-        let scenario = LlmScenario::new().turn(|t| {
-            t.tool_call_fragmented("fn", args, 1).done("tool_calls")
-        });
+        let scenario =
+            LlmScenario::new().turn(|t| t.tool_call_fragmented("fn", args, 1).done("tool_calls"));
         let turn = &scenario.turns()[0];
         let deltas = turn
             .iter()

@@ -99,8 +99,8 @@ fn coerce_env_value(s: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use std::sync::LazyLock;
+    use std::sync::Mutex;
 
     static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -127,7 +127,13 @@ mod tests {
                 ("PFCFG1_PORT", "8080"),
                 ("UNRELATED_KEY", "ignored"),
             ],
-            || read_env(false, Some("PFCFG1_"), EnvKeyTransform::DoubleUnderscoreToNested),
+            || {
+                read_env(
+                    false,
+                    Some("PFCFG1_"),
+                    EnvKeyTransform::DoubleUnderscoreToNested,
+                )
+            },
         )
         .unwrap();
 
@@ -141,7 +147,13 @@ mod tests {
     fn double_underscore_creates_nested_objects() {
         let result = with_env_vars(
             &[("PFCFG2_HTTP__PORT", "3000"), ("PFCFG2_DB__HOST", "pg")],
-            || read_env(false, Some("PFCFG2_"), EnvKeyTransform::DoubleUnderscoreToNested),
+            || {
+                read_env(
+                    false,
+                    Some("PFCFG2_"),
+                    EnvKeyTransform::DoubleUnderscoreToNested,
+                )
+            },
         )
         .unwrap();
 
@@ -152,7 +164,11 @@ mod tests {
     #[test]
     fn triple_nesting_via_double_underscore() {
         let result = with_env_vars(&[("PFCFG3_A__B__C", "deep")], || {
-            read_env(false, Some("PFCFG3_"), EnvKeyTransform::DoubleUnderscoreToNested)
+            read_env(
+                false,
+                Some("PFCFG3_"),
+                EnvKeyTransform::DoubleUnderscoreToNested,
+            )
         })
         .unwrap();
 

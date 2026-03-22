@@ -40,10 +40,9 @@ async fn json_http_error_handler() -> Response<String> {
     response
         .headers_mut()
         .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    response.headers_mut().insert(
-        "x-ratelimit-reset",
-        HeaderValue::from_static("1735689600"),
-    );
+    response
+        .headers_mut()
+        .insert("x-ratelimit-reset", HeaderValue::from_static("1735689600"));
     response
 }
 

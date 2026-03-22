@@ -13,13 +13,13 @@
 #[cfg(feature = "mcp-e2e")]
 mod e2e {
     use agent_sdk::agent::tools::ToolRegistry;
-    use agent_sdk::mcp_tools::{
-        McpServersConfig, McpToolAdapter, McpToolSource, NativeMcpBackend,
-    };
+    use agent_sdk::mcp_tools::{McpServersConfig, McpToolAdapter, McpToolSource, NativeMcpBackend};
     use std::sync::Arc;
 
     fn tavily_key() -> Option<String> {
-        std::env::var("TAVILY_API_KEY").ok().filter(|k| !k.is_empty())
+        std::env::var("TAVILY_API_KEY")
+            .ok()
+            .filter(|k| !k.is_empty())
     }
 
     fn tavily_config(api_key: &str) -> McpServersConfig {

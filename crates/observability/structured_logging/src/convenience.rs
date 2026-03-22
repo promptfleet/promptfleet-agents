@@ -4,9 +4,7 @@
 //! based on context and structured fields, maintaining standard Rust logging interface.
 
 use crate::error::{Result, StructuredLoggingError};
-use observability_core::{
-    domain::LogProcessor, ports::MetricsPort, LogEntry,
-};
+use observability_core::{domain::LogProcessor, ports::MetricsPort, LogEntry};
 use serde_json::Value;
 
 #[cfg(test)]

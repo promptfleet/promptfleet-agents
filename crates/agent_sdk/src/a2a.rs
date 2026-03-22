@@ -11,18 +11,20 @@ use log::info;
 #[cfg(feature = "a2a-server")]
 use serde_json::Value;
 
-use crate::Agent;
-use crate::agent::{RuntimeArtifact, RuntimeResponse, RuntimeTask};
 #[cfg(feature = "a2a-server")]
 use crate::agent::task_store::{
     ContinuationArtifactRef, ContinuationSnapshot, ContinuationStrategyDescriptor, RuntimeTaskStore,
 };
+use crate::agent::{RuntimeArtifact, RuntimeResponse, RuntimeTask};
+use crate::Agent;
 
 pub use a2a_protocol_core::{
     agent::{AgentCapabilities, AgentCard, AgentInterface, AgentSkill},
     data::{Artifact, Message, MessageRole, Part, Task, TaskState, TaskStatus},
     error::{A2AError, A2AResult},
-    methods::params::{MessageSendParams, MessageSendResponse, SendMessageRequest, SendMessageResponse},
+    methods::params::{
+        MessageSendParams, MessageSendResponse, SendMessageRequest, SendMessageResponse,
+    },
     A2A_PROTOCOL_VERSION,
 };
 
@@ -30,9 +32,9 @@ pub use a2a_protocol_core::{
 pub use a2a_protocol_core::streaming::StreamResponse;
 
 #[cfg(feature = "llm-engine")]
-use crate::agent::llm_orchestrator::{execute_runtime, LlmInvoker, LlmPolicy, LlmRequestDefaults};
-#[cfg(feature = "llm-engine")]
 use crate::agent::history_policy::default_runtime as default_history_policy_runtime;
+#[cfg(feature = "llm-engine")]
+use crate::agent::llm_orchestrator::{execute_runtime, LlmInvoker, LlmPolicy, LlmRequestDefaults};
 
 #[cfg(feature = "a2a-server")]
 pub use crate::a2a_app::A2aApp;
@@ -50,7 +52,10 @@ pub mod conversions {
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "sub-agents"))]
 pub mod sub_agent {
-    pub use crate::a2a_sub_agent::{A2aMessageBuilder, A2aStreamEvent, A2aSubAgentAdapter, A2aTraceMapper, DefaultA2aTraceMapper};
+    pub use crate::a2a_sub_agent::{
+        A2aMessageBuilder, A2aStreamEvent, A2aSubAgentAdapter, A2aTraceMapper,
+        DefaultA2aTraceMapper,
+    };
 }
 
 #[cfg(all(feature = "a2a-server", feature = "agent-observability"))]
@@ -102,10 +107,8 @@ impl MirroredTaskStorage {
             snapshot.strategy = existing.strategy;
             snapshot.payload = existing.payload;
         }
-        self.runtime_store.set_latest_snapshot(
-            &task.context_id,
-            Some(snapshot),
-        )
+        self.runtime_store
+            .set_latest_snapshot(&task.context_id, Some(snapshot))
     }
 
     fn sync_context_after_removal(&self, context_id: &str) -> crate::SdkResult<()> {
@@ -114,10 +117,7 @@ impl MirroredTaskStorage {
             .get_latest_task_in_context(context_id)
             .map_err(crate::SdkError::from)?
             .map(|task| {
-                let revision = self
-                    .runtime_store
-                    .get_task_revision(&task.id)?
-                    .unwrap_or(0);
+                let revision = self.runtime_store.get_task_revision(&task.id)?.unwrap_or(0);
                 Ok::<_, crate::SdkError>(continuation_snapshot_from_task(&task, revision))
             })
             .transpose()?;
@@ -206,7 +206,11 @@ impl MirroredTaskStorage {
             return Ok(task);
         }
 
-        let Some(existing) = self.storage.get_task(&task.id).map_err(crate::SdkError::from)? else {
+        let Some(existing) = self
+            .storage
+            .get_task(&task.id)
+            .map_err(crate::SdkError::from)?
+        else {
             return Ok(task);
         };
 
@@ -236,14 +240,15 @@ pub(crate) fn server_task_storage(
 
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     {
-        let protocol_backend: StdArc<dyn a2a_protocol_core::services::TaskStorage> =
-            StdArc::new(crate::wasm_kv_task_storage::WasmKvTaskStorage::new(storage_prefix).map_err(
-                |e| crate::SdkError::agent_initialization(format!("protocol KV storage init failed: {}", e)),
-            )?);
-        let storage = StdArc::new(MirroredTaskStorage::new(
-            protocol_backend,
-            runtime_store,
-        ));
+        let protocol_backend: StdArc<dyn a2a_protocol_core::services::TaskStorage> = StdArc::new(
+            crate::wasm_kv_task_storage::WasmKvTaskStorage::new(storage_prefix).map_err(|e| {
+                crate::SdkError::agent_initialization(format!(
+                    "protocol KV storage init failed: {}",
+                    e
+                ))
+            })?,
+        );
+        let storage = StdArc::new(MirroredTaskStorage::new(protocol_backend, runtime_store));
         agent.attach_protocol_task_storage(storage.clone())?;
         return Ok(storage);
     }
@@ -260,10 +265,8 @@ pub(crate) fn server_task_storage(
                 Ok(protocol_backend) => {
                     let protocol_backend: StdArc<dyn a2a_protocol_core::services::TaskStorage> =
                         StdArc::new(protocol_backend);
-                    let storage = StdArc::new(MirroredTaskStorage::new(
-                        protocol_backend,
-                        runtime_store,
-                    ));
+                    let storage =
+                        StdArc::new(MirroredTaskStorage::new(protocol_backend, runtime_store));
                     agent.attach_protocol_task_storage(storage.clone())?;
                     return Ok(storage);
                 }
@@ -294,10 +297,7 @@ pub(crate) fn server_task_storage(
     {
         let protocol_backend: StdArc<dyn a2a_protocol_core::services::TaskStorage> =
             StdArc::new(a2a_protocol_core::services::InMemoryTaskStorage::new());
-        let storage = StdArc::new(MirroredTaskStorage::new(
-            protocol_backend,
-            runtime_store,
-        ));
+        let storage = StdArc::new(MirroredTaskStorage::new(protocol_backend, runtime_store));
         agent.attach_protocol_task_storage(storage.clone())?;
         return Ok(storage);
     }
@@ -436,14 +436,10 @@ fn latest_task_status_message(runtime: &crate::agent::response::RuntimeTask) -> 
         ));
     }
 
-    runtime
-        .history
-        .iter()
-        .rev()
-        .find_map(|message| {
-            (message.role == agent_core::Role::Agent)
-                .then(|| crate::conversions::agent_message_to_a2a(message.clone()))
-        })
+    runtime.history.iter().rev().find_map(|message| {
+        (message.role == agent_core::Role::Agent)
+            .then(|| crate::conversions::agent_message_to_a2a(message.clone()))
+    })
 }
 
 fn trim_runtime_history(
@@ -663,8 +659,17 @@ async fn persist_continuation_update(
 
     let runtime_store = agent.runtime_task_store();
     let source_revision = task_ctx
-        .and_then(|ctx| ctx.continuation.as_ref().map(|continuation| continuation.source_revision))
-        .or_else(|| runtime_store.get_task_revision(&runtime.task_id).ok().flatten())
+        .and_then(|ctx| {
+            ctx.continuation
+                .as_ref()
+                .map(|continuation| continuation.source_revision)
+        })
+        .or_else(|| {
+            runtime_store
+                .get_task_revision(&runtime.task_id)
+                .ok()
+                .flatten()
+        })
         .unwrap_or(0);
     let existing = runtime_store.get_latest_snapshot(&runtime.context_id)?;
     let mut snapshot = continuation_snapshot_from_runtime_task(runtime, source_revision);
@@ -765,7 +770,7 @@ mod tests {
     use agent_core::{AgentMessage, ContentPart, Role, TaskPhase};
     use serde_json::json;
 
-    use super::{MirroredTaskStorage, runtime_response_into_a2a};
+    use super::{runtime_response_into_a2a, MirroredTaskStorage};
     use crate::agent::task_store::{
         ContinuationSnapshot, ContinuationStrategyDescriptor, RuntimeTaskStore,
     };
@@ -791,7 +796,9 @@ mod tests {
             self.latest_by_context
                 .read()
                 .map(|contexts| contexts.get(context_id).cloned())
-                .map_err(|_| crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned"))
+                .map_err(|_| {
+                    crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned")
+                })
         }
 
         fn set_latest_snapshot(
@@ -819,7 +826,9 @@ mod tests {
             self.revisions_by_task
                 .read()
                 .map(|revisions| revisions.get(task_id).copied())
-                .map_err(|_| crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned"))
+                .map_err(|_| {
+                    crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned")
+                })
         }
 
         fn set_task_revision(&self, task_id: &str, revision: u64) -> SdkResult<()> {
@@ -852,7 +861,8 @@ mod tests {
 
         let mut task = Task::with_id(task_id.clone(), context_id.clone());
         task.add_to_history(
-            Message::text(MessageRole::User, "hello", task_id.clone()).with_context(context_id.clone()),
+            Message::text(MessageRole::User, "hello", task_id.clone())
+                .with_context(context_id.clone()),
         );
         task.add_artifact(
             Artifact::data(json!({"result":"ok"}))
@@ -893,7 +903,10 @@ mod tests {
             .expect("runtime snapshot should exist after store");
         assert_eq!(snapshot.task_id, task_id);
         assert_eq!(snapshot.context_id, context_id);
-        assert_eq!(snapshot.metadata_extract.get("source"), Some(&json!("test")));
+        assert_eq!(
+            snapshot.metadata_extract.get("source"),
+            Some(&json!("test"))
+        );
         assert_eq!(snapshot.artifact_refs.len(), 1);
         assert_eq!(snapshot.artifact_refs[0].name, "answer");
         assert_eq!(
@@ -946,7 +959,9 @@ mod tests {
             .get_task(&task_id)
             .unwrap()
             .expect("stored task should exist");
-        let artifacts = stored.artifacts.expect("stored task should preserve artifacts");
+        let artifacts = stored
+            .artifacts
+            .expect("stored task should preserve artifacts");
         assert_eq!(artifacts.len(), 2);
         assert_eq!(artifacts[0].name.as_deref(), Some("round_1"));
         assert_eq!(artifacts[1].name.as_deref(), Some("round_2"));
@@ -968,7 +983,8 @@ mod tests {
             continuation_update: None,
         });
 
-        let converted = runtime_response_into_a2a(response, Some(0)).expect("conversion should succeed");
+        let converted =
+            runtime_response_into_a2a(response, Some(0)).expect("conversion should succeed");
         let task = match converted {
             crate::a2a::MessageSendResponse::Task(task) => task,
             other => panic!("expected task response, got {:?}", other),
@@ -977,7 +993,10 @@ mod tests {
         assert!(task.history.is_none());
         assert_eq!(task.artifacts.as_ref().map(Vec::len), Some(1));
         assert_eq!(
-            task.status.message.as_ref().map(|message| message.get_text_content()),
+            task.status
+                .message
+                .as_ref()
+                .map(|message| message.get_text_content()),
             Some("done".to_string())
         );
     }
@@ -1000,7 +1019,8 @@ mod tests {
             continuation_update: None,
         });
 
-        let converted = runtime_response_into_a2a(response, Some(2)).expect("conversion should succeed");
+        let converted =
+            runtime_response_into_a2a(response, Some(2)).expect("conversion should succeed");
         let task = match converted {
             crate::a2a::MessageSendResponse::Task(task) => task,
             other => panic!("expected task response, got {:?}", other),

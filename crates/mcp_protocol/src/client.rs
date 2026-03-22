@@ -4,9 +4,8 @@
 //! Streamable HTTP or the older direct SSE feature path.
 
 use crate::{
-    AuthHandler, CallToolResult, ClientCapabilities, ClientInfo, InitializeRequest,
-    JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListToolsResult, Tool, ToolCapabilities,
-    MCP_PROTOCOL_VERSION,
+    AuthHandler, CallToolResult, ClientCapabilities, ClientInfo, InitializeRequest, JsonRpcError,
+    JsonRpcRequest, JsonRpcResponse, ListToolsResult, Tool, ToolCapabilities, MCP_PROTOCOL_VERSION,
 };
 use protocol_transport_core::{ProtocolError, TransportError};
 use serde_json::json;
@@ -255,14 +254,15 @@ impl StreamableHttpClientTransport {
             HEADER_ACCEPT.to_string(),
             format!("{CONTENT_TYPE_JSON}, {CONTENT_TYPE_EVENT_STREAM}"),
         );
-        headers.insert(HEADER_CONTENT_TYPE.to_string(), CONTENT_TYPE_JSON.to_string());
+        headers.insert(
+            HEADER_CONTENT_TYPE.to_string(),
+            CONTENT_TYPE_JSON.to_string(),
+        );
         if let Some(protocol_version) = self
             .protocol_version
             .lock()
             .map_err(|_| {
-                ProtocolError::internal_error(
-                    "streamable client protocol-version mutex poisoned",
-                )
+                ProtocolError::internal_error("streamable client protocol-version mutex poisoned")
             })?
             .clone()
         {
@@ -270,10 +270,7 @@ impl StreamableHttpClientTransport {
         }
 
         if let Some(token) = &self.auth_token {
-            headers.insert(
-                HEADER_AUTHORIZATION.to_string(),
-                format!("Bearer {token}"),
-            );
+            headers.insert(HEADER_AUTHORIZATION.to_string(), format!("Bearer {token}"));
         }
 
         if let Some(session_id) = self
@@ -867,11 +864,7 @@ mod tests {
                         }
                     })
                 );
-                (
-                    [(HEADER_CONTENT_TYPE, CONTENT_TYPE_EVENT_STREAM)],
-                    body,
-                )
-                    .into_response()
+                ([(HEADER_CONTENT_TYPE, CONTENT_TYPE_EVENT_STREAM)], body).into_response()
             }
             _ => StatusCode::NOT_FOUND.into_response(),
         }

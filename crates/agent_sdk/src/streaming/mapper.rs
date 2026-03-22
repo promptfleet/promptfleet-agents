@@ -12,11 +12,7 @@ pub struct A2aSseContext {
     pub jsonrpc_id: serde_json::Value,
 }
 
-fn status_update(
-    ctx: &A2aSseContext,
-    state: TaskState,
-    message: Option<String>,
-) -> StreamResponse {
+fn status_update(ctx: &A2aSseContext, state: TaskState, message: Option<String>) -> StreamResponse {
     StreamResponse::StatusUpdate(TaskStatusUpdateEvent {
         id: ctx.jsonrpc_id.clone(),
         task_id: ctx.task_id.clone(),
@@ -380,7 +376,10 @@ fn delegation_events_from_tool_result(
     }]
 }
 
-pub fn map_trace_to_stream_response(event: AgentTraceEvent, ctx: &A2aSseContext) -> Vec<StreamResponse> {
+pub fn map_trace_to_stream_response(
+    event: AgentTraceEvent,
+    ctx: &A2aSseContext,
+) -> Vec<StreamResponse> {
     match event {
         AgentTraceEvent::TurnStarted { .. } => {
             vec![status_update(ctx, TaskState::Working, None)]

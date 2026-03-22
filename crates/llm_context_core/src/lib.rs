@@ -22,11 +22,11 @@
 //! - **Tier 2 (Short-Term)**: Conversation history with sliding window / summarization
 //! - **Tier 3 (Long-Term)**: Cross-conversation semantic retrieval (Qdrant, etc.)
 
-pub mod tokens;
 pub mod budget;
-pub mod strategy;
 pub mod history;
 pub mod memory;
+pub mod strategy;
+pub mod tokens;
 
 pub use budget::ContextBudget;
 pub use history::{HistoryManager, HistoryManagerConfig};

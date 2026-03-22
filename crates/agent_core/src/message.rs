@@ -99,11 +99,7 @@ impl AgentMessage {
 
     /// Check if the message contains only text parts.
     pub fn is_text_only(&self) -> bool {
-        !self.parts.is_empty()
-            && self
-                .parts
-                .iter()
-                .all(|p| matches!(p, ContentPart::Text(_)))
+        !self.parts.is_empty() && self.parts.iter().all(|p| matches!(p, ContentPart::Text(_)))
     }
 
     /// Check if the message contains any data parts.
@@ -148,10 +144,7 @@ mod tests {
 
     #[test]
     fn empty_text_content_returns_none() {
-        let msg = AgentMessage::new(
-            Role::User,
-            vec![ContentPart::Data(serde_json::json!(42))],
-        );
+        let msg = AgentMessage::new(Role::User, vec![ContentPart::Data(serde_json::json!(42))]);
         assert_eq!(msg.text_content(), None);
     }
 

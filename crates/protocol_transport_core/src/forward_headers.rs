@@ -86,8 +86,14 @@ mod tests {
         ]);
 
         let out = sanitize_headers(&headers).into_map();
-        assert_eq!(out.get("Authorization").map(String::as_str), Some("Bearer token"));
-        assert_eq!(out.get("traceparent").map(String::as_str), Some("00-abc-def-01"));
+        assert_eq!(
+            out.get("Authorization").map(String::as_str),
+            Some("Bearer token")
+        );
+        assert_eq!(
+            out.get("traceparent").map(String::as_str),
+            Some("00-abc-def-01")
+        );
         assert_eq!(out.get("x-pf-tid").map(String::as_str), Some("T-123"));
         assert_eq!(out.get("x-custom").map(String::as_str), Some("value"));
     }

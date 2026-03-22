@@ -269,7 +269,6 @@ impl LogKvExtractor {
 
         serde_json::Value::Object(fields)
     }
-
 }
 
 impl LogProcessor for LogKvExtractor {

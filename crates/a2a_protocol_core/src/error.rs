@@ -176,40 +176,67 @@ impl A2AError {
     }
 
     pub fn method_not_found(method: impl Into<String>) -> Self {
-        Self::MethodNotFound { method: method.into() }
+        Self::MethodNotFound {
+            method: method.into(),
+        }
     }
     pub fn invalid_params(method: impl Into<String>, details: impl Into<String>) -> Self {
-        Self::InvalidParams { method: method.into(), details: details.into() }
+        Self::InvalidParams {
+            method: method.into(),
+            details: details.into(),
+        }
     }
     pub fn agent_unavailable(agent_id: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::AgentUnavailable { agent_id: agent_id.into(), reason: reason.into() }
+        Self::AgentUnavailable {
+            agent_id: agent_id.into(),
+            reason: reason.into(),
+        }
     }
     pub fn capability_validation_failed(details: impl Into<String>) -> Self {
-        Self::CapabilityValidationFailed { details: details.into() }
+        Self::CapabilityValidationFailed {
+            details: details.into(),
+        }
     }
     pub fn method_execution_failed(method: impl Into<String>, details: impl Into<String>) -> Self {
-        Self::MethodExecutionFailed { method: method.into(), details: details.into() }
+        Self::MethodExecutionFailed {
+            method: method.into(),
+            details: details.into(),
+        }
     }
     pub fn registry_error(details: impl Into<String>) -> Self {
-        Self::RegistryError { details: details.into() }
+        Self::RegistryError {
+            details: details.into(),
+        }
     }
     pub fn protocol_validation_error(details: impl Into<String>) -> Self {
-        Self::ProtocolValidationError { details: details.into() }
+        Self::ProtocolValidationError {
+            details: details.into(),
+        }
     }
     pub fn internal(details: impl Into<String>) -> Self {
-        Self::Internal { details: details.into() }
+        Self::Internal {
+            details: details.into(),
+        }
     }
     pub fn task_not_found(task_id: impl Into<String>) -> Self {
-        Self::TaskNotFound { task_id: task_id.into() }
+        Self::TaskNotFound {
+            task_id: task_id.into(),
+        }
     }
     pub fn task_not_cancelable(task_id: impl Into<String>) -> Self {
-        Self::TaskNotCancelable { task_id: task_id.into() }
+        Self::TaskNotCancelable {
+            task_id: task_id.into(),
+        }
     }
     pub fn unsupported_operation(details: impl Into<String>) -> Self {
-        Self::UnsupportedOperation { details: details.into() }
+        Self::UnsupportedOperation {
+            details: details.into(),
+        }
     }
     pub fn version_not_supported(version: impl Into<String>) -> Self {
-        Self::VersionNotSupported { version: version.into() }
+        Self::VersionNotSupported {
+            version: version.into(),
+        }
     }
 }
 

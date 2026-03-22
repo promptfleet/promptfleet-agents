@@ -4,19 +4,24 @@
 //! - WASM: Uses Spin SDK for SpinKube deployment
 //! - Native: Uses native HTTP server for testing
 
-#[cfg(feature = "a2a-server")]
-use crate::{
-    error::SdkResult,
-    Agent,
-};
 #[cfg(all(feature = "a2a-server", target_arch = "wasm32"))]
 use crate::error::SdkError;
 #[cfg(feature = "a2a-server")]
+use crate::{error::SdkResult, Agent};
+#[cfg(feature = "a2a-server")]
 use a2a_http_server::A2AHttpServer;
-#[cfg(all(feature = "a2a-server", feature = "event-stream", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "a2a-server",
+    feature = "event-stream",
+    not(target_arch = "wasm32")
+))]
 use a2a_protocol_core::methods::params::MessageSendParams;
 #[cfg(feature = "a2a-server")]
-#[cfg(all(feature = "a2a-server", feature = "event-stream", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "a2a-server",
+    feature = "event-stream",
+    not(target_arch = "wasm32")
+))]
 use a2a_protocol_core::streaming::StreamResponse;
 #[cfg(all(feature = "a2a-server", not(target_arch = "wasm32")))]
 use anyhow::Result;
@@ -31,7 +36,11 @@ use spin_sdk::http::{IncomingRequest, Response as SpinResponse};
 // Native-only imports
 #[cfg(all(not(target_arch = "wasm32"), feature = "a2a-server"))]
 use axum;
-#[cfg(all(feature = "a2a-server", feature = "event-stream", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "a2a-server",
+    feature = "event-stream",
+    not(target_arch = "wasm32")
+))]
 use futures_util::StreamExt;
 
 /// **A2aServer** - Clean A2A wrapper around the HTTP server
@@ -60,10 +69,8 @@ impl a2a_app_ports::A2AAppPort for SdkAppAdapter {
         &self,
         params: a2a_protocol_core::methods::params::SendMessageRequest,
     ) -> a2a_protocol_core::A2AResult<a2a_protocol_core::methods::params::SendMessageResponse> {
-        tokio::runtime::Handle::current().block_on(crate::a2a::handle_message_send(
-            self.agent.as_ref(),
-            params,
-        ))
+        tokio::runtime::Handle::current()
+            .block_on(crate::a2a::handle_message_send(self.agent.as_ref(), params))
     }
 }
 
@@ -88,12 +95,20 @@ impl a2a_app_ports::A2AAppPortAsync for SdkAppAdapterAsync {
     }
 }
 
-#[cfg(all(feature = "a2a-server", feature = "event-stream", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "a2a-server",
+    feature = "event-stream",
+    not(target_arch = "wasm32")
+))]
 struct SdkStreamingAdapter {
     agent: std::sync::Arc<crate::Agent>,
 }
 
-#[cfg(all(feature = "a2a-server", feature = "event-stream", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "a2a-server",
+    feature = "event-stream",
+    not(target_arch = "wasm32")
+))]
 impl a2a_http_server::A2AStreamingAppPort for SdkStreamingAdapter {
     fn handle_streaming_task(
         &self,
@@ -104,7 +119,10 @@ impl a2a_http_server::A2AStreamingAppPort for SdkStreamingAdapter {
         std::pin::Pin<Box<dyn futures_util::Stream<Item = StreamResponse> + Send>>,
         a2a_protocol_core::A2AError,
     > {
-        let context_id = message.context_id.clone().unwrap_or_else(|| task_id.clone());
+        let context_id = message
+            .context_id
+            .clone()
+            .unwrap_or_else(|| task_id.clone());
         let params = MessageSendParams {
             message,
             tenant: None,

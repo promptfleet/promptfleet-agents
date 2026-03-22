@@ -10,13 +10,15 @@ use std::sync::Arc;
 
 use a2a_protocol_core::data::TaskState;
 use agent_core::{AgentMessage, ContentPart, Role};
+use agent_sdk::a2a::sub_agent::{
+    A2aStreamEvent, A2aSubAgentAdapter, A2aTraceMapper, DefaultA2aTraceMapper,
+};
 use agent_sdk::agent::llm_orchestrator::{
     run_tools_loop_agnostic, run_tools_loop_agnostic_with_cancel, LlmPolicy,
 };
 use agent_sdk::agent::tool_context::ToolContext;
 use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
 use agent_sdk::agent::trace::AgentTraceEvent;
-use agent_sdk::a2a::sub_agent::{A2aStreamEvent, A2aSubAgentAdapter, A2aTraceMapper, DefaultA2aTraceMapper};
 use agent_sdk::sub_agent::{DelegationMode, SubAgentContext, SubAgentToolBuilder};
 use futures_util::StreamExt;
 use pf_test_harness::a2a_mock::{sse_status, MockA2AServerBuilder};
@@ -75,7 +77,11 @@ async fn streaming_delegation_forwards_events() {
         .iter()
         .filter(|e| matches!(e, AgentTraceEvent::ProgressUpdate { .. }))
         .collect();
-    assert_eq!(progress.len(), 2, "Working events with text should produce ProgressUpdate (Completed is skipped by mapper)");
+    assert_eq!(
+        progress.len(),
+        2,
+        "Working events with text should produce ProgressUpdate (Completed is skipped by mapper)"
+    );
 }
 
 #[tokio::test]
@@ -103,14 +109,22 @@ async fn streaming_delegation_with_handoff_events() {
     assert_eq!(handoffs.len(), 2, "should emit handoff at start and end");
 
     match &handoffs[0] {
-        AgentTraceEvent::AgentHandoff { from_agent, to_agent, .. } => {
+        AgentTraceEvent::AgentHandoff {
+            from_agent,
+            to_agent,
+            ..
+        } => {
             assert_eq!(from_agent, "self");
             assert_eq!(to_agent, "executor");
         }
         _ => unreachable!(),
     }
     match &handoffs[1] {
-        AgentTraceEvent::AgentHandoff { from_agent, to_agent, .. } => {
+        AgentTraceEvent::AgentHandoff {
+            from_agent,
+            to_agent,
+            ..
+        } => {
             assert_eq!(from_agent, "executor");
             assert_eq!(to_agent, "self");
         }
@@ -161,7 +175,11 @@ async fn streaming_delegation_cancellation() {
         "cancellation should stop iteration early, got {count} events"
     );
     let cancel_requests = server.cancel_requests();
-    assert_eq!(cancel_requests.len(), 1, "expected one remote tasks/cancel request");
+    assert_eq!(
+        cancel_requests.len(),
+        1,
+        "expected one remote tasks/cancel request"
+    );
     assert_eq!(
         cancel_requests[0]
             .get("params")
@@ -188,16 +206,26 @@ async fn streaming_delegation_failure() {
 
     let (result, events) = run_tool(&spec, json!({})).await;
     let err = result.expect_err("tool should return structured Err on sub-agent failure");
-    let error_json: serde_json::Value = serde_json::from_str(&err).expect("structured sub-agent error JSON");
+    let error_json: serde_json::Value =
+        serde_json::from_str(&err).expect("structured sub-agent error JSON");
     assert_eq!(error_json["source"], "sub_agent");
     assert_eq!(error_json["error_kind"], "subagent_failed");
     assert!(
-        error_json["message"].as_str().unwrap_or("").contains("internal error"),
+        error_json["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("internal error"),
         "error should contain the failed message text"
     );
 
-    let progress_count = events.iter().filter(|e| matches!(e, AgentTraceEvent::ProgressUpdate { .. })).count();
-    assert!(progress_count >= 1, "should have forwarded at least the Working + Failed events with text");
+    let progress_count = events
+        .iter()
+        .filter(|e| matches!(e, AgentTraceEvent::ProgressUpdate { .. }))
+        .count();
+    assert!(
+        progress_count >= 1,
+        "should have forwarded at least the Working + Failed events with text"
+    );
 }
 
 #[tokio::test]
@@ -220,7 +248,10 @@ async fn streaming_delegation_allows_tool_loop_to_continue_after_success() {
 
     let stream = run_tools_loop_agnostic(
         LlmScenario::new()
-            .turn(|t| t.tool_call("delegate_planner", json!({"task":"plan"})).done("tool_calls"))
+            .turn(|t| {
+                t.tool_call("delegate_planner", json!({"task":"plan"}))
+                    .done("tool_calls")
+            })
             .turn(|t| t.content("done").done("stop"))
             .into_stream_invoker(),
         "test-model".to_string(),
@@ -234,7 +265,10 @@ async fn streaming_delegation_allows_tool_loop_to_continue_after_success() {
 
     let events = stream.collect::<Vec<_>>().await;
     assert!(
-        events.iter().any(|event| matches!(event, AgentTraceEvent::ToolCallCompleted { success: true, .. })),
+        events.iter().any(|event| matches!(
+            event,
+            AgentTraceEvent::ToolCallCompleted { success: true, .. }
+        )),
         "expected successful tool completion, got events: {events:#?}"
     );
     assert!(
@@ -325,7 +359,10 @@ async fn synchronous_delegation_returns_result() {
     let (result, events) = run_tool(&spec, json!({"query": "hello"})).await;
     let result = result.expect("sync delegation should succeed");
     assert!(result.get("result").is_some());
-    assert!(events.is_empty(), "sync mode should not emit any mid-execution events");
+    assert!(
+        events.is_empty(),
+        "sync mode should not emit any mid-execution events"
+    );
 }
 
 #[tokio::test]
@@ -344,7 +381,11 @@ async fn synchronous_delegation_with_handoff() {
         .iter()
         .filter(|e| matches!(e, AgentTraceEvent::AgentHandoff { .. }))
         .collect();
-    assert_eq!(handoffs.len(), 2, "sync mode with handoff should emit start + end handoff events");
+    assert_eq!(
+        handoffs.len(),
+        2,
+        "sync mode with handoff should emit start + end handoff events"
+    );
 }
 
 // =====================================================================
@@ -353,12 +394,7 @@ async fn synchronous_delegation_with_handoff() {
 
 #[tokio::test]
 async fn builder_defaults_produce_valid_spec() {
-    let spec = SubAgentToolBuilder::new(
-        "agent",
-        "http://localhost:9999",
-        "delegate",
-    )
-    .build();
+    let spec = SubAgentToolBuilder::new("agent", "http://localhost:9999", "delegate").build();
 
     assert_eq!(spec.name, "delegate");
     assert!(matches!(spec.executor, ToolExecutor::WithContext(_)));
@@ -396,13 +432,19 @@ async fn builder_custom_mapper() {
 
     let (result, events) = run_tool(&spec, json!({})).await;
     assert!(result.is_ok());
-    assert!(events.is_empty(), "NoopMapper should suppress all trace events");
+    assert!(
+        events.is_empty(),
+        "NoopMapper should suppress all trace events"
+    );
 }
 
 #[tokio::test]
 async fn streaming_result_transformer_rewrites_final_result() {
     let server = MockA2AServerBuilder::new()
-        .sse_events(vec![sse_status(TaskState::Completed, Some("planner output"))])
+        .sse_events(vec![sse_status(
+            TaskState::Completed,
+            Some("planner output"),
+        )])
         .spawn()
         .await;
 
@@ -426,7 +468,10 @@ async fn streaming_result_transformer_rewrites_final_result() {
 #[tokio::test]
 async fn streaming_result_transformer_failure_returns_structured_error() {
     let server = MockA2AServerBuilder::new()
-        .sse_events(vec![sse_status(TaskState::Completed, Some("planner output"))])
+        .sse_events(vec![sse_status(
+            TaskState::Completed,
+            Some("planner output"),
+        )])
         .spawn()
         .await;
 

@@ -173,7 +173,9 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                                 .cloned()
                                 .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
                             match &request_headers {
-                                Some(hdrs) => ToolContext::with_headers(sink.clone(), cf, hdrs.clone()),
+                                Some(hdrs) => {
+                                    ToolContext::with_headers(sink.clone(), cf, hdrs.clone())
+                                }
                                 None => ToolContext::new(sink.clone(), cf),
                             }
                         }),

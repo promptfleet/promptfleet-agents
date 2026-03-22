@@ -183,7 +183,11 @@ impl AgentCard {
 
     /// Retained for downstream code that calls `with_capability(method, desc)`.
     /// Stores method in metadata under `pf:methods`.
-    pub fn with_capability(mut self, method: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn with_capability(
+        mut self,
+        method: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         let method = method.into();
         let desc: String = description.into();
         let meta = self.metadata.get_or_insert_with(HashMap::new);
@@ -253,7 +257,9 @@ impl AgentSkill {
     }
 
     pub fn with_example(mut self, example: impl Into<String>) -> Self {
-        self.examples.get_or_insert_with(Vec::new).push(example.into());
+        self.examples
+            .get_or_insert_with(Vec::new)
+            .push(example.into());
         self
     }
 
@@ -276,8 +282,7 @@ mod tests {
 
     #[test]
     fn test_agent_card_creation() {
-        let card = AgentCard::new("test-agent")
-            .with_capability("ping", "Simple ping method");
+        let card = AgentCard::new("test-agent").with_capability("ping", "Simple ping method");
         assert_eq!(card.name, "test-agent");
         assert!(card.supports_method("ping"));
         assert!(!card.supports_method("unknown"));
@@ -313,7 +318,10 @@ mod tests {
             description: "Get current weather".to_string(),
             tags: Some(vec!["weather".to_string()]),
             examples: None,
-            input_modes: Some(vec!["application/json".to_string(), "text/plain".to_string()]),
+            input_modes: Some(vec![
+                "application/json".to_string(),
+                "text/plain".to_string(),
+            ]),
             output_modes: Some(vec!["text/plain".to_string()]),
             security_requirements: None,
         };

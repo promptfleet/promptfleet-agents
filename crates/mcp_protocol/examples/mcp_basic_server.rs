@@ -4,11 +4,11 @@
 //! This example shows how to implement a fully MCP-compliant server
 //! that connects with any standard MCP client (FastMCP, Claude Desktop, etc.)
 
+use async_trait::async_trait;
 use mcp_protocol::{
     CallToolResult, Content, McpProtocolHandler, QueryMode, ServerCapabilities, Tool,
     ToolCapabilities, ToolProvider,
 };
-use async_trait::async_trait;
 use protocol_transport_core::{AsyncProtocolHandler, ProtocolError, UniversalRequest};
 use serde_json::json;
 

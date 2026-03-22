@@ -183,7 +183,10 @@ pub type TaskListResult = ListTasksResponse;
 impl SendMessageRequest {
     pub fn from_json(params: Value) -> A2AResult<Self> {
         serde_json::from_value(params).map_err(|e| {
-            A2AError::invalid_params("SendMessage", &format!("Invalid SendMessage parameters: {}", e))
+            A2AError::invalid_params(
+                "SendMessage",
+                &format!("Invalid SendMessage parameters: {}", e),
+            )
         })
     }
 
@@ -207,7 +210,10 @@ impl GetTaskRequest {
 
     pub fn validate(&self) -> A2AResult<()> {
         if self.id.is_empty() {
-            return Err(A2AError::invalid_params("GetTask", "Task ID cannot be empty"));
+            return Err(A2AError::invalid_params(
+                "GetTask",
+                "Task ID cannot be empty",
+            ));
         }
         Ok(())
     }
@@ -216,13 +222,19 @@ impl GetTaskRequest {
 impl CancelTaskRequest {
     pub fn from_json(params: Value) -> A2AResult<Self> {
         serde_json::from_value(params).map_err(|e| {
-            A2AError::invalid_params("CancelTask", &format!("Invalid CancelTask parameters: {}", e))
+            A2AError::invalid_params(
+                "CancelTask",
+                &format!("Invalid CancelTask parameters: {}", e),
+            )
         })
     }
 
     pub fn validate(&self) -> A2AResult<()> {
         if self.id.is_empty() {
-            return Err(A2AError::invalid_params("CancelTask", "Task ID cannot be empty"));
+            return Err(A2AError::invalid_params(
+                "CancelTask",
+                "Task ID cannot be empty",
+            ));
         }
         Ok(())
     }

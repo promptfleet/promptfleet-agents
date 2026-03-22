@@ -16,9 +16,7 @@ async fn sdk_server_and_client_send_subscribe_roundtrip() {
 
     let std_listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = std_listener.local_addr().expect("listener addr");
-    std_listener
-        .set_nonblocking(true)
-        .expect("set_nonblocking");
+    std_listener.set_nonblocking(true).expect("set_nonblocking");
     let listener = tokio::net::TcpListener::from_std(std_listener).expect("tokio listener");
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();

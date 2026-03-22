@@ -17,7 +17,7 @@ pub use driver::{
 };
 pub use enrichers::CitationEnricher;
 pub use events::{AgentIoEvent, IoEventContext};
-pub use mapper::{map_trace_to_stream_response, map_trace_to_agent_io, A2aSseContext};
+pub use mapper::{map_trace_to_agent_io, map_trace_to_stream_response, A2aSseContext};
 pub use sse::{
     a2a_sse_stream, ag_ui_sse_response, ag_ui_sse_response_with_summary, agent_io_sse_stream,
 };

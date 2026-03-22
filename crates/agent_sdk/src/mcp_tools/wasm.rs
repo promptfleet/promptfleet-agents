@@ -106,8 +106,7 @@ impl WasmClientHandle {
         request_headers: Option<&std::collections::HashMap<String, String>>,
     ) -> Result<McpClient, McpToolError> {
         let mut client = match &self.auth_token {
-            Some(token) => McpClient::new()
-                .with_streamable_http_server_auth(&self.url, token),
+            Some(token) => McpClient::new().with_streamable_http_server_auth(&self.url, token),
             None => McpClient::new().with_streamable_http_server(&self.url),
         };
 
@@ -185,7 +184,8 @@ impl WasmMcpBackend {
                         entry.auth_token.as_deref(),
                         entry.forward_caller_auth,
                     )
-                    .await {
+                    .await
+                    {
                         Ok(handle) => {
                             log::info!(
                                 "MCP server '{}' connected (streamable_http: {})",
@@ -231,10 +231,7 @@ impl WasmMcpBackend {
         let resolved_auth_token = auth_token.map(resolve_env_vars);
 
         let client = match &resolved_auth_token {
-            Some(token) => {
-                McpClient::new()
-                    .with_streamable_http_server_auth(&resolved_url, token)
-            }
+            Some(token) => McpClient::new().with_streamable_http_server_auth(&resolved_url, token),
             None => McpClient::new().with_streamable_http_server(&resolved_url),
         };
 
@@ -289,7 +286,9 @@ impl McpToolSource for WasmMcpBackend {
             .servers
             .get(server_id)
             .ok_or_else(|| McpToolError::ServerNotFound(server_id.to_string()))?;
-        handle.call_tool_with_headers(tool_name, args, request_headers).await
+        handle
+            .call_tool_with_headers(tool_name, args, request_headers)
+            .await
     }
 
     async fn health_check(&self, server_id: &str) -> Result<bool, McpToolError> {

@@ -126,10 +126,7 @@ impl ContextWindowHistoryPolicyRuntime {
         manager.with_summaries(persisted_summaries)
     }
 
-    fn budget(
-        &self,
-        system_message: Option<&str>,
-    ) -> llm_context_core::budget::ContextBudget {
+    fn budget(&self, system_message: Option<&str>) -> llm_context_core::budget::ContextBudget {
         llm_context_core::budget::ContextBudget::new(
             self.policy.context_window_tokens,
             self.policy.max_output_tokens,
@@ -253,14 +250,9 @@ pub(crate) fn build_history_policy_runtime(
     memory: Option<Arc<dyn llm_context_core::LongTermMemory>>,
 ) -> Arc<dyn HistoryPolicyRuntime> {
     match policy {
-        Some(policy) if policy.mode == HistoryPolicyMode::HistoryManager => {
-            Arc::new(ContextWindowHistoryPolicyRuntime::new(
-                agent_id,
-                policy.clone(),
-                summarizer,
-                memory,
-            ))
-        }
+        Some(policy) if policy.mode == HistoryPolicyMode::HistoryManager => Arc::new(
+            ContextWindowHistoryPolicyRuntime::new(agent_id, policy.clone(), summarizer, memory),
+        ),
         _ => default_runtime(),
     }
 }
@@ -497,7 +489,10 @@ mod tests {
             .expect("prepare turn should succeed");
 
         assert_eq!(prepared.system_message.as_deref(), Some("system"));
-        assert_eq!(prepared.retained_history.len(), task_ctx.runtime_history.len());
+        assert_eq!(
+            prepared.retained_history.len(),
+            task_ctx.runtime_history.len()
+        );
     }
 
     #[cfg(feature = "context-window")]
@@ -518,7 +513,11 @@ mod tests {
         let task_ctx = task_ctx_with_history();
 
         let prepared = runtime
-            .prepare_turn(&task_ctx, &user_msg_ctx("current turn"), Some("system instructions"))
+            .prepare_turn(
+                &task_ctx,
+                &user_msg_ctx("current turn"),
+                Some("system instructions"),
+            )
             .await
             .expect("prepare turn should succeed");
 
@@ -545,7 +544,9 @@ mod tests {
                 enable_summarization: true,
                 ..Default::default()
             },
-            Some(Arc::new(llm_context_core::history::ExtractiveSnippets::default())),
+            Some(Arc::new(
+                llm_context_core::history::ExtractiveSnippets::default(),
+            )),
             None,
         );
         let task_ctx = task_ctx_with_history();

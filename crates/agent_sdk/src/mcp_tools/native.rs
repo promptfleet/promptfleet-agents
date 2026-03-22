@@ -149,11 +149,11 @@ impl McpPeerHandle for RmcpClientHandle {
                 self.call_tool_once(params, forwarded_meta)
                     .await
                     .map_err(|second_error| {
-                    McpToolError::CallToolFailed(format!(
-                        "{}::{}: {} (after reconnect: {})",
-                        self.server_id, name, first_error, second_error
-                    ))
-                })?
+                        McpToolError::CallToolFailed(format!(
+                            "{}::{}: {} (after reconnect: {})",
+                            self.server_id, name, first_error, second_error
+                        ))
+                    })?
             }
             Err(error) => {
                 return Err(McpToolError::CallToolFailed(format!(
@@ -201,12 +201,11 @@ impl RmcpClientHandle {
                 use rmcp::model::{ClientRequest, ServerResult};
                 use rmcp::service::PeerRequestOptions;
 
-                let request =
-                    ClientRequest::CallToolRequest(rmcp::model::CallToolRequest {
-                        method: Default::default(),
-                        params,
-                        extensions: Default::default(),
-                    });
+                let request = ClientRequest::CallToolRequest(rmcp::model::CallToolRequest {
+                    method: Default::default(),
+                    params,
+                    extensions: Default::default(),
+                });
                 let options = PeerRequestOptions {
                     meta: Some(meta),
                     timeout: None,

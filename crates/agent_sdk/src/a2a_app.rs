@@ -37,10 +37,7 @@ impl A2aApp {
     }
 
     #[cfg(all(feature = "a2a-server", feature = "agent-observability"))]
-    pub fn from_agent_with_obs(
-        agent: Agent,
-        obs_cfg: Option<ObsConfig>,
-    ) -> SdkResult<Self> {
+    pub fn from_agent_with_obs(agent: Agent, obs_cfg: Option<ObsConfig>) -> SdkResult<Self> {
         let obs = match obs_cfg {
             Some(cfg) => Obs::init(cfg).unwrap_or_else(|e| {
                 log::warn!("obs:auto_init_failed err={}, using noop", e);

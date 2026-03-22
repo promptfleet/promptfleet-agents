@@ -95,9 +95,13 @@ impl AgentDiscovery for DefaultAgentDiscovery {
 
         let timestamp = {
             #[cfg(feature = "time-stamps")]
-            { Some(chrono::Utc::now().to_rfc3339()) }
+            {
+                Some(chrono::Utc::now().to_rfc3339())
+            }
             #[cfg(not(feature = "time-stamps"))]
-            { None }
+            {
+                None
+            }
         };
 
         Ok(AuthenticatedExtendedCardResult {
@@ -133,6 +137,8 @@ mod tests {
             scope: None,
             metadata: None,
         };
-        assert!(discovery.agent_authenticated_extended_card(params_with_token).is_ok());
+        assert!(discovery
+            .agent_authenticated_extended_card(params_with_token)
+            .is_ok());
     }
 }

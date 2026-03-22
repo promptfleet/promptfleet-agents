@@ -11,5 +11,4 @@ type CallableFuture = dyn Future<Output = SdkResult<Value>>;
 type CallableFuture = dyn Future<Output = SdkResult<Value>> + Send;
 
 /// Protocol-neutral async callable that accepts JSON input and returns JSON output.
-pub type CallableSkill =
-    Box<dyn Fn(Value) -> Pin<Box<CallableFuture>> + Send + Sync>;
+pub type CallableSkill = Box<dyn Fn(Value) -> Pin<Box<CallableFuture>> + Send + Sync>;

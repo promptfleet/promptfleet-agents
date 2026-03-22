@@ -3,9 +3,9 @@
 //! This module provides an ergonomic client interface for communicating
 //! with other A2A agents using the HTTP transport.
 
-use std::collections::HashMap;
 use log::{debug, error, info, trace};
 use serde_json::Value;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[cfg(feature = "a2a-client")]
@@ -158,10 +158,7 @@ impl A2aClient {
     /// ```
     #[cfg(feature = "a2a-client")]
     pub fn direct(agent_endpoint: &str) -> SdkResult<Self> {
-        debug!(
-            "Creating direct A2aClient for endpoint: {}",
-            agent_endpoint
-        );
+        debug!("Creating direct A2aClient for endpoint: {}", agent_endpoint);
 
         if agent_endpoint.is_empty() {
             error!("Client creation failed: endpoint cannot be empty");
@@ -170,10 +167,7 @@ impl A2aClient {
 
         let inner = Client::external(agent_endpoint);
 
-        info!(
-            "Direct A2aClient created for endpoint: {}",
-            agent_endpoint
-        );
+        info!("Direct A2aClient created for endpoint: {}", agent_endpoint);
         Ok(Self {
             inner,
             mode: ClientMode::Direct {
@@ -661,10 +655,7 @@ impl A2aClient {
                 format!("Failed to parse agent card: {}", e),
             )
         })?;
-        Ok(card
-            .get("capabilities")
-            .cloned()
-            .unwrap_or(Value::Null))
+        Ok(card.get("capabilities").cloned().unwrap_or(Value::Null))
     }
 
     /// Get agent capabilities (feature guard)
@@ -877,7 +868,10 @@ impl A2aClient {
 
             Box::pin(async move {
                 // Execute the call
-                client.execute_skill_call(&agent_id, &skill_id, params).await.map_err(SdkError::from)
+                client
+                    .execute_skill_call(&agent_id, &skill_id, params)
+                    .await
+                    .map_err(SdkError::from)
             })
         }))
     }
@@ -902,15 +896,12 @@ impl A2aClient {
         skill_id: &str,
     ) -> A2AResult<a2a_protocol_core::agent::AgentSkill> {
         let agent_card = self.fetch_remote_agent_card(agent_id).await?;
-        agent_card
-            .get_skill(skill_id)
-            .cloned()
-            .ok_or_else(|| {
-                A2AError::capability_validation_failed(format!(
-                    "Skill '{}' not found in agent '{}'",
-                    skill_id, agent_id
-                ))
-            })
+        agent_card.get_skill(skill_id).cloned().ok_or_else(|| {
+            A2AError::capability_validation_failed(format!(
+                "Skill '{}' not found in agent '{}'",
+                skill_id, agent_id
+            ))
+        })
     }
 
     /// **Execute Skill Call (Internal Implementation)**
@@ -986,7 +977,6 @@ impl A2aClient {
             ))
         }
     }
-
 
     /// **Fetch Remote Agent Card**
     ///

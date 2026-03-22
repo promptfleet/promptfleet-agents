@@ -98,10 +98,7 @@ mod tests {
         assert!(ctx.has_history());
         assert_eq!(ctx.history[0].role, crate::Role::User);
         assert_eq!(ctx.history[1].role, crate::Role::Agent);
-        assert_eq!(
-            ctx.history[1].text_content(),
-            Some("hi there".to_string())
-        );
+        assert_eq!(ctx.history[1].text_content(), Some("hi there".to_string()));
     }
 
     #[test]

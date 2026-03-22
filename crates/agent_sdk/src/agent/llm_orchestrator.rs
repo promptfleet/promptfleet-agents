@@ -18,9 +18,7 @@
 pub use super::llm_invoker::*;
 
 // ── Finalization helpers (crate-internal) ───────────────────────────────
-use super::finalization::{
-    build_response_from_finalization_args, run_finalization_turn,
-};
+use super::finalization::{build_response_from_finalization_args, run_finalization_turn};
 
 // ── Other imports ───────────────────────────────────────────────────────
 use crate::agent::history_policy::HistoryPolicyRuntime;
@@ -195,10 +193,7 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
             None => None,
         };
         let (effective_system_message, retained_history) = match prepared_history {
-            Some(Ok(prepared)) => (
-                prepared.system_message,
-                Some(prepared.retained_history),
-            ),
+            Some(Ok(prepared)) => (prepared.system_message, Some(prepared.retained_history)),
             Some(Err(err)) => {
                 let _ = tx.try_send(AgentTraceEvent::Failed {
                     message: err.to_string(),
@@ -582,13 +577,13 @@ pub(crate) async fn execute_runtime(
                     msg_ctx,
                     prepared_system,
                     Response::task(
-                    TaskOpts {
-                        state: Some(TaskPhase::Completed),
-                        ..Default::default()
-                    },
-                    msg_ctx,
-                    task_ctx.clone(),
-                )?,
+                        TaskOpts {
+                            state: Some(TaskPhase::Completed),
+                            ..Default::default()
+                        },
+                        msg_ctx,
+                        task_ctx.clone(),
+                    )?,
                 )
                 .await
             } else if policy.finalize_required {
@@ -619,14 +614,14 @@ pub(crate) async fn execute_runtime(
                     msg_ctx,
                     prepared_system,
                     Response::task(
-                    TaskOpts {
-                        state: Some(TaskPhase::Completed),
-                        history_parts: Some(vec![ContentPart::Text(text)]),
-                        ..Default::default()
-                    },
-                    msg_ctx,
-                    task_ctx.clone(),
-                )?,
+                        TaskOpts {
+                            state: Some(TaskPhase::Completed),
+                            history_parts: Some(vec![ContentPart::Text(text)]),
+                            ..Default::default()
+                        },
+                        msg_ctx,
+                        task_ctx.clone(),
+                    )?,
                 )
                 .await
             } else {
@@ -636,14 +631,14 @@ pub(crate) async fn execute_runtime(
                     msg_ctx,
                     prepared_system,
                     Response::task(
-                    TaskOpts {
-                        state: Some(TaskPhase::Completed),
-                        history_parts: Some(vec![ContentPart::Text(text)]),
-                        ..Default::default()
-                    },
-                    msg_ctx,
-                    task_ctx.clone(),
-                )?,
+                        TaskOpts {
+                            state: Some(TaskPhase::Completed),
+                            history_parts: Some(vec![ContentPart::Text(text)]),
+                            ..Default::default()
+                        },
+                        msg_ctx,
+                        task_ctx.clone(),
+                    )?,
                 )
                 .await
             }
@@ -671,23 +666,25 @@ pub(crate) async fn execute_runtime(
                         )
                         .await
                     }
-                    Err(_) => attach_continuation_update(
-                        history_policy_runtime,
-                        original_task_ctx.as_ref(),
-                        msg_ctx,
-                        prepared_system,
-                        Response::task(
-                            TaskOpts {
-                                state: Some(TaskPhase::Failed),
-                                status_text: Some(reason.clone()),
-                                history_parts: Some(vec![ContentPart::Text(reason)]),
-                                ..Default::default()
-                            },
+                    Err(_) => {
+                        attach_continuation_update(
+                            history_policy_runtime,
+                            original_task_ctx.as_ref(),
                             msg_ctx,
-                            task_ctx.clone(),
-                        )?,
-                    )
-                    .await,
+                            prepared_system,
+                            Response::task(
+                                TaskOpts {
+                                    state: Some(TaskPhase::Failed),
+                                    status_text: Some(reason.clone()),
+                                    history_parts: Some(vec![ContentPart::Text(reason)]),
+                                    ..Default::default()
+                                },
+                                msg_ctx,
+                                task_ctx.clone(),
+                            )?,
+                        )
+                        .await
+                    }
                 }
             } else {
                 attach_continuation_update(
@@ -696,15 +693,15 @@ pub(crate) async fn execute_runtime(
                     msg_ctx,
                     prepared_system,
                     Response::task(
-                    TaskOpts {
-                        state: Some(TaskPhase::Failed),
-                        status_text: Some(reason.clone()),
-                        history_parts: Some(vec![ContentPart::Text(reason)]),
-                        ..Default::default()
-                    },
-                    msg_ctx,
-                    task_ctx,
-                )?,
+                        TaskOpts {
+                            state: Some(TaskPhase::Failed),
+                            status_text: Some(reason.clone()),
+                            history_parts: Some(vec![ContentPart::Text(reason)]),
+                            ..Default::default()
+                        },
+                        msg_ctx,
+                        task_ctx,
+                    )?,
                 )
                 .await
             }

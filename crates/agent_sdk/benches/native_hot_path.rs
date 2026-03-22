@@ -129,7 +129,11 @@ fn typical_tool_scenario() -> LlmScenario {
     LlmScenario::tool_call_then_text("echo", json!({"q": "benchmark"}), "done")
 }
 
-fn stress_tool_scenario(call_count: usize, fragment_count: usize, delta_count: usize) -> LlmScenario {
+fn stress_tool_scenario(
+    call_count: usize,
+    fragment_count: usize,
+    delta_count: usize,
+) -> LlmScenario {
     LlmScenario::new()
         .turn(|mut turn| {
             for idx in 0..call_count {
@@ -352,20 +356,26 @@ fn bench_mapping_and_sse(c: &mut Criterion) {
 
     let mut agui_group = c.benchmark_group("mapping_only_agui");
     agui_group.throughput(Throughput::Elements(trace_events.len() as u64));
-    agui_group.bench_function(BenchmarkId::new("stress_trace_events", trace_events.len()), |b| {
-        b.iter(|| {
-            map_agent_io_events(&trace_events, &io_ctx);
-        });
-    });
+    agui_group.bench_function(
+        BenchmarkId::new("stress_trace_events", trace_events.len()),
+        |b| {
+            b.iter(|| {
+                map_agent_io_events(&trace_events, &io_ctx);
+            });
+        },
+    );
     agui_group.finish();
 
     let mut a2a_group = c.benchmark_group("mapping_only_a2a");
     a2a_group.throughput(Throughput::Elements(trace_events.len() as u64));
-    a2a_group.bench_function(BenchmarkId::new("stress_trace_events", trace_events.len()), |b| {
-        b.iter(|| {
-            map_a2a_sse_events(&trace_events, &a2a_ctx);
-        });
-    });
+    a2a_group.bench_function(
+        BenchmarkId::new("stress_trace_events", trace_events.len()),
+        |b| {
+            b.iter(|| {
+                map_a2a_sse_events(&trace_events, &a2a_ctx);
+            });
+        },
+    );
     a2a_group.finish();
 
     let mapped_agui = map_agent_io_events(&trace_events, &io_ctx);

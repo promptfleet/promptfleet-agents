@@ -83,7 +83,10 @@ impl AgentHostBuilder {
         Ok(host)
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), any(feature = "a2a-server", feature = "event-stream")))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        any(feature = "a2a-server", feature = "event-stream")
+    ))]
     pub fn build_router(self) -> SdkResult<axum::Router> {
         self.build()?.build_router()
     }
@@ -131,7 +134,10 @@ impl AgentHost {
         false
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), any(feature = "a2a-server", feature = "event-stream")))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        any(feature = "a2a-server", feature = "event-stream")
+    ))]
     pub fn build_router(self) -> SdkResult<axum::Router> {
         let mut router = axum::Router::new();
 
@@ -154,10 +160,7 @@ impl AgentHost {
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
-    pub fn serve(
-        &self,
-        req: spin_sdk::http::Request,
-    ) -> SdkResult<spin_sdk::http::Response> {
+    pub fn serve(&self, req: spin_sdk::http::Request) -> SdkResult<spin_sdk::http::Response> {
         Ok(self.build_spin_router()?.handle(req))
     }
 
@@ -211,10 +214,7 @@ async fn handle_wasm_a2a(
 ) -> spin_sdk::http::Response {
     match app.serve_async_flushed(req).await {
         Ok(response) => response,
-        Err(err) => spin_sdk::http::Response::new(
-            500,
-            format!("Agent host routing failed: {err}"),
-        ),
+        Err(err) => spin_sdk::http::Response::new(500, format!("Agent host routing failed: {err}")),
     }
 }
 
@@ -229,7 +229,9 @@ mod tests {
             .build()
             .err()
             .expect("host without adapters should fail");
-        assert!(err.to_string().contains("requires at least one protocol adapter"));
+        assert!(err
+            .to_string()
+            .contains("requires at least one protocol adapter"));
     }
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "a2a-server"))]

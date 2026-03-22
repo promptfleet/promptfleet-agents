@@ -137,9 +137,7 @@ impl serde::Serialize for OtelSampling {
             OtelSampling::AlwaysOn => serializer.serialize_str("always_on"),
             OtelSampling::AlwaysOff => serializer.serialize_str("always_off"),
             OtelSampling::ParentBased => serializer.serialize_str("parent_based"),
-            OtelSampling::TraceIdRatio(r) => {
-                serializer.serialize_str(&format!("ratio:{}", r))
-            }
+            OtelSampling::TraceIdRatio(r) => serializer.serialize_str(&format!("ratio:{}", r)),
         }
     }
 }
@@ -909,7 +907,10 @@ mod tests {
         assert_eq!(cfg.otel.sampling, back.otel.sampling);
         assert_eq!(cfg.prometheus.enabled, back.prometheus.enabled);
         assert_eq!(cfg.prometheus.push_interval, back.prometheus.push_interval);
-        assert_eq!(cfg.prometheus.max_cardinality, back.prometheus.max_cardinality);
+        assert_eq!(
+            cfg.prometheus.max_cardinality,
+            back.prometheus.max_cardinality
+        );
     }
 
     #[test]

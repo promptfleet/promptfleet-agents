@@ -616,17 +616,17 @@ pub fn generate_extensions(_input: TokenStream) -> TokenStream {
             pub fn get_generated_extensions() -> Vec<(&'static str, fn() -> Box<dyn component_core::ExtensionInstance>)> {
                 vec![]
             }
-            
+
             /// Initialize agent with empty extension set
             pub fn init_generated_extensions() -> component_core::ComponentResult<()> {
                 Ok(())
             }
-            
+
             /// Number of generated extensions
             pub fn get_extension_count() -> usize {
                 0
             }
-            
+
             /// List extension names (diagnostics)
             pub fn get_extension_names() -> Vec<&'static str> {
                 vec![]

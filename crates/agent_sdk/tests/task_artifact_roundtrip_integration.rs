@@ -1,14 +1,18 @@
-#![cfg(all(not(target_arch = "wasm32"), feature = "a2a-client", feature = "a2a-server"))]
+#![cfg(all(
+    not(target_arch = "wasm32"),
+    feature = "a2a-client",
+    feature = "a2a-server"
+))]
 
 use a2a_protocol_core::data::{Message, MessageRole, Part};
 use agent_core::{ContentPart, TaskPhase};
 use agent_sdk::{
-    Agent, SdkError,
     a2a::A2aClient,
     a2a::A2aServer,
     agent::{Response, RuntimeArtifact, TaskOpts},
+    Agent, SdkError,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tokio::net::TcpListener;
 
 fn extract_task(value: &Value) -> &Value {
@@ -30,7 +34,11 @@ fn extract_task_id(value: &Value) -> Option<String> {
         .map(ToString::to_string)
 }
 
-async fn spawn_sdk_skill_server() -> (String, tokio::task::JoinHandle<()>, tokio::sync::oneshot::Sender<()>) {
+async fn spawn_sdk_skill_server() -> (
+    String,
+    tokio::task::JoinHandle<()>,
+    tokio::sync::oneshot::Sender<()>,
+) {
     let mut agent = Agent::new_runtime("artifact-roundtrip-agent").expect("agent");
     agent
         .skill("lookup", |params| async move {
@@ -96,7 +104,8 @@ async fn spawn_sdk_skill_server() -> (String, tokio::task::JoinHandle<()>, tokio
 }
 
 #[tokio::test]
-async fn test_message_send_reused_task_returns_delta_artifacts_while_get_task_returns_full_artifacts() {
+async fn test_message_send_reused_task_returns_delta_artifacts_while_get_task_returns_full_artifacts(
+) {
     let (endpoint, handle, shutdown_tx) = spawn_sdk_skill_server().await;
     let client = A2aClient::direct(&endpoint).expect("create direct client");
 
@@ -119,7 +128,11 @@ async fn test_message_send_reused_task_returns_delta_artifacts_while_get_task_re
         )
         .await
         .expect("first message_send should succeed");
-    assert_eq!(task_artifact_count(&first), 1, "first send should return one delta artifact");
+    assert_eq!(
+        task_artifact_count(&first),
+        1,
+        "first send should return one delta artifact"
+    );
     let task_id = extract_task_id(&first).expect("first send should return task id");
 
     let second = client

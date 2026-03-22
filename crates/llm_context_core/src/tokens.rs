@@ -65,7 +65,11 @@ pub fn estimate_message_json_tokens(msg: &serde_json::Value) -> u32 {
 /// Includes a ~3 token overhead for the overall messages array framing.
 pub fn estimate_messages_tokens(messages: &[serde_json::Value]) -> u32 {
     let framing: u32 = 3; // array overhead
-    framing + messages.iter().map(estimate_message_json_tokens).sum::<u32>()
+    framing
+        + messages
+            .iter()
+            .map(estimate_message_json_tokens)
+            .sum::<u32>()
 }
 
 /// Estimate tokens for a tool schema definition (for budget reservation).
@@ -79,7 +83,11 @@ pub fn estimate_tool_schema_tokens(tool_json: &serde_json::Value) -> u32 {
 pub fn estimate_tools_tokens(tools_json: &[serde_json::Value]) -> u32 {
     // Per OpenAI: ~10 token overhead for tools array framing
     let framing: u32 = if tools_json.is_empty() { 0 } else { 10 };
-    framing + tools_json.iter().map(estimate_tool_schema_tokens).sum::<u32>()
+    framing
+        + tools_json
+            .iter()
+            .map(estimate_tool_schema_tokens)
+            .sum::<u32>()
 }
 
 #[cfg(test)]
@@ -141,7 +149,11 @@ mod tests {
             }]
         });
         let t = estimate_message_json_tokens(&msg);
-        assert!(t >= 10, "expected >=10 for message with tool call, got {}", t);
+        assert!(
+            t >= 10,
+            "expected >=10 for message with tool call, got {}",
+            t
+        );
     }
 
     #[test]

@@ -329,7 +329,11 @@ impl A2AHttpServer {
                                     }
                                 }
                                 let jsonrpc_error = e.to_jsonrpc_error();
-                                JsonRpcResponse::error(id, jsonrpc_error.code, jsonrpc_error.message)
+                                JsonRpcResponse::error(
+                                    id,
+                                    jsonrpc_error.code,
+                                    jsonrpc_error.message,
+                                )
                             }
                         };
                         let body = serde_json::to_string(&response)?;

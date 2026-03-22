@@ -53,7 +53,11 @@ impl TaskManager {
                     if reuse_policy == TaskReusePolicy::StartNewTaskAfterTerminal
                         && task.is_terminal()
                     {
-                        Ok(self.prepare_new_task_context(&task, ctx_id.clone(), snapshot.as_ref())?)
+                        Ok(self.prepare_new_task_context(
+                            &task,
+                            ctx_id.clone(),
+                            snapshot.as_ref(),
+                        )?)
                     } else {
                         Ok(self.prepare_task_context(&task, ctx_id.clone(), snapshot.as_ref())?)
                     }
@@ -91,7 +95,10 @@ impl TaskManager {
         self.runtime_store.clone()
     }
 
-    pub(crate) fn attach_canonical_task_storage(&self, storage: Arc<dyn TaskStorage>) -> SdkResult<()> {
+    pub(crate) fn attach_canonical_task_storage(
+        &self,
+        storage: Arc<dyn TaskStorage>,
+    ) -> SdkResult<()> {
         let mut guard = self.canonical_store.write().map_err(|_| {
             crate::SdkError::method_execution("task_manager", "canonical task store lock poisoned")
         })?;
@@ -112,7 +119,10 @@ impl TaskManager {
         };
 
         if let Some(snapshot) = snapshot {
-            if let Some(task) = storage.get_task(&snapshot.task_id).map_err(crate::SdkError::from)? {
+            if let Some(task) = storage
+                .get_task(&snapshot.task_id)
+                .map_err(crate::SdkError::from)?
+            {
                 return Ok(Some(task));
             }
         }
@@ -132,9 +142,8 @@ impl TaskManager {
         if let Some(snapshot) = snapshot {
             let current_revision = self.runtime_store.get_task_revision(&task.id)?;
             if current_revision == Some(snapshot.source_revision) {
-                task_ctx.continuation = Some(
-                    crate::agent::history_policy::continuation_state_from_snapshot(snapshot),
-                );
+                task_ctx.continuation =
+                    Some(crate::agent::history_policy::continuation_state_from_snapshot(snapshot));
             }
         }
         Ok(task_ctx)
@@ -164,9 +173,8 @@ impl TaskManager {
             }
             let current_revision = self.runtime_store.get_task_revision(&task.id)?;
             if current_revision == Some(snapshot.source_revision) {
-                task_ctx.continuation = Some(
-                    crate::agent::history_policy::continuation_state_from_snapshot(snapshot),
-                );
+                task_ctx.continuation =
+                    Some(crate::agent::history_policy::continuation_state_from_snapshot(snapshot));
             }
         }
         Ok(task_ctx)
@@ -178,9 +186,8 @@ impl TaskManager {
     ) -> TaskContext {
         let mut task_ctx = TaskContext::create_new(Some(snapshot.context_id.clone()));
         task_ctx.task_metadata = snapshot.metadata_extract.clone();
-        task_ctx.continuation = Some(
-            crate::agent::history_policy::continuation_state_from_snapshot(&snapshot),
-        );
+        task_ctx.continuation =
+            Some(crate::agent::history_policy::continuation_state_from_snapshot(&snapshot));
         task_ctx
     }
 }
@@ -201,11 +208,12 @@ mod tests {
 
     use a2a_protocol_core::data::{Message, MessageRole, Task, TaskState};
     use a2a_protocol_core::services::{InMemoryTaskStorage, TaskStorage};
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
 
     use super::{TaskManager, TaskReusePolicy};
     use crate::agent::task_store::{
-        ContinuationArtifactRef, ContinuationSnapshot, ContinuationStrategyDescriptor, RuntimeTaskStore,
+        ContinuationArtifactRef, ContinuationSnapshot, ContinuationStrategyDescriptor,
+        RuntimeTaskStore,
     };
     use crate::SdkResult;
 
@@ -228,7 +236,9 @@ mod tests {
             self.latest_by_context
                 .read()
                 .map(|contexts| contexts.get(context_id).cloned())
-                .map_err(|_| crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned"))
+                .map_err(|_| {
+                    crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned")
+                })
         }
 
         fn set_latest_snapshot(
@@ -254,7 +264,9 @@ mod tests {
             self.revisions_by_task
                 .read()
                 .map(|revisions| revisions.get(task_id).copied())
-                .map_err(|_| crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned"))
+                .map_err(|_| {
+                    crate::SdkError::method_execution("test_runtime_task_store", "lock poisoned")
+                })
         }
 
         fn set_task_revision(&self, task_id: &str, revision: u64) -> SdkResult<()> {
@@ -287,17 +299,17 @@ mod tests {
         let task_id = "task-terminal".to_string();
         let mut task = Task::with_id(task_id.clone(), context_id.clone());
         task.add_to_history(
-            Message::text(MessageRole::User, "first", task_id.clone()).with_context(context_id.clone()),
+            Message::text(MessageRole::User, "first", task_id.clone())
+                .with_context(context_id.clone()),
         );
         task.add_to_history(
-            Message::text(MessageRole::Agent, "done", task_id.clone()).with_context(context_id.clone()),
+            Message::text(MessageRole::Agent, "done", task_id.clone())
+                .with_context(context_id.clone()),
         );
         task.update_status(TaskState::Completed);
         canonical.store_task(task).unwrap();
 
-        runtime_store
-            .set_task_revision(&task_id, 1)
-            .unwrap();
+        runtime_store.set_task_revision(&task_id, 1).unwrap();
         runtime_store
             .set_latest_snapshot(
                 &context_id,

@@ -138,7 +138,8 @@ impl McpProxy {
                 Err(e) => {
                     log::warn!(
                         "Failed to list tools from proxy target '{}': {:?}",
-                        server.name, e
+                        server.name,
+                        e
                     );
                 }
             }

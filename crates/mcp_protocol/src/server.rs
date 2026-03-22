@@ -121,8 +121,7 @@ impl McpServer {
             "tools/call" => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    tokio::runtime::Handle::current()
-                        .block_on(self.handle_call_tool(params, id))?
+                    tokio::runtime::Handle::current().block_on(self.handle_call_tool(params, id))?
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -205,9 +204,11 @@ impl McpServer {
             .map_err(|e| ProtocolError::Parsing(format!("Invalid call_tool request: {}", e)))?;
 
         let result = match &self.tool_provider {
-            Some(provider) => provider
-                .call_tool(&call_request.name, call_request.arguments)
-                .await?,
+            Some(provider) => {
+                provider
+                    .call_tool(&call_request.name, call_request.arguments)
+                    .await?
+            }
             None => CallToolResult {
                 content: vec![crate::Content::text("No tool provider configured")],
                 is_error: Some(true),

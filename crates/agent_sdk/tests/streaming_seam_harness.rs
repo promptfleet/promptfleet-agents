@@ -6,7 +6,9 @@
 
 use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
 use agent_sdk::agent::trace::AgentTraceEvent;
-use agent_sdk::streaming::{ag_ui_sse_response_with_summary, AgUiDriverConfig, AgUiStreamDriver, IoEventContext};
+use agent_sdk::streaming::{
+    ag_ui_sse_response_with_summary, AgUiDriverConfig, AgUiStreamDriver, IoEventContext,
+};
 use futures::StreamExt;
 use pf_test_harness::pipeline::{InvokerMode, MapperKind, TestPipeline};
 use pf_test_harness::scenario::LlmScenario;

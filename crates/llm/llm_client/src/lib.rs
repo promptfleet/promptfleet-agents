@@ -6,7 +6,7 @@ pub mod stream;
 pub mod types;
 
 pub use model_client::{ClientCapabilities, ClientConfig, ModelClient};
-pub use protocol_transport_core::StreamingPolicy;
 pub use profile::{ModelCapabilities, ModelConfig, ModelFamily, ModelProfile};
+pub use protocol_transport_core::StreamingPolicy;
 pub use stream::{parse_chat_chunk, LlmEventStream, SseParser, StreamEvent};
 pub use types::*;

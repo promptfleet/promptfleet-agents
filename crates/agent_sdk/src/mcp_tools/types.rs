@@ -170,7 +170,9 @@ mod tests {
             .expect("forwarded headers object");
 
         assert_eq!(
-            forwarded.get("traceparent").and_then(|value| value.as_str()),
+            forwarded
+                .get("traceparent")
+                .and_then(|value| value.as_str()),
             Some("00-abc-123-01")
         );
         assert!(!forwarded.contains_key("authorization"));

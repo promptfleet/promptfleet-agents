@@ -330,10 +330,7 @@ impl Client {
     }
 
     /// **GetTask** — Retrieve task state and artifacts.
-    pub async fn task_get(
-        &self,
-        task_id: String,
-    ) -> Result<Task, RpcError> {
+    pub async fn task_get(&self, task_id: String) -> Result<Task, RpcError> {
         let params = json!({
             "id": task_id,
         });
@@ -344,10 +341,7 @@ impl Client {
     }
 
     /// **CancelTask** — Cancel an ongoing task.
-    pub async fn task_cancel(
-        &self,
-        task_id: String,
-    ) -> Result<Task, RpcError> {
+    pub async fn task_cancel(&self, task_id: String) -> Result<Task, RpcError> {
         let params = json!({
             "id": task_id,
         });

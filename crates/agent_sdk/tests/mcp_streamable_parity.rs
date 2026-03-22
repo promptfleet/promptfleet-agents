@@ -230,11 +230,8 @@ async fn custom_streamable_handler(
     }
 }
 
-async fn start_custom_streamable_server() -> (
-    String,
-    Arc<AtomicUsize>,
-    tokio::task::JoinHandle<()>,
-) {
+async fn start_custom_streamable_server() -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>)
+{
     let state = CustomState {
         session_replays: Arc::new(AtomicUsize::new(0)),
     };
@@ -294,7 +291,10 @@ async fn native_rmcp_and_streamable_client_match_expected_contract() {
         assert!(session_replays.load(Ordering::SeqCst) >= 1);
 
         let wasm_result = wasm_compatible
-            .call_tool_async(expected_tool_name(), Some(serde_json::json!({ "q": "planner" })))
+            .call_tool_async(
+                expected_tool_name(),
+                Some(serde_json::json!({ "q": "planner" })),
+            )
             .await
             .expect("streamable tool call");
         let wasm_json = {

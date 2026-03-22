@@ -345,8 +345,11 @@ impl HistoryManager {
                         let memory_budget = self.config.memory_token_budget;
 
                         for mem in &memories {
-                            let entry_text =
-                                format!("- [{}] {}\n", format_memory_type(&mem.memory_type), mem.content);
+                            let entry_text = format!(
+                                "- [{}] {}\n",
+                                format_memory_type(&mem.memory_type),
+                                mem.content
+                            );
                             let entry_tokens = tokens::estimate_tokens(&entry_text);
                             if used_tokens + entry_tokens > memory_budget {
                                 break;
@@ -463,18 +466,17 @@ mod tests {
         let budget = ContextBudget::new(100, 20, None, &[]);
 
         let history: Vec<serde_json::Value> = (0..20)
-            .map(|i| make_msg("user", &format!("Message number {} with some padding text", i)))
+            .map(|i| {
+                make_msg(
+                    "user",
+                    &format!("Message number {} with some padding text", i),
+                )
+            })
             .collect();
         let current = vec![make_msg("user", "Latest question")];
 
         let result = manager
-            .prepare_messages(
-                &budget,
-                None,
-                &history,
-                &current,
-                &MemoryFilters::default(),
-            )
+            .prepare_messages(&budget, None, &history, &current, &MemoryFilters::default())
             .await;
 
         assert!(

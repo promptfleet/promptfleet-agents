@@ -117,9 +117,14 @@ async fn test_sync_adapter_message_send_delegates_to_adapter_response() {
         .expect("SendMessage should succeed");
     assert_eq!(capture.status, StatusCode::OK);
 
-    let payload = capture.body_json.expect("SendMessage must return JSON body");
+    let payload = capture
+        .body_json
+        .expect("SendMessage must return JSON body");
     assert_eq!(payload["result"]["message"]["role"], "ROLE_AGENT");
-    assert_eq!(payload["result"]["message"]["parts"][0]["text"], "sync adapter reply");
+    assert_eq!(
+        payload["result"]["message"]["parts"][0]["text"],
+        "sync adapter reply"
+    );
 }
 
 #[tokio::test]
@@ -140,15 +145,23 @@ async fn test_sync_adapter_task_response_is_persisted_for_tasks_get() {
         .body_json
         .expect("SendMessage should return JSON body");
     assert_eq!(send_payload["result"]["task"]["id"], "adapter-task-1");
-    assert_eq!(send_payload["result"]["task"]["status"]["state"], "TASK_STATE_WORKING");
+    assert_eq!(
+        send_payload["result"]["task"]["status"]["state"],
+        "TASK_STATE_WORKING"
+    );
 
     let get_capture = call_jsonrpc(router, tasks_get_body("adapter-task-1", true, false))
         .await
         .expect("GetTask should succeed");
     assert_eq!(get_capture.status, StatusCode::OK);
-    let get_payload = get_capture.body_json.expect("GetTask should return JSON body");
+    let get_payload = get_capture
+        .body_json
+        .expect("GetTask should return JSON body");
     assert_eq!(get_payload["result"]["id"], "adapter-task-1");
-    assert_eq!(get_payload["result"]["history"][0]["parts"][0]["text"], "persist this");
+    assert_eq!(
+        get_payload["result"]["history"][0]["parts"][0]["text"],
+        "persist this"
+    );
 }
 
 #[tokio::test]
@@ -169,7 +182,9 @@ async fn test_sync_adapter_agent_card_get_uses_adapter_card() {
     .await
     .expect("GetAgentCard should succeed");
     assert_eq!(capture.status, StatusCode::OK);
-    let payload = capture.body_json.expect("GetAgentCard must return JSON body");
+    let payload = capture
+        .body_json
+        .expect("GetAgentCard must return JSON body");
 
     assert_eq!(payload["result"]["name"], "Delegated Agent");
 }
@@ -194,8 +209,13 @@ async fn test_async_adapter_takes_precedence_over_sync_adapter() {
         .await
         .expect("SendMessage should succeed");
     assert_eq!(capture.status, StatusCode::OK);
-    let payload = capture.body_json.expect("SendMessage should return JSON body");
-    assert_eq!(payload["result"]["message"]["parts"][0]["text"], "async path");
+    let payload = capture
+        .body_json
+        .expect("SendMessage should return JSON body");
+    assert_eq!(
+        payload["result"]["message"]["parts"][0]["text"],
+        "async path"
+    );
 }
 
 #[tokio::test]
@@ -210,8 +230,14 @@ async fn test_sync_adapter_failure_maps_to_jsonrpc_error() {
         .expect("request should return HTTP response");
     assert_eq!(capture.status, StatusCode::OK);
     let payload = capture.body_json.expect("JSON-RPC error must have a body");
-    assert!(payload.get("error").is_some(), "response must contain JSON-RPC error");
-    assert!(payload["error"]["message"].as_str().unwrap().contains("Internal"));
+    assert!(
+        payload.get("error").is_some(),
+        "response must contain JSON-RPC error"
+    );
+    assert!(payload["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Internal"));
 }
 
 #[tokio::test]
@@ -226,6 +252,12 @@ async fn test_async_adapter_failure_maps_to_jsonrpc_error() {
         .expect("request should return HTTP response");
     assert_eq!(capture.status, StatusCode::OK);
     let payload = capture.body_json.expect("JSON-RPC error must have a body");
-    assert!(payload.get("error").is_some(), "response must contain JSON-RPC error");
-    assert!(payload["error"]["message"].as_str().unwrap().contains("Internal"));
+    assert!(
+        payload.get("error").is_some(),
+        "response must contain JSON-RPC error"
+    );
+    assert!(payload["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Internal"));
 }

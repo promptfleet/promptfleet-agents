@@ -92,9 +92,8 @@ pub enum StreamEvent {
 /// A boxed, pinned, `Send` stream of [`StreamEvent`] results.
 ///
 /// This is the canonical return type for all streaming LLM methods.
-pub type LlmEventStream = std::pin::Pin<
-    Box<dyn futures::Stream<Item = Result<StreamEvent, ClientError>> + Send>,
->;
+pub type LlmEventStream =
+    std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, ClientError>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // SSE parser
@@ -201,10 +200,7 @@ pub fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, ClientError> {
             }
 
             // Reasoning content (thinking models: Qwen3, DeepSeek R1)
-            if let Some(reasoning) = delta
-                .get("reasoning_content")
-                .and_then(|v| v.as_str())
-            {
+            if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
                 if !reasoning.is_empty() {
                     events.push(StreamEvent::ReasoningDelta {
                         delta: reasoning.to_string(),
@@ -224,10 +220,7 @@ pub fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, ClientError> {
             // Tool calls (streamed incrementally)
             if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
                 for tc in tool_calls {
-                    let idx = tc
-                        .get("index")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32;
+                    let idx = tc.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
                     // First fragment of a tool call: has `id` + `function.name`
                     let tc_id = tc.get("id").and_then(|v| v.as_str());
@@ -327,18 +320,13 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
                             Ok(events) => {
                                 for event in events {
                                     if tx.send(Ok(event)).await.is_err() {
-                                        log::debug!(
-                                            "sse_event_stream: receiver dropped, stopping"
-                                        );
+                                        log::debug!("sse_event_stream: receiver dropped, stopping");
                                         return;
                                     }
                                 }
                             }
                             Err(e) => {
-                                log::warn!(
-                                    "sse_event_stream: failed to parse chunk: {}",
-                                    e
-                                );
+                                log::warn!("sse_event_stream: failed to parse chunk: {}", e);
                                 let _ = tx.send(Err(e)).await;
                                 return;
                             }
@@ -560,9 +548,7 @@ mod tests {
         let events = parse_chat_chunk(chunk).unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
-            StreamEvent::Done {
-                finish_reason, ..
-            } => {
+            StreamEvent::Done { finish_reason, .. } => {
                 assert_eq!(finish_reason.as_deref(), Some("tool_calls"));
             }
             other => panic!("expected Done, got {:?}", other),
@@ -603,8 +589,12 @@ mod tests {
         let chunk = r#"{"id":"chatcmpl-1","model":"qwen3","choices":[{"index":0,"delta":{"reasoning_content":"done thinking","content":"The answer is 42"},"finish_reason":null}]}"#;
         let events = parse_chat_chunk(chunk).unwrap();
         assert_eq!(events.len(), 2);
-        assert!(matches!(&events[0], StreamEvent::ReasoningDelta { delta } if delta == "done thinking"));
-        assert!(matches!(&events[1], StreamEvent::ContentDelta { delta } if delta == "The answer is 42"));
+        assert!(
+            matches!(&events[0], StreamEvent::ReasoningDelta { delta } if delta == "done thinking")
+        );
+        assert!(
+            matches!(&events[1], StreamEvent::ContentDelta { delta } if delta == "The answer is 42")
+        );
     }
 
     // ── parse_chat_chunk: edge cases ───────────────────────────────────
@@ -661,18 +651,18 @@ mod tests {
         }
 
         // Verify the event sequence
-        assert_eq!(all_events.len(), 4, "expected 4 events: start + 2 deltas + done");
+        assert_eq!(
+            all_events.len(),
+            4,
+            "expected 4 events: start + 2 deltas + done"
+        );
 
         assert!(
             matches!(&all_events[0], StreamEvent::StreamStart { id, model }
                 if id.as_deref() == Some("chatcmpl-test") && model.as_deref() == Some("gpt-4"))
         );
-        assert!(
-            matches!(&all_events[1], StreamEvent::ContentDelta { delta } if delta == "Hello")
-        );
-        assert!(
-            matches!(&all_events[2], StreamEvent::ContentDelta { delta } if delta == " world")
-        );
+        assert!(matches!(&all_events[1], StreamEvent::ContentDelta { delta } if delta == "Hello"));
+        assert!(matches!(&all_events[2], StreamEvent::ContentDelta { delta } if delta == " world"));
         match &all_events[3] {
             StreamEvent::Done {
                 finish_reason,
@@ -776,10 +766,16 @@ mod tests {
         assert_eq!(all_events.len(), 5, "events: {:?}", all_events);
 
         assert!(matches!(&all_events[0], StreamEvent::StreamStart { .. }));
-        assert!(matches!(&all_events[1], StreamEvent::ReasoningDelta { delta } if delta == "Let me analyze this."));
-        assert!(matches!(&all_events[2], StreamEvent::ReasoningDelta { delta } if delta == " The answer is clear."));
+        assert!(
+            matches!(&all_events[1], StreamEvent::ReasoningDelta { delta } if delta == "Let me analyze this.")
+        );
+        assert!(
+            matches!(&all_events[2], StreamEvent::ReasoningDelta { delta } if delta == " The answer is clear.")
+        );
         assert!(matches!(&all_events[3], StreamEvent::ContentDelta { delta } if delta == "42"));
-        assert!(matches!(&all_events[4], StreamEvent::Done { finish_reason, .. } if finish_reason.as_deref() == Some("stop")));
+        assert!(
+            matches!(&all_events[4], StreamEvent::Done { finish_reason, .. } if finish_reason.as_deref() == Some("stop"))
+        );
     }
 
     /// Tests that SSE bytes split at arbitrary boundaries still parse correctly.

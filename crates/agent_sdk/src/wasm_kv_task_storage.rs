@@ -2,16 +2,16 @@
 use spin_sdk::key_value::Store;
 
 #[cfg(target_arch = "wasm32")]
+use crate::agent::task_store::{ContinuationSnapshot, RuntimeTaskStore};
+#[cfg(target_arch = "wasm32")]
+use crate::error::{SdkError, SdkResult};
+#[cfg(target_arch = "wasm32")]
 use a2a_protocol_core::{
     data::message::Message,
     data::task::Task,
     services::{ConversationContext, TaskStorage},
     A2AError, A2AResult,
 };
-#[cfg(target_arch = "wasm32")]
-use crate::agent::task_store::{ContinuationSnapshot, RuntimeTaskStore};
-#[cfg(target_arch = "wasm32")]
-use crate::error::{SdkError, SdkResult};
 
 #[cfg(target_arch = "wasm32")]
 pub struct WasmKvTaskStorage {
@@ -96,8 +96,9 @@ impl WasmKvTaskStorage {
 #[cfg(target_arch = "wasm32")]
 impl WasmKvRuntimeTaskStore {
     pub fn new(prefix: String) -> SdkResult<Self> {
-        let store = Store::open_default()
-            .map_err(|e| SdkError::agent_initialization(format!("KV open_default failed: {}", e)))?;
+        let store = Store::open_default().map_err(|e| {
+            SdkError::agent_initialization(format!("KV open_default failed: {}", e))
+        })?;
         Ok(Self { store, prefix })
     }
 
@@ -130,24 +131,18 @@ impl RuntimeTaskStore for WasmKvRuntimeTaskStore {
     ) -> SdkResult<()> {
         let key = self.key_runtime_latest(context_id);
         match snapshot {
-            Some(snapshot) => self
-                .store
-                .set_json(&key, &snapshot)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("KV set_json continuation snapshot failed: {}", e),
-                    )
-                }),
-            None => self
-                .store
-                .delete(&key)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("KV delete continuation snapshot failed: {}", e),
-                    )
-                }),
+            Some(snapshot) => self.store.set_json(&key, &snapshot).map_err(|e| {
+                SdkError::method_execution(
+                    "runtime_task_store",
+                    format!("KV set_json continuation snapshot failed: {}", e),
+                )
+            }),
+            None => self.store.delete(&key).map_err(|e| {
+                SdkError::method_execution(
+                    "runtime_task_store",
+                    format!("KV delete continuation snapshot failed: {}", e),
+                )
+            }),
         }
     }
 

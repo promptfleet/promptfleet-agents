@@ -53,9 +53,18 @@ fn task_state_screaming_snake() {
     assert_eq!(json!(TaskState::Failed), json!("TASK_STATE_FAILED"));
     assert_eq!(json!(TaskState::Canceled), json!("TASK_STATE_CANCELED"));
     assert_eq!(json!(TaskState::Rejected), json!("TASK_STATE_REJECTED"));
-    assert_eq!(json!(TaskState::InputRequired), json!("TASK_STATE_INPUT_REQUIRED"));
-    assert_eq!(json!(TaskState::AuthRequired), json!("TASK_STATE_AUTH_REQUIRED"));
-    assert_eq!(json!(TaskState::Unspecified), json!("TASK_STATE_UNSPECIFIED"));
+    assert_eq!(
+        json!(TaskState::InputRequired),
+        json!("TASK_STATE_INPUT_REQUIRED")
+    );
+    assert_eq!(
+        json!(TaskState::AuthRequired),
+        json!("TASK_STATE_AUTH_REQUIRED")
+    );
+    assert_eq!(
+        json!(TaskState::Unspecified),
+        json!("TASK_STATE_UNSPECIFIED")
+    );
 }
 
 #[test]
@@ -63,7 +72,10 @@ fn part_flat_struct_no_kind_tag() {
     let text_part = Part::text("hello");
     let json = serde_json::to_value(&text_part).unwrap();
 
-    assert!(json.get("kind").is_none(), "v1.0 Part must not have a 'kind' field");
+    assert!(
+        json.get("kind").is_none(),
+        "v1.0 Part must not have a 'kind' field"
+    );
     assert_eq!(json["text"], "hello");
 
     let data_part = Part::data(json!({"key": "value"}));
@@ -77,13 +89,24 @@ fn message_camel_case_fields() {
     let msg = Message::text(MessageRole::User, "hi", "task-1".to_string());
     let json = serde_json::to_value(&msg).unwrap();
 
-    assert!(json.get("messageId").is_some(), "field must be camelCase: messageId");
-    assert!(json.get("taskId").is_some(), "field must be camelCase: taskId");
-    assert!(json.get("contextId").is_none() || json.get("contextId").unwrap().is_null() == false,
-        "contextId should be absent when None (skip_serializing_if)");
+    assert!(
+        json.get("messageId").is_some(),
+        "field must be camelCase: messageId"
+    );
+    assert!(
+        json.get("taskId").is_some(),
+        "field must be camelCase: taskId"
+    );
+    assert!(
+        json.get("contextId").is_none() || json.get("contextId").unwrap().is_null() == false,
+        "contextId should be absent when None (skip_serializing_if)"
+    );
     assert_eq!(json["role"], "ROLE_USER");
     assert_eq!(json["parts"][0]["text"], "hi");
-    assert!(json.get("kind").is_none(), "v1.0 Message must not have a 'kind' field");
+    assert!(
+        json.get("kind").is_none(),
+        "v1.0 Message must not have a 'kind' field"
+    );
 }
 
 #[test]
@@ -100,7 +123,11 @@ fn message_with_context() {
 fn task_wire_format() {
     let mut task = Task::with_id("task-abc".to_string(), "ctx-xyz".to_string());
     task.update_status(TaskState::Working);
-    task.add_to_history(Message::text(MessageRole::User, "input", "task-abc".to_string()));
+    task.add_to_history(Message::text(
+        MessageRole::User,
+        "input",
+        "task-abc".to_string(),
+    ));
 
     let json = serde_json::to_value(&task).unwrap();
     let norm = normalize(&json, &["timestamp"]);
@@ -118,7 +145,10 @@ fn task_status_camel_case() {
     let json = serde_json::to_value(&status).unwrap();
 
     assert_eq!(json["state"], "TASK_STATE_COMPLETED");
-    assert!(json.get("kind").is_none(), "v1.0 TaskStatus must not have a 'kind' field");
+    assert!(
+        json.get("kind").is_none(),
+        "v1.0 TaskStatus must not have a 'kind' field"
+    );
 }
 
 #[test]
@@ -161,7 +191,10 @@ fn agent_card_v1_fields() {
     assert_eq!(json["defaultOutputModes"][0], "text/plain");
     assert_eq!(json["skills"][0]["id"], "echo");
 
-    assert!(json.get("kind").is_none(), "AgentCard must not have a 'kind' field");
+    assert!(
+        json.get("kind").is_none(),
+        "AgentCard must not have a 'kind' field"
+    );
 }
 
 #[test]
@@ -173,7 +206,10 @@ fn send_message_response_task_variant() {
     let resp = SendMessageResponse::Task(task);
     let json = serde_json::to_value(&resp).unwrap();
 
-    assert!(json.get("task").is_some(), "Task variant must be wrapped under 'task' key");
+    assert!(
+        json.get("task").is_some(),
+        "Task variant must be wrapped under 'task' key"
+    );
     assert_eq!(json["task"]["id"], "t-1");
     assert_eq!(json["task"]["contextId"], "c-1");
     assert_eq!(json["task"]["status"]["state"], "TASK_STATE_COMPLETED");
@@ -187,7 +223,10 @@ fn send_message_response_message_variant() {
     let resp = SendMessageResponse::Message(msg);
     let json = serde_json::to_value(&resp).unwrap();
 
-    assert!(json.get("message").is_some(), "Message variant must be wrapped under 'message' key");
+    assert!(
+        json.get("message").is_some(),
+        "Message variant must be wrapped under 'message' key"
+    );
     assert_eq!(json["message"]["role"], "ROLE_AGENT");
     assert_eq!(json["message"]["parts"][0]["text"], "reply");
 }

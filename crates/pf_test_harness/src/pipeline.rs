@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use agent_sdk::a2a::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
 use agent_sdk::agent::engine::{
     EngineConfig, EngineError, EngineResult, RequestResponseTurnInvoker, StreamingTurnInvoker,
 };
 use agent_sdk::agent::tools::ToolRegistry;
 use agent_sdk::agent::trace::AgentTraceEvent;
-use agent_sdk::a2a::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
 use agent_sdk::agui::{agent_io_sse_stream, map_trace_to_agent_io, AgentIoEvent, IoEventContext};
 use axum::response::IntoResponse;
 use serde_json::Value;
@@ -612,7 +612,11 @@ mod tests {
         );
         capture.assert_json_path_eq(0, "jsonrpc", serde_json::json!("2.0"));
         let last = capture.frames.len().saturating_sub(1);
-        capture.assert_json_path_eq(last, "result.statusUpdate.status.state", serde_json::json!("TASK_STATE_COMPLETED"));
+        capture.assert_json_path_eq(
+            last,
+            "result.statusUpdate.status.state",
+            serde_json::json!("TASK_STATE_COMPLETED"),
+        );
     }
 
     #[tokio::test]

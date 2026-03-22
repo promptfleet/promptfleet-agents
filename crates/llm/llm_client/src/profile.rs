@@ -112,142 +112,324 @@ impl ModelCapabilities {
 /// override for custom deployments.
 const KNOWN_MODELS: &[(&str, ModelCapabilities)] = &[
     // OpenAI
-    ("gpt-4o-mini", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 16_384,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.00015), cost_per_1k_output: Some(0.0006),
-    }),
-    ("gpt-4o", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 16_384,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.0025), cost_per_1k_output: Some(0.01),
-    }),
-    ("gpt-4-turbo", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 4_096,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.01), cost_per_1k_output: Some(0.03),
-    }),
-    ("gpt-4", ModelCapabilities {
-        context_window: 8_192, max_output_tokens: 4_096,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.03), cost_per_1k_output: Some(0.06),
-    }),
-    ("gpt-5", ModelCapabilities {
-        context_window: 256_000, max_output_tokens: 32_768,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.005), cost_per_1k_output: Some(0.02),
-    }),
-    ("o3-mini", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 100_000,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.0011), cost_per_1k_output: Some(0.0044),
-    }),
-    ("o3", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 100_000,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.01), cost_per_1k_output: Some(0.04),
-    }),
-    ("o1-mini", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 65_536,
-        supports_tools: false, supports_vision: false, supports_streaming: false,
-        cost_per_1k_input: Some(0.003), cost_per_1k_output: Some(0.012),
-    }),
-    ("o1", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 100_000,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.015), cost_per_1k_output: Some(0.06),
-    }),
+    (
+        "gpt-4o-mini",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 16_384,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00015),
+            cost_per_1k_output: Some(0.0006),
+        },
+    ),
+    (
+        "gpt-4o",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 16_384,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.0025),
+            cost_per_1k_output: Some(0.01),
+        },
+    ),
+    (
+        "gpt-4-turbo",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 4_096,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.01),
+            cost_per_1k_output: Some(0.03),
+        },
+    ),
+    (
+        "gpt-4",
+        ModelCapabilities {
+            context_window: 8_192,
+            max_output_tokens: 4_096,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.03),
+            cost_per_1k_output: Some(0.06),
+        },
+    ),
+    (
+        "gpt-5",
+        ModelCapabilities {
+            context_window: 256_000,
+            max_output_tokens: 32_768,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.005),
+            cost_per_1k_output: Some(0.02),
+        },
+    ),
+    (
+        "o3-mini",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 100_000,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.0011),
+            cost_per_1k_output: Some(0.0044),
+        },
+    ),
+    (
+        "o3",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 100_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.01),
+            cost_per_1k_output: Some(0.04),
+        },
+    ),
+    (
+        "o1-mini",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 65_536,
+            supports_tools: false,
+            supports_vision: false,
+            supports_streaming: false,
+            cost_per_1k_input: Some(0.003),
+            cost_per_1k_output: Some(0.012),
+        },
+    ),
+    (
+        "o1",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 100_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.015),
+            cost_per_1k_output: Some(0.06),
+        },
+    ),
     // Anthropic Claude
-    ("claude-4-opus", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 32_768,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.015), cost_per_1k_output: Some(0.075),
-    }),
-    ("claude-4-sonnet", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 64_000,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.003), cost_per_1k_output: Some(0.015),
-    }),
-    ("claude-3.5-sonnet", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.003), cost_per_1k_output: Some(0.015),
-    }),
-    ("claude-3-haiku", ModelCapabilities {
-        context_window: 200_000, max_output_tokens: 4_096,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.00025), cost_per_1k_output: Some(0.00125),
-    }),
+    (
+        "claude-4-opus",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 32_768,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.015),
+            cost_per_1k_output: Some(0.075),
+        },
+    ),
+    (
+        "claude-4-sonnet",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 64_000,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.003),
+            cost_per_1k_output: Some(0.015),
+        },
+    ),
+    (
+        "claude-3.5-sonnet",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.003),
+            cost_per_1k_output: Some(0.015),
+        },
+    ),
+    (
+        "claude-3-haiku",
+        ModelCapabilities {
+            context_window: 200_000,
+            max_output_tokens: 4_096,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00025),
+            cost_per_1k_output: Some(0.00125),
+        },
+    ),
     // Google Gemini
-    ("gemini-2.0-flash", ModelCapabilities {
-        context_window: 1_048_576, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.0001), cost_per_1k_output: Some(0.0004),
-    }),
-    ("gemini-2.5-pro", ModelCapabilities {
-        context_window: 1_048_576, max_output_tokens: 65_536,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.00125), cost_per_1k_output: Some(0.01),
-    }),
-    ("gemini-1.5-pro", ModelCapabilities {
-        context_window: 2_097_152, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: Some(0.00125), cost_per_1k_output: Some(0.005),
-    }),
+    (
+        "gemini-2.0-flash",
+        ModelCapabilities {
+            context_window: 1_048_576,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.0001),
+            cost_per_1k_output: Some(0.0004),
+        },
+    ),
+    (
+        "gemini-2.5-pro",
+        ModelCapabilities {
+            context_window: 1_048_576,
+            max_output_tokens: 65_536,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00125),
+            cost_per_1k_output: Some(0.01),
+        },
+    ),
+    (
+        "gemini-1.5-pro",
+        ModelCapabilities {
+            context_window: 2_097_152,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00125),
+            cost_per_1k_output: Some(0.005),
+        },
+    ),
     // Qwen3
-    ("qwen3-235b", ModelCapabilities {
-        context_window: 131_072, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
-    ("qwen3-30b", ModelCapabilities {
-        context_window: 131_072, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
-    ("qwen3-8b", ModelCapabilities {
-        context_window: 131_072, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
+    (
+        "qwen3-235b",
+        ModelCapabilities {
+            context_window: 131_072,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
+    (
+        "qwen3-30b",
+        ModelCapabilities {
+            context_window: 131_072,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
+    (
+        "qwen3-8b",
+        ModelCapabilities {
+            context_window: 131_072,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
     // DeepSeek
-    ("deepseek-r1", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 8_192,
-        supports_tools: false, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.00055), cost_per_1k_output: Some(0.0022),
-    }),
-    ("deepseek-v3", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.00027), cost_per_1k_output: Some(0.0011),
-    }),
+    (
+        "deepseek-r1",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 8_192,
+            supports_tools: false,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00055),
+            cost_per_1k_output: Some(0.0022),
+        },
+    ),
+    (
+        "deepseek-v3",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.00027),
+            cost_per_1k_output: Some(0.0011),
+        },
+    ),
     // Meta Llama
-    ("llama-3.3-70b", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 4_096,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
-    ("llama-4-scout", ModelCapabilities {
-        context_window: 512_000, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
-    ("llama-4-maverick", ModelCapabilities {
-        context_window: 1_048_576, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: true, supports_streaming: true,
-        cost_per_1k_input: None, cost_per_1k_output: None,
-    }),
+    (
+        "llama-3.3-70b",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 4_096,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
+    (
+        "llama-4-scout",
+        ModelCapabilities {
+            context_window: 512_000,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
+    (
+        "llama-4-maverick",
+        ModelCapabilities {
+            context_window: 1_048_576,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: true,
+            supports_streaming: true,
+            cost_per_1k_input: None,
+            cost_per_1k_output: None,
+        },
+    ),
     // Mistral
-    ("mistral-large", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.002), cost_per_1k_output: Some(0.006),
-    }),
-    ("mistral-small", ModelCapabilities {
-        context_window: 128_000, max_output_tokens: 8_192,
-        supports_tools: true, supports_vision: false, supports_streaming: true,
-        cost_per_1k_input: Some(0.0002), cost_per_1k_output: Some(0.0006),
-    }),
+    (
+        "mistral-large",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.002),
+            cost_per_1k_output: Some(0.006),
+        },
+    ),
+    (
+        "mistral-small",
+        ModelCapabilities {
+            context_window: 128_000,
+            max_output_tokens: 8_192,
+            supports_tools: true,
+            supports_vision: false,
+            supports_streaming: true,
+            cost_per_1k_input: Some(0.0002),
+            cost_per_1k_output: Some(0.0006),
+        },
+    ),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -788,7 +788,10 @@ mod a2a_sse_mapper {
         assert!(out[0].is_terminal());
         match &out[0] {
             StreamResponse::StatusUpdate(ev) => {
-                assert_eq!(ev.status.state, a2a_protocol_core::data::TaskState::Completed);
+                assert_eq!(
+                    ev.status.state,
+                    a2a_protocol_core::data::TaskState::Completed
+                );
             }
             _ => panic!("expected StatusUpdate"),
         }
@@ -1156,7 +1159,10 @@ mod driver_tests {
             out.push(item);
         }
         let types: Vec<&str> = out.iter().map(AgentIoEvent::wire_type).collect();
-        assert_eq!(types, vec!["run_started", "text_message_content", "run_finished"]);
+        assert_eq!(
+            types,
+            vec!["run_started", "text_message_content", "run_finished"]
+        );
     }
 
     #[tokio::test]

@@ -86,8 +86,8 @@ pub mod a2a;
 pub mod agui;
 
 // Core agent implementation
-pub mod agent;
 mod a2a_app;
+pub mod agent;
 pub mod builder;
 pub mod callable;
 pub mod error;
@@ -133,18 +133,18 @@ pub mod streaming;
 pub mod sub_agent;
 
 // Re-export key types
+pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
     SkillBuilder, SkillCall,
 };
-pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use callable::CallableSkill;
 pub use error::{SdkError, SdkResult};
 pub use host::{AgentHost, AgentHostBuilder};
-pub use timeout_policy::TimeoutPolicy;
 pub use interaction::{
     InteractionKind, InteractionOption, InteractionRequest, InteractionResponse,
 };
+pub use timeout_policy::TimeoutPolicy;
 
 pub use services::ServiceContainer;
 
@@ -255,7 +255,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_core_agent_workflow() {
-        let mut agent = AgentRuntime::new_runtime("test-workflow-agent").expect("Should create agent");
+        let mut agent =
+            AgentRuntime::new_runtime("test-workflow-agent").expect("Should create agent");
 
         let skill_result = agent
             .skill("process_data", |params| async move {
@@ -372,7 +373,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_end_to_end_agent_workflow() {
-        let mut agent = AgentRuntime::new_runtime("weather-calculator-agent").expect("Should create agent");
+        let mut agent =
+            AgentRuntime::new_runtime("weather-calculator-agent").expect("Should create agent");
 
         agent
             .skill("get_weather", |params| async move {

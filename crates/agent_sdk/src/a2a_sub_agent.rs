@@ -84,7 +84,9 @@ impl A2aTraceMapper for DefaultA2aTraceMapper {
                 .as_ref()
                 .map(|m| m.get_text_content())
                 .filter(|s| !s.is_empty()),
-            StreamResponse::ArtifactUpdate(artifact) => serde_json::to_string(&artifact.artifact).ok(),
+            StreamResponse::ArtifactUpdate(artifact) => {
+                serde_json::to_string(&artifact.artifact).ok()
+            }
             _ => None,
         }
     }
@@ -193,7 +195,8 @@ async fn execute_subagent_tool(
     for (k, v) in headers {
         client = client.with_header(k, v);
     }
-    let forwarded_headers = protocol_transport_core::sanitize_headers(ctx.request_headers()).into_map();
+    let forwarded_headers =
+        protocol_transport_core::sanitize_headers(ctx.request_headers()).into_map();
     for (k, v) in forwarded_headers {
         client = client.with_header(k.clone(), v.clone());
     }

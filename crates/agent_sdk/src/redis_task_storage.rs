@@ -8,6 +8,8 @@
 mod inner {
     use std::sync::Mutex;
 
+    use crate::agent::task_store::{ContinuationSnapshot, RuntimeTaskStore};
+    use crate::error::{SdkError, SdkResult};
     use a2a_protocol_core::{
         data::message::Message,
         data::task::Task,
@@ -15,8 +17,6 @@ mod inner {
         A2AError, A2AResult,
     };
     use redis::{Client, Commands, Connection};
-    use crate::agent::task_store::{ContinuationSnapshot, RuntimeTaskStore};
-    use crate::error::{SdkError, SdkResult};
 
     pub struct RedisTaskStorage {
         conn: Mutex<Connection>,
@@ -160,66 +160,48 @@ mod inner {
         }
 
         fn conn(&self) -> SdkResult<std::sync::MutexGuard<'_, Connection>> {
-            self.conn
-                .lock()
-                .map_err(|_| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        "Redis runtime store lock poisoned",
-                    )
-                })
+            self.conn.lock().map_err(|_| {
+                SdkError::method_execution(
+                    "runtime_task_store",
+                    "Redis runtime store lock poisoned",
+                )
+            })
         }
 
         fn set_json<T: serde::Serialize>(&self, key: &str, value: &T) -> SdkResult<()> {
-            let json = serde_json::to_string(value)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("JSON serialize failed: {}", e),
-                    )
-                })?;
+            let json = serde_json::to_string(value).map_err(|e| {
+                SdkError::method_execution(
+                    "runtime_task_store",
+                    format!("JSON serialize failed: {}", e),
+                )
+            })?;
             let mut c = self.conn()?;
-            c.set::<_, _, ()>(key, &json)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("Redis SET failed: {}", e),
-                    )
-                })
+            c.set::<_, _, ()>(key, &json).map_err(|e| {
+                SdkError::method_execution("runtime_task_store", format!("Redis SET failed: {}", e))
+            })
         }
 
         fn get_json<T: serde::de::DeserializeOwned>(&self, key: &str) -> SdkResult<Option<T>> {
             let mut c = self.conn()?;
-            let raw: Option<String> = c
-                .get(key)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("Redis GET failed: {}", e),
-                    )
-                })?;
+            let raw: Option<String> = c.get(key).map_err(|e| {
+                SdkError::method_execution("runtime_task_store", format!("Redis GET failed: {}", e))
+            })?;
             match raw {
                 None => Ok(None),
-                Some(s) => serde_json::from_str(&s)
-                    .map(Some)
-                    .map_err(|e| {
-                        SdkError::method_execution(
-                            "runtime_task_store",
-                            format!("JSON deserialize failed: {}", e),
-                        )
-                    }),
+                Some(s) => serde_json::from_str(&s).map(Some).map_err(|e| {
+                    SdkError::method_execution(
+                        "runtime_task_store",
+                        format!("JSON deserialize failed: {}", e),
+                    )
+                }),
             }
         }
 
         fn del(&self, key: &str) -> SdkResult<()> {
             let mut c = self.conn()?;
-            c.del::<_, ()>(key)
-                .map_err(|e| {
-                    SdkError::method_execution(
-                        "runtime_task_store",
-                        format!("Redis DEL failed: {}", e),
-                    )
-                })
+            c.del::<_, ()>(key).map_err(|e| {
+                SdkError::method_execution("runtime_task_store", format!("Redis DEL failed: {}", e))
+            })
         }
     }
 
@@ -373,6 +355,6 @@ mod inner {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "redis-storage"))]
-pub use inner::RedisTaskStorage;
-#[cfg(all(not(target_arch = "wasm32"), feature = "redis-storage"))]
 pub use inner::RedisRuntimeTaskStore;
+#[cfg(all(not(target_arch = "wasm32"), feature = "redis-storage"))]
+pub use inner::RedisTaskStorage;

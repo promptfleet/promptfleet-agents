@@ -20,11 +20,17 @@ impl A2AProtocol {
     pub fn new(agent_card: AgentCard) -> Self {
         let mut registry = A2AMethodRegistry::new();
         registry.set_agent_card(agent_card.clone());
-        Self { agent_card, registry }
+        Self {
+            agent_card,
+            registry,
+        }
     }
 
     pub fn with_registry(agent_card: AgentCard, registry: A2AMethodRegistry) -> Self {
-        Self { agent_card, registry }
+        Self {
+            agent_card,
+            registry,
+        }
     }
 
     pub fn agent_card(&self) -> &AgentCard {
@@ -183,14 +189,17 @@ impl A2AProtocol {
                 "Get authenticated extended agent card",
                 move |request| {
                     let params: AuthenticatedExtendedCardParams =
-                        serde_json::from_value(request.params.clone())
-                            .unwrap_or_default();
+                        serde_json::from_value(request.params.clone()).unwrap_or_default();
                     let discovery = DefaultAgentDiscovery::new(agent_card_for_discovery.clone());
                     match discovery.agent_authenticated_extended_card(params) {
                         Ok(result) => Ok(JsonRpcResponse::success(request.id, json!(result))),
                         Err(e) => {
                             let rpc_err = e.to_jsonrpc_error();
-                            Ok(JsonRpcResponse::error(request.id, rpc_err.code, rpc_err.message))
+                            Ok(JsonRpcResponse::error(
+                                request.id,
+                                rpc_err.code,
+                                rpc_err.message,
+                            ))
                         }
                     }
                 },
@@ -350,8 +359,12 @@ mod tests {
             None,
             Arc::new(|req| Ok(JsonRpcResponse::success(req.id, json!({})))),
         );
-        assert!(protocol.validate_request_params("test", &json!(null)).is_err());
-        assert!(protocol.validate_request_params("test", &json!({"a": 1})).is_ok());
+        assert!(protocol
+            .validate_request_params("test", &json!(null))
+            .is_err());
+        assert!(protocol
+            .validate_request_params("test", &json!({"a": 1}))
+            .is_ok());
     }
 
     #[tokio::test]

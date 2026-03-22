@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use agent_sdk::a2a::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
 use agent_sdk::agent::engine::{
     EngineConfig, EngineError, EngineResult, RequestResponseTurnInvoker, StreamingTurnInvoker,
 };
@@ -11,7 +12,6 @@ use agent_sdk::agent::tools::{ToolExecutionResult, ToolRegistry};
 use agent_sdk::agent::trace::AgentTraceEvent;
 use agent_sdk::agent::{MessageContext, TaskContext, ToolContext};
 use agent_sdk::agent_core::{AgentMessage, ContentPart, Role};
-use agent_sdk::a2a::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
 use agent_sdk::agui::{agent_io_sse_stream, map_trace_to_agent_io, AgentIoEvent, IoEventContext};
 use axum::response::IntoResponse;
 use serde_json::{json, Value};
@@ -255,7 +255,10 @@ mod tests {
     fn test_skills() -> SkillRegistry {
         let mut skills = SkillRegistry::new();
         skills
-            .skill("lookup", |params| async move { Ok(json!({"result": params})) })
+            .skill(
+                "lookup",
+                |params| async move { Ok(json!({"result": params})) },
+            )
             .llm_callable(true)
             .register()
             .expect("register lookup skill");
@@ -325,14 +328,10 @@ mod tests {
     async fn test_execute_skill_with_context_helper() {
         let skills = test_skills();
         let exec_ctx = default_skill_execution_context();
-        let result = execute_skill_with_context(
-            &skills,
-            "lookup_ctx",
-            json!({"value": 3}),
-            &exec_ctx,
-        )
-        .await
-        .expect("skill with context result");
+        let result =
+            execute_skill_with_context(&skills, "lookup_ctx", json!({"value": 3}), &exec_ctx)
+                .await
+                .expect("skill with context result");
 
         assert_eq!(result["result"]["value"], json!(3));
         assert_eq!(result["has_task"], json!(true));

@@ -325,6 +325,12 @@ impl Otel {
         self.resource_manager.get_all_attributes()
     }
 
+    /// Get the effective OTEL configuration.
+    #[cfg(test)]
+    pub(crate) fn config(&self) -> &OtelConfig {
+        &self.config
+    }
+
     /// Generate a new span ID
     fn generate_span_id() -> String {
         // Generate a unique 16-character hex string (64-bit)
@@ -778,8 +784,49 @@ impl OtelBuilder {
         self
     }
 
+    pub fn with_service_version(mut self, version: impl Into<String>) -> Self {
+        self.config.service_version = version.into();
+        self
+    }
+
+    pub fn with_service_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.service_namespace = namespace.into();
+        self
+    }
+
     pub fn with_batch_size(mut self, size: usize) -> Self {
         self.config.batch_size = size;
+        self
+    }
+
+    pub fn with_export_timeout_secs(mut self, timeout_secs: u64) -> Self {
+        self.config.export_timeout_secs = timeout_secs;
+        self
+    }
+
+    pub fn with_sampling_strategy(mut self, strategy: SamplingStrategy) -> Self {
+        self.config.sampling_strategy = strategy;
+        self
+    }
+
+    pub fn with_auto_instrumentation(mut self, enabled: bool) -> Self {
+        self.config.auto_instrumentation = enabled;
+        self
+    }
+
+    pub fn with_resource_attribute(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.config
+            .resource_attributes
+            .insert(key.into(), value.into());
+        self
+    }
+
+    pub fn with_resource_attributes(mut self, attributes: HashMap<String, String>) -> Self {
+        self.config.resource_attributes = attributes;
         self
     }
 
@@ -834,6 +881,56 @@ mod tests {
         assert_eq!(config.batch_size, 256);
         assert_eq!(
             config.resource_attributes.get("environment"),
+            Some(&"test".to_string())
+        );
+    }
+
+    #[test]
+    fn test_builder_preserves_extended_config() {
+        let mut resource_attributes = HashMap::new();
+        resource_attributes.insert("deployment.environment".to_string(), "test".to_string());
+        resource_attributes.insert("region".to_string(), "us-east-1".to_string());
+
+        let plugin = Otel::builder()
+            .with_endpoint("http://collector:4317")
+            .with_service_name("test-service")
+            .with_service_version("1.2.3")
+            .with_service_namespace("platform")
+            .with_batch_size(128)
+            .with_export_timeout_secs(7)
+            .with_sampling_strategy(SamplingStrategy::AlwaysOff)
+            .with_auto_instrumentation(false)
+            .with_resource_attributes(resource_attributes.clone())
+            .build_sync()
+            .expect("builder should construct a plugin");
+
+        assert_eq!(plugin.config.service_name, "test-service");
+        assert_eq!(plugin.config.service_version, "1.2.3");
+        assert_eq!(plugin.config.service_namespace, "platform");
+        assert_eq!(plugin.config.batch_size, 128);
+        assert_eq!(plugin.config.export_timeout_secs, 7);
+        assert!(matches!(
+            &plugin.config.sampling_strategy,
+            &SamplingStrategy::AlwaysOff
+        ));
+        assert!(!plugin.config.auto_instrumentation);
+        assert_eq!(plugin.config.resource_attributes, resource_attributes);
+
+        let all_attributes = plugin.get_resource_attributes();
+        assert_eq!(
+            all_attributes.get("service.name"),
+            Some(&"test-service".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("service.version"),
+            Some(&"1.2.3".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("service.namespace"),
+            Some(&"platform".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("deployment.environment"),
             Some(&"test".to_string())
         );
     }

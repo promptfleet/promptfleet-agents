@@ -1,6 +1,6 @@
 //! Universal server abstractions for all protocols
 
-use crate::ProtocolRouter;
+use crate::{ProtocolRouter, UniversalRequest, UniversalResponse};
 use serde_json::json;
 use std::collections::HashMap;
 

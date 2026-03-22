@@ -101,19 +101,31 @@ impl OtelManager {
         }
     }
 
+    fn build_plugin(config: &OtelExtensionConfig) -> Result<Otel, String> {
+        let mut base_config = config.base.clone();
+        base_config.auto_instrumentation = config.auto_instrumentation;
+
+        OtelBuilder::new()
+            .with_endpoint(base_config.otlp_endpoint)
+            .with_service_name(base_config.service_name)
+            .with_service_version(base_config.service_version)
+            .with_service_namespace(base_config.service_namespace)
+            .with_batch_size(base_config.batch_size)
+            .with_export_timeout_secs(base_config.export_timeout_secs)
+            .with_sampling_strategy(base_config.sampling_strategy.clone())
+            .with_auto_instrumentation(base_config.auto_instrumentation)
+            .with_resource_attributes(base_config.resource_attributes)
+            .build_sync()
+            .map_err(|e| e.to_string())
+    }
+
     /// Create from configuration
     pub fn from_config(config: OtelExtensionConfig) -> Result<Self, String> {
         // Validate configuration
         config.validate()?;
 
         // Create extension instance synchronously (WASM-compatible)
-        let base_config = config.to_base_config();
-        match OtelBuilder::new()
-            .with_endpoint(base_config.otlp_endpoint)
-            .with_service_name(base_config.service_name)
-            .with_batch_size(base_config.batch_size)
-            .build_sync()
-        {
+        match Self::build_plugin(&config) {
             Ok(plugin) => {
                 log::info!("🔗 OTEL Extension manager created successfully");
                 Ok(Self::with_plugin(plugin, config))
@@ -148,13 +160,7 @@ impl OtelManager {
 
         // Try to create extension if not already created
         if self.plugin.is_none() {
-            let base_config = config.to_base_config();
-            match OtelBuilder::new()
-                .with_endpoint(base_config.otlp_endpoint)
-                .with_service_name(base_config.service_name)
-                .with_batch_size(base_config.batch_size)
-                .build_sync()
-            {
+            match Self::build_plugin(&config) {
                 Ok(plugin) => {
                     self.plugin = Some(plugin);
                     log::info!("🔗 OTEL Extension manager initialized successfully");
@@ -227,6 +233,7 @@ impl OtelManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sampling::SamplingStrategy;
 
     #[test]
     fn test_otel_extension_config_default() {
@@ -263,5 +270,87 @@ mod tests {
 
         let restored = OtelExtensionConfig::from_json(&json.unwrap());
         assert!(restored.is_ok());
+    }
+
+    fn sample_extension_config(auto_instrumentation: bool) -> OtelExtensionConfig {
+        let mut base = OtelConfig::default();
+        base.otlp_endpoint = "http://collector:4317".to_string();
+        base.service_name = "test-service".to_string();
+        base.service_version = "1.2.3".to_string();
+        base.service_namespace = "platform".to_string();
+        base.batch_size = 64;
+        base.export_timeout_secs = 11;
+        base.sampling_strategy = SamplingStrategy::AlwaysOff;
+        base.resource_attributes.insert(
+            "deployment.environment".to_string(),
+            "integration".to_string(),
+        );
+
+        OtelExtensionConfig {
+            base,
+            auto_instrumentation,
+            enable_otlp_export: true,
+            enable_trace_correlation: true,
+            enable_w3c_propagation: true,
+        }
+    }
+
+    #[test]
+    fn test_from_config_forwards_full_base_config() {
+        let config = sample_extension_config(false);
+        let manager = OtelManager::from_config(config.clone()).expect("manager creation");
+
+        let plugin = manager.plugin().expect("plugin should be initialized");
+        let plugin_config = plugin.config();
+        assert_eq!(plugin_config.service_name, "test-service");
+        assert_eq!(plugin_config.service_version, "1.2.3");
+        assert_eq!(plugin_config.service_namespace, "platform");
+        assert_eq!(plugin_config.batch_size, 64);
+        assert_eq!(plugin_config.export_timeout_secs, 11);
+        assert_eq!(
+            std::mem::discriminant(&plugin_config.sampling_strategy),
+            std::mem::discriminant(&SamplingStrategy::AlwaysOff)
+        );
+        assert!(!plugin_config.auto_instrumentation);
+        assert_eq!(
+            plugin
+                .get_resource_attributes()
+                .get("deployment.environment"),
+            Some(&"integration".to_string())
+        );
+
+        let stored = manager.config().expect("manager config");
+        assert_eq!(stored.auto_instrumentation, false);
+        assert_eq!(stored.base.service_version, "1.2.3");
+    }
+
+    #[test]
+    fn test_initialize_forwards_full_base_config() {
+        let config = sample_extension_config(true);
+        let mut manager = OtelManager::new();
+        manager.initialize(config.clone()).expect("manager init");
+
+        let plugin = manager.plugin().expect("plugin should be initialized");
+        let plugin_config = plugin.config();
+        assert_eq!(plugin_config.service_name, "test-service");
+        assert_eq!(plugin_config.service_version, "1.2.3");
+        assert_eq!(plugin_config.service_namespace, "platform");
+        assert_eq!(plugin_config.batch_size, 64);
+        assert_eq!(plugin_config.export_timeout_secs, 11);
+        assert_eq!(
+            std::mem::discriminant(&plugin_config.sampling_strategy),
+            std::mem::discriminant(&SamplingStrategy::AlwaysOff)
+        );
+        assert!(plugin_config.auto_instrumentation);
+        assert_eq!(
+            plugin
+                .get_resource_attributes()
+                .get("deployment.environment"),
+            Some(&"integration".to_string())
+        );
+
+        let stored = manager.config().expect("manager config");
+        assert_eq!(stored.auto_instrumentation, true);
+        assert_eq!(stored.base.service_namespace, "platform");
     }
 }

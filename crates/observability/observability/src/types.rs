@@ -735,6 +735,9 @@ impl ObservabilityConfig {
         fn get_u64(v: &ConfigValue, key: &str) -> Option<u64> {
             v.get(key)?.as_u64()
         }
+        fn get_duration_millis(v: &ConfigValue, key: &str) -> Option<Duration> {
+            get_u64(v, key).map(Duration::from_millis)
+        }
         fn get_usize(v: &ConfigValue, key: &str) -> Option<usize> {
             v.get(key)?.as_u64().map(|n| n as usize)
         }
@@ -790,7 +793,9 @@ impl ObservabilityConfig {
             if let Some(bs) = get_usize(&otel_val, "batch_size") {
                 cfg.otel.batch_size = bs;
             }
-            if let Some(secs) = get_u64(&otel_val, "export_timeout_secs") {
+            if let Some(timeout) = get_duration_millis(&otel_val, "export_timeout") {
+                cfg.otel.export_timeout = timeout;
+            } else if let Some(secs) = get_u64(&otel_val, "export_timeout_secs") {
                 cfg.otel.export_timeout = Duration::from_secs(secs);
             }
             if let Some(sampling) = get_str(&otel_val, "sampling") {
@@ -830,7 +835,9 @@ impl ObservabilityConfig {
             if let Some(inst) = get_str(&p_val, "instance") {
                 cfg.prometheus.instance = inst;
             }
-            if let Some(secs) = get_u64(&p_val, "push_interval_secs") {
+            if let Some(interval) = get_duration_millis(&p_val, "push_interval") {
+                cfg.prometheus.push_interval = interval;
+            } else if let Some(secs) = get_u64(&p_val, "push_interval_secs") {
                 cfg.prometheus.push_interval = Duration::from_secs(secs);
             }
             if let Some(cr) = get_bool(&p_val, "cardinality_reduction") {
@@ -848,6 +855,8 @@ impl ObservabilityConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "config")]
+    use serde_json::json;
 
     #[test]
     fn init_default_config_works() {
@@ -958,6 +967,79 @@ mod tests {
         assert_eq!(otel.export_timeout, back.export_timeout);
     }
 
+    #[cfg(feature = "config")]
+    #[test]
+    fn from_value_roundtrips_canonical_duration_fields() {
+        let cfg = ObservabilityConfig {
+            service_name: "test-agent".to_string(),
+            service_version: "2.0.0".to_string(),
+            service_namespace: "prod".to_string(),
+            logging: CoreLoggingConfig {
+                level: "debug".to_string(),
+                format: "json".to_string(),
+                structured: true,
+                context_enrichment: true,
+                default_context: Default::default(),
+            },
+            otel: OtelConfig {
+                enabled: true,
+                otlp_endpoint: "http://otel:4317".to_string(),
+                batch_size: 256,
+                export_timeout: Duration::from_millis(5_500),
+                sampling: OtelSampling::ParentBased,
+            },
+            prometheus: PrometheusConfig {
+                enabled: true,
+                pushgateway_endpoint: Some("http://pushgw:9091".to_string()),
+                job_name: "my-job".to_string(),
+                instance: "pod-1".to_string(),
+                push_interval: Duration::from_millis(15_250),
+                cardinality_reduction: false,
+                max_cardinality: 5000,
+            },
+        };
+
+        let json = serde_json::to_value(&cfg).unwrap();
+        let roundtrip: ObservabilityConfig = serde_json::from_value(json.clone()).unwrap();
+        let from_value = ObservabilityConfig::from_value(&json);
+
+        assert_eq!(cfg, roundtrip);
+        assert_eq!(cfg, from_value);
+    }
+
+    #[cfg(feature = "config")]
+    #[test]
+    fn from_value_prefers_canonical_duration_fields_over_legacy_seconds() {
+        let cfg = ObservabilityConfig::from_value(&json!({
+            "observability": {
+                "service_name": "legacy-bridge",
+                "service_version": "1.0.0",
+                "service_namespace": "prod",
+                "otel": {
+                    "enabled": true,
+                    "otlp_endpoint": "http://otel:4317",
+                    "batch_size": 128,
+                    "export_timeout": 1500,
+                    "export_timeout_secs": 99,
+                    "sampling": "always_off"
+                },
+                "prometheus": {
+                    "enabled": true,
+                    "pushgateway_endpoint": "http://pushgw:9091",
+                    "job_name": "bridge",
+                    "instance": "pod-a",
+                    "push_interval": 2500,
+                    "push_interval_secs": 88
+                }
+            }
+        }));
+
+        assert_eq!(cfg.otel.export_timeout, Duration::from_millis(1500));
+        assert_eq!(cfg.prometheus.push_interval, Duration::from_millis(2500));
+        assert!(cfg.otel.enabled);
+        assert!(cfg.prometheus.enabled);
+    }
+
     #[test]
     fn health_includes_logging() {
         let obs = Obs::init(ObservabilityConfig::default()).unwrap();
@@ -987,7 +1069,10 @@ mod tests {
     fn health_marks_failed_backends_when_configured_but_invalid() {
         // This test asserts "best-effort init": invalid backend configs must not panic,
         // and health must surface the failure as `Some(false)` with a helpful note.
+        #[cfg(any(feature = "otel", feature = "prometheus"))]
         let mut cfg = ObservabilityConfig::default();
+        #[cfg(not(any(feature = "otel", feature = "prometheus")))]
+        let cfg = ObservabilityConfig::default();
 
         #[cfg(feature = "otel")]
         {

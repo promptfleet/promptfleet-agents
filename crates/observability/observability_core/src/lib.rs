@@ -32,6 +32,8 @@ pub use context::{
     // Thread-local management
     set_current_context,
     with_context,
+    with_context_future,
+    ContextFuture,
     HeaderExtractor,
     // Header utilities
     HeaderInjector,

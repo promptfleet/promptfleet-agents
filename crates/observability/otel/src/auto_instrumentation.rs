@@ -1,6 +1,6 @@
 //! Auto-instrumentation support for OpenTelemetry
 
-use observability_core::{ObservabilityPlugin, SpanGuard, W3CTraceContext};
+use observability_core::{ObservabilityPlugin, W3CTraceContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 

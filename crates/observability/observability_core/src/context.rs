@@ -6,6 +6,9 @@
 use crate::error::{ObservabilityError, ObservabilityResult};
 use std::collections::HashMap;
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use uuid::Uuid;
 
 /// W3C Trace Context implementation for distributed tracing
@@ -301,6 +304,47 @@ where
     }
 
     result
+}
+
+/// Execute a future with a specific trace context re-applied on every poll.
+pub fn with_context_future<F>(context: TraceContext, future: F) -> ContextFuture<F>
+where
+    F: Future,
+{
+    ContextFuture {
+        context,
+        inner: Box::pin(future),
+    }
+}
+
+/// Future wrapper that restores trace context across async poll boundaries.
+pub struct ContextFuture<F>
+where
+    F: Future,
+{
+    context: TraceContext,
+    inner: Pin<Box<F>>,
+}
+
+impl<F> Future for ContextFuture<F>
+where
+    F: Future,
+{
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let previous = get_current_context();
+        set_current_context(self.context.clone());
+
+        let result = self.inner.as_mut().poll(cx);
+
+        match previous {
+            Some(ctx) => set_current_context(ctx),
+            None => clear_current_context(),
+        }
+
+        result
+    }
 }
 
 /// Header injector for W3C trace context propagation

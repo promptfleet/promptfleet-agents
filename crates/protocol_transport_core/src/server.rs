@@ -1,6 +1,8 @@
 //! Universal server abstractions for all protocols
 
-use crate::{ProtocolRouter, UniversalRequest, UniversalResponse};
+use crate::ProtocolRouter;
+#[cfg(target_arch = "wasm32")]
+use crate::{UniversalRequest, UniversalResponse};
 use serde_json::json;
 use std::collections::HashMap;
 

@@ -15,7 +15,7 @@ use web_time::Instant;
 #[cfg(feature = "observability")]
 use observability::{
     attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-    ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+    with_context_future, ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
 };
 
 const STATUS_OK: &str = "ok";
@@ -264,7 +264,13 @@ impl A2AHttpServer {
                             .get("id")
                             .cloned()
                             .unwrap_or(serde_json::Value::Null);
-                        let response = match app.handle_send_message_async(params).await {
+                        let response_future = app.handle_send_message_async(params);
+                        let response_result = if let Some(current_context) = get_current_context() {
+                            with_context_future(current_context, response_future).await
+                        } else {
+                            response_future.await
+                        };
+                        let response = match response_result {
                             Ok(result) => {
                                 let result_value =
                                     if let a2a_protocol_core::methods::params::MessageSendResponse::Task(
@@ -957,5 +963,85 @@ mod tests {
         let storage: Arc<dyn TaskStorage> = Arc::new(InMemoryTaskStorage::new());
         let server = A2AHttpServer::new_with_storage(agent_card, storage);
         assert_eq!(server.agent_id(), "test-agent");
+    }
+
+    #[cfg(feature = "observability")]
+    #[tokio::test]
+    async fn test_wasm_server_preserves_w3c_trace_context_for_app_adapter() {
+        use a2a_app_ports::{A2AAppPortAsync, AppFuture};
+        use a2a_protocol_core::data::{Message, MessageRole};
+        use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
+        use observability::{get_current_context, TraceContext};
+
+        #[derive(Clone)]
+        struct TraceCapturingApp {
+            seen: std::sync::Arc<std::sync::Mutex<Option<TraceContext>>>,
+        }
+
+        impl A2AAppPortAsync for TraceCapturingApp {
+            fn build_agent_card(&self) -> AgentCard {
+                AgentCard::new("test-agent".to_string())
+            }
+
+            fn handle_send_message_async<'a>(
+                &'a self,
+                _params: SendMessageRequest,
+            ) -> AppFuture<'a> {
+                Box::pin(async move {
+                    *self.seen.lock().unwrap() = get_current_context();
+                    Ok(SendMessageResponse::Message(Message::text(
+                        MessageRole::Agent,
+                        "ok",
+                        "task-1".to_string(),
+                    )))
+                })
+            }
+        }
+
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let app = TraceCapturingApp { seen: seen.clone() };
+
+        let mut obs_cfg = observability::ObservabilityConfig::default();
+        obs_cfg.otel.enabled = true;
+        obs_cfg.otel.otlp_endpoint = "http://otel:4317".to_string();
+        let obs = observability::Obs::init(obs_cfg).unwrap();
+
+        let server = A2AHttpServer::new_with_a2a_methods(AgentCard::new("test-agent".to_string()))
+            .with_app_adapter_async(std::sync::Arc::new(app))
+            .with_observability(obs);
+
+        let req = SpinRequest::builder()
+            .method(Method::Post)
+            .uri("/jsonrpc")
+            .header("content-type", "application/json")
+            .header(
+                "traceparent",
+                "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+            )
+            .body(
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": "trace-test",
+                    "method": crate::method::SEND_MESSAGE,
+                    "params": {
+                        "message": {
+                            "messageId": "msg-1",
+                            "role": "ROLE_USER",
+                            "parts": [{"text": "hello"}]
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .build();
+
+        let response = server.serve_request_async(req).await.unwrap();
+        assert_eq!(*response.status(), 200);
+
+        let ctx = seen.lock().unwrap().clone().expect("trace context");
+        assert_eq!(ctx.trace_id, "0af7651916cd43dd8448eb211c80319c");
+        assert_eq!(ctx.parent_span_id.as_deref(), Some("b7ad6b7169203331"));
+        assert_ne!(ctx.span_id, "b7ad6b7169203331");
+        assert_eq!(ctx.span_id.len(), 16);
     }
 }

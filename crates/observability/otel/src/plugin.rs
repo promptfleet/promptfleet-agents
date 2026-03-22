@@ -5,7 +5,9 @@ use observability_core::{
     ports::MetricsPort, ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext,
 };
 
-use crate::collector_client::{CollectorClient, LogData, MetricData, OtelSpanData, SpanEvent};
+use crate::collector_client::{
+    CollectorClient, LogData, MetricData, MetricKind, OtelSpanData, SpanEvent,
+};
 use crate::resource_attributes::ResourceAttributeManager;
 use crate::sampling::SamplingStrategy;
 #[cfg(feature = "structured-logging")]
@@ -308,7 +310,9 @@ impl Otel {
             return Ok(());
         }
 
-        self.collector_client.export_metrics(metrics).await
+        self.collector_client
+            .export_metrics(metrics, &self.resource_manager)
+            .await
     }
 
     /// Export pending logs to collector
@@ -317,7 +321,9 @@ impl Otel {
             return Ok(());
         }
 
-        self.collector_client.export_logs(logs).await
+        self.collector_client
+            .export_logs(logs, &self.resource_manager)
+            .await
     }
 
     /// Get resource attributes
@@ -619,6 +625,7 @@ impl ObservabilityPlugin for Otel {
         // Add trace correlation if available
         if let Some(context) = self.get_trace_context() {
             log = log
+                .with_trace_context(&context.trace_id, &context.span_id)
                 .with_attribute("trace_id", &context.trace_id)
                 .with_attribute("span_id", &context.span_id);
         }
@@ -656,18 +663,11 @@ impl ObservabilityPlugin for Otel {
 impl MetricsPort for Otel {
     /// Emit a simple counter metric
     fn emit_counter_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "counter".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("count".to_string()),
-            description: Some(format!("Counter metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Counter)
+            .with_label("component", "otel_plugin")
+            .with_unit("count")
+            .with_description(format!("Counter metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {
@@ -690,18 +690,11 @@ impl MetricsPort for Otel {
 
     /// Emit a simple histogram/timing metric
     fn emit_histogram_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "histogram".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("duration".to_string()),
-            description: Some(format!("Histogram metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Histogram)
+            .with_label("component", "otel_plugin")
+            .with_unit("duration")
+            .with_description(format!("Histogram metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {
@@ -724,18 +717,11 @@ impl MetricsPort for Otel {
 
     /// Emit a simple gauge metric
     fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "gauge".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("value".to_string()),
-            description: Some(format!("Gauge metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Gauge)
+            .with_label("component", "otel_plugin")
+            .with_unit("value")
+            .with_description(format!("Gauge metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {

@@ -117,7 +117,11 @@ impl CollectorClient {
     }
 
     /// Export metrics to the OTLP collector
-    pub async fn export_metrics(&self, metrics: Vec<MetricData>) -> ObservabilityResult<()> {
+    pub async fn export_metrics(
+        &self,
+        metrics: Vec<MetricData>,
+        resource_manager: &crate::resource_attributes::ResourceAttributeManager,
+    ) -> ObservabilityResult<()> {
         if metrics.is_empty() {
             return Ok(());
         }
@@ -125,7 +129,7 @@ impl CollectorClient {
         #[cfg(feature = "structured-logging")]
         {
             // Convert to OTLP-compatible JSON format
-            let otlp_payload = self.create_otlp_metrics_payload(metrics)?;
+            let otlp_payload = self.create_otlp_metrics_payload(metrics, resource_manager)?;
 
             let url = format!("{}/v1/metrics", self.endpoint);
             self.send_json(&url, &otlp_payload).await.map_err(|e| {
@@ -144,7 +148,11 @@ impl CollectorClient {
     }
 
     /// Export logs to the OTLP collector
-    pub async fn export_logs(&self, logs: Vec<LogData>) -> ObservabilityResult<()> {
+    pub async fn export_logs(
+        &self,
+        logs: Vec<LogData>,
+        resource_manager: &crate::resource_attributes::ResourceAttributeManager,
+    ) -> ObservabilityResult<()> {
         if logs.is_empty() {
             return Ok(());
         }
@@ -152,7 +160,7 @@ impl CollectorClient {
         #[cfg(feature = "structured-logging")]
         {
             // Convert to OTLP-compatible JSON format
-            let otlp_payload = self.create_otlp_logs_payload(logs)?;
+            let otlp_payload = self.create_otlp_logs_payload(logs, resource_manager)?;
 
             let url = format!("{}/v1/logs", self.endpoint);
             self.send_json(&url, &otlp_payload).await.map_err(|e| {
@@ -787,37 +795,107 @@ impl CollectorClient {
     fn create_otlp_metrics_payload(
         &self,
         metrics: Vec<MetricData>,
+        resource_manager: &crate::resource_attributes::ResourceAttributeManager,
     ) -> ObservabilityResult<serde_json::Value> {
         use serde_json::{json, Value};
+        use web_time::SystemTime;
 
-        let resource_metrics = metrics.into_iter().map(|metric| {
-            let labels: Vec<Value> = metric.labels.into_iter().map(|(key, value)| {
-                json!({
-                    "key": key,
-                    "value": {
-                        "stringValue": value
-                    }
+        fn system_time_to_unix_nanos(t: SystemTime) -> ObservabilityResult<u64> {
+            let d = t.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
+                ObservabilityError::transport(format!("SystemTime before UNIX_EPOCH: {e}"))
+            })?;
+            Ok(d.as_nanos() as u64)
+        }
+
+        fn resource_attributes_json(
+            resource_manager: &crate::resource_attributes::ResourceAttributeManager,
+        ) -> Vec<Value> {
+            resource_manager
+                .get_all_attributes()
+                .into_iter()
+                .map(|(key, value)| {
+                    json!({
+                        "key": key,
+                        "value": {
+                            "stringValue": value
+                        }
+                    })
                 })
-            }).collect();
+                .collect()
+        }
 
-            json!({
-                "name": metric.name,
-                "description": metric.description.unwrap_or_default(),
-                "unit": metric.unit.unwrap_or_default(),
-                "gauge": {
-                    "dataPoints": [{
-                        "asDouble": metric.value,
-                        "timeUnixNano": web_time::Instant::now().elapsed().as_nanos().to_string(),
-                        "attributes": labels
-                    }]
+        let now = SystemTime::now();
+        let resource_attrs = resource_attributes_json(resource_manager);
+
+        let resource_metrics = metrics
+            .into_iter()
+            .map(|metric| {
+                let labels: Vec<Value> = metric
+                    .labels
+                    .into_iter()
+                    .map(|(key, value)| {
+                        json!({
+                            "key": key,
+                            "value": {
+                                "stringValue": value
+                            }
+                        })
+                    })
+                    .collect();
+
+                let point_time = now.checked_sub(metric.timestamp.elapsed()).unwrap_or(now);
+                let time_unix_nano = system_time_to_unix_nanos(point_time).unwrap_or(0);
+
+                let mut metric_json = json!({
+                    "name": metric.name,
+                    "description": metric.description.unwrap_or_default(),
+                    "unit": metric.unit.unwrap_or_default(),
+                });
+
+                match metric.kind {
+                    MetricKind::Counter => {
+                        metric_json["sum"] = json!({
+                            "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE",
+                            "isMonotonic": true,
+                            "dataPoints": [{
+                                "asDouble": metric.value,
+                                "timeUnixNano": time_unix_nano.to_string(),
+                                "attributes": labels
+                            }]
+                        });
+                    }
+                    MetricKind::Histogram => {
+                        metric_json["histogram"] = json!({
+                            "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE",
+                            "dataPoints": [{
+                                "count": "1",
+                                "sum": metric.value,
+                                "bucketCounts": ["1"],
+                                "explicitBounds": [],
+                                "timeUnixNano": time_unix_nano.to_string(),
+                                "attributes": labels
+                            }]
+                        });
+                    }
+                    MetricKind::Gauge => {
+                        metric_json["gauge"] = json!({
+                            "dataPoints": [{
+                                "asDouble": metric.value,
+                                "timeUnixNano": time_unix_nano.to_string(),
+                                "attributes": labels
+                            }]
+                        });
+                    }
                 }
+
+                metric_json
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
         Ok(json!({
             "resourceMetrics": [{
                 "resource": {
-                    "attributes": []
+                    "attributes": resource_attrs
                 },
                 "instrumentationLibraryMetrics": [{
                     "instrumentationLibrary": {
@@ -835,12 +913,67 @@ impl CollectorClient {
     fn create_otlp_logs_payload(
         &self,
         logs: Vec<LogData>,
+        resource_manager: &crate::resource_attributes::ResourceAttributeManager,
     ) -> ObservabilityResult<serde_json::Value> {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
         use serde_json::{json, Value};
+        use web_time::SystemTime;
+
+        fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
+            let hex = hex.trim();
+            if hex.len() % 2 != 0 {
+                return None;
+            }
+            let mut out = Vec::with_capacity(hex.len() / 2);
+            let mut i = 0;
+            while i < hex.len() {
+                let b = u8::from_str_radix(&hex[i..i + 2], 16).ok()?;
+                out.push(b);
+                i += 2;
+            }
+            Some(out)
+        }
+
+        fn hex_to_b64(hex: &str, expected_len: usize) -> Option<String> {
+            let bytes = hex_to_bytes(hex)?;
+            if bytes.len() != expected_len {
+                return None;
+            }
+            Some(STANDARD.encode(bytes))
+        }
+
+        fn system_time_to_unix_nanos(t: SystemTime) -> ObservabilityResult<u64> {
+            let d = t.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
+                ObservabilityError::transport(format!("SystemTime before UNIX_EPOCH: {e}"))
+            })?;
+            Ok(d.as_nanos() as u64)
+        }
+
+        fn resource_attributes_json(
+            resource_manager: &crate::resource_attributes::ResourceAttributeManager,
+        ) -> Vec<Value> {
+            resource_manager
+                .get_all_attributes()
+                .into_iter()
+                .map(|(key, value)| {
+                    json!({
+                        "key": key,
+                        "value": {
+                            "stringValue": value
+                        }
+                    })
+                })
+                .collect()
+        }
+
+        let now = SystemTime::now();
+        let resource_attrs = resource_attributes_json(resource_manager);
 
         let log_records = logs
             .into_iter()
             .map(|log| {
+                let log_time = now.checked_sub(log.timestamp.elapsed()).unwrap_or(now);
+                let time_unix_nano = system_time_to_unix_nanos(log_time).unwrap_or(0);
                 let attributes: Vec<Value> = log
                     .attributes
                     .into_iter()
@@ -854,21 +987,39 @@ impl CollectorClient {
                     })
                     .collect();
 
-                json!({
-                    "timeUnixNano": log.timestamp.elapsed().as_nanos().to_string(),
+                let mut log_record = json!({
+                    "timeUnixNano": time_unix_nano.to_string(),
                     "severityText": log.level,
                     "body": {
                         "stringValue": log.message
                     },
                     "attributes": attributes
-                })
+                });
+
+                if let Some(trace_id) = log
+                    .trace_id
+                    .as_deref()
+                    .and_then(|trace_id| hex_to_b64(trace_id, 16))
+                {
+                    log_record["traceId"] = Value::String(trace_id);
+                }
+
+                if let Some(span_id) = log
+                    .span_id
+                    .as_deref()
+                    .and_then(|span_id| hex_to_b64(span_id, 8))
+                {
+                    log_record["spanId"] = Value::String(span_id);
+                }
+
+                log_record
             })
             .collect::<Vec<_>>();
 
         Ok(json!({
             "resourceLogs": [{
                 "resource": {
-                    "attributes": []
+                    "attributes": resource_attrs
                 },
                 "instrumentationLibraryLogs": [{
                     "instrumentationLibrary": {
@@ -913,10 +1064,37 @@ impl CollectorClient {
 }
 
 /// Metric data for export with proper OpenTelemetry structure
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MetricKind {
+    Counter,
+    Histogram,
+    Gauge,
+}
+
+impl MetricKind {
+    pub fn from_metric_name(name: &str) -> Self {
+        let lower = name.to_ascii_lowercase();
+        if lower.ends_with("_total") || lower.ends_with("_count") || lower.ends_with("_counter") {
+            Self::Counter
+        } else if lower.ends_with("_ms")
+            || lower.ends_with("_seconds")
+            || lower.contains("latency")
+            || lower.contains("duration")
+        {
+            Self::Histogram
+        } else {
+            Self::Gauge
+        }
+    }
+}
+
+/// Metric data for export with proper OpenTelemetry structure
 #[derive(Debug, Clone)]
 pub struct MetricData {
     pub name: String,
     pub value: f64,
+    pub kind: MetricKind,
+    pub timestamp: Instant,
     pub labels: HashMap<String, String>,
     pub unit: Option<String>,
     pub description: Option<String>,
@@ -925,13 +1103,22 @@ pub struct MetricData {
 impl MetricData {
     /// Create a new metric data entry
     pub fn new(name: impl Into<String>, value: f64) -> Self {
+        let name = name.into();
         Self {
-            name: name.into(),
+            kind: MetricKind::from_metric_name(&name),
+            name,
             value,
+            timestamp: Instant::now(),
             labels: HashMap::new(),
             unit: None,
             description: None,
         }
+    }
+
+    /// Override the inferred metric kind.
+    pub fn with_kind(mut self, kind: MetricKind) -> Self {
+        self.kind = kind;
+        self
     }
 
     /// Add a label to the metric
@@ -959,6 +1146,8 @@ pub struct LogData {
     pub message: String,
     pub level: String,
     pub timestamp: web_time::Instant,
+    pub trace_id: Option<String>,
+    pub span_id: Option<String>,
     pub attributes: HashMap<String, String>,
 }
 
@@ -969,6 +1158,8 @@ impl LogData {
             message: message.into(),
             level: level.into(),
             timestamp: web_time::Instant::now(),
+            trace_id: None,
+            span_id: None,
             attributes: HashMap::new(),
         }
     }
@@ -976,6 +1167,17 @@ impl LogData {
     /// Add an attribute to the log entry
     pub fn with_attribute(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.attributes.insert(key.into(), value.into());
+        self
+    }
+
+    /// Attach canonical trace correlation to the log entry.
+    pub fn with_trace_context(
+        mut self,
+        trace_id: impl Into<String>,
+        span_id: impl Into<String>,
+    ) -> Self {
+        self.trace_id = Some(trace_id.into());
+        self.span_id = Some(span_id.into());
         self
     }
 }
@@ -987,13 +1189,14 @@ mod tests {
 
     #[test]
     fn test_metric_data_builder() {
-        let metric = MetricData::new("test_metric", 42.0)
+        let metric = MetricData::new("test_metric_total", 42.0)
             .with_label("env", "test")
             .with_unit("count")
             .with_description("A test metric");
 
-        assert_eq!(metric.name, "test_metric");
+        assert_eq!(metric.name, "test_metric_total");
         assert_eq!(metric.value, 42.0);
+        assert_eq!(metric.kind, MetricKind::Counter);
         assert_eq!(metric.labels.get("env"), Some(&"test".to_string()));
         assert_eq!(metric.unit, Some("count".to_string()));
         assert_eq!(metric.description, Some("A test metric".to_string()));
@@ -1001,11 +1204,112 @@ mod tests {
 
     #[test]
     fn test_log_data_builder() {
-        let log = LogData::new("INFO", "Test message").with_attribute("component", "test");
+        let log = LogData::new("INFO", "Test message")
+            .with_trace_context(
+                "0af7651916cd43dd8448eb211c80319c",
+                "b7ad6b7169203331",
+            )
+            .with_attribute("component", "test");
 
         assert_eq!(log.level, "INFO");
         assert_eq!(log.message, "Test message");
+        assert_eq!(
+            log.trace_id.as_deref(),
+            Some("0af7651916cd43dd8448eb211c80319c")
+        );
+        assert_eq!(log.span_id.as_deref(), Some("b7ad6b7169203331"));
         assert_eq!(log.attributes.get("component"), Some(&"test".to_string()));
+    }
+
+    #[test]
+    fn test_create_otlp_metrics_payload_preserves_metric_kinds() {
+        let client = CollectorClient::new_sync("http://localhost:4318", Duration::from_secs(1))
+            .expect("client");
+        let resource_manager = crate::resource_attributes::ResourceAttributeManager::new(
+            "metric-service",
+            "1.2.3",
+            "test-ns",
+            HashMap::new(),
+        );
+
+        let payload = client
+            .create_otlp_metrics_payload(
+                vec![
+                    MetricData::new("requests_total", 3.0),
+                    MetricData::new("request_latency_ms", 125.0),
+                    MetricData::new("queue_depth", 7.0),
+                ],
+                &resource_manager,
+            )
+            .expect("payload");
+
+        let metrics = payload["resourceMetrics"][0]["instrumentationLibraryMetrics"][0]["metrics"]
+            .as_array()
+            .expect("metrics array");
+        assert!(metrics[0].get("sum").is_some(), "counter should export as sum");
+        assert_eq!(
+            metrics[0]["sum"]["isMonotonic"].as_bool(),
+            Some(true),
+            "counter should be monotonic"
+        );
+        assert!(
+            metrics[1].get("histogram").is_some(),
+            "latency metric should export as histogram"
+        );
+        assert!(
+            metrics[2].get("gauge").is_some(),
+            "generic metric should export as gauge"
+        );
+
+        let resource_attrs = payload["resourceMetrics"][0]["resource"]["attributes"]
+            .as_array()
+            .expect("resource attrs");
+        assert!(resource_attrs.iter().any(|attr| {
+            attr["key"].as_str() == Some("service.name")
+                && attr["value"]["stringValue"].as_str() == Some("metric-service")
+        }));
+    }
+
+    #[test]
+    fn test_create_otlp_logs_payload_includes_resource_attrs_and_trace_context() {
+        let client = CollectorClient::new_sync("http://localhost:4318", Duration::from_secs(1))
+            .expect("client");
+        let resource_manager = crate::resource_attributes::ResourceAttributeManager::new(
+            "log-service",
+            "9.9.9",
+            "test-ns",
+            HashMap::new(),
+        );
+
+        let payload = client
+            .create_otlp_logs_payload(
+                vec![LogData::new("INFO", "hello")
+                    .with_trace_context(
+                        "0af7651916cd43dd8448eb211c80319c",
+                        "b7ad6b7169203331",
+                    )
+                    .with_attribute("trace_id", "0af7651916cd43dd8448eb211c80319c")
+                    .with_attribute("span_id", "b7ad6b7169203331")],
+                &resource_manager,
+            )
+            .expect("payload");
+
+        let log = &payload["resourceLogs"][0]["instrumentationLibraryLogs"][0]["logs"][0];
+        assert!(log.get("traceId").is_some(), "trace context should be attached");
+        assert!(log.get("spanId").is_some(), "span context should be attached");
+        assert!(log["attributes"]
+            .as_array()
+            .expect("attributes")
+            .iter()
+            .any(|attr| attr["key"].as_str() == Some("trace_id")));
+
+        let resource_attrs = payload["resourceLogs"][0]["resource"]["attributes"]
+            .as_array()
+            .expect("resource attrs");
+        assert!(resource_attrs.iter().any(|attr| {
+            attr["key"].as_str() == Some("service.name")
+                && attr["value"]["stringValue"].as_str() == Some("log-service")
+        }));
     }
 
     #[test]

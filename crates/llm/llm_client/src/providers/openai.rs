@@ -1,6 +1,7 @@
 use crate::{
     model_client::{
-        ApiMode, ClientCapabilities, ClientConfig, ClientError, HttpModelClient, ModelClient,
+        ApiMode, ClientCapabilities, ClientConfig, ClientError, ClientFuture, HttpModelClient,
+        ModelClient,
     },
     types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
 };
@@ -75,11 +76,8 @@ impl ModelClient for OpenAIClient {
         self.inner.capabilities()
     }
 
-    async fn llm_request(
-        &self,
-        request: serde_json::Value,
-    ) -> Result<serde_json::Value, ClientError> {
-        self.inner.llm_request(request).await
+    fn llm_request(&self, request: serde_json::Value) -> ClientFuture<'_> {
+        Box::pin(async move { self.inner.llm_request(request).await })
     }
 }
 

@@ -48,15 +48,23 @@ pub enum ClientError {
 
 pub type ClientResult<T> = Result<T, ClientError>;
 
+#[cfg(target_arch = "wasm32")]
+pub type ClientFuture<'a> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = ClientResult<serde_json::Value>> + 'a>>;
+#[cfg(not(target_arch = "wasm32"))]
+pub type ClientFuture<'a> = std::pin::Pin<
+    Box<
+        dyn std::future::Future<Output = ClientResult<serde_json::Value>> + Send + 'a,
+    >,
+>;
+
 /// Minimal provider-agnostic client API
 pub trait ModelClient: Send + Sync {
     fn capabilities(&self) -> ClientCapabilities;
 
-    /// Generic non-streaming LLM request (chat, tools, structured output)
-    fn llm_request(
-        &self,
-        request: serde_json::Value,
-    ) -> impl std::future::Future<Output = ClientResult<serde_json::Value>> + Send;
+    /// Generic non-streaming LLM request (chat, tools, structured output).
+    /// Spin's WASM HTTP path is not `Send`, so the future bound is target-aware.
+    fn llm_request(&self, request: serde_json::Value) -> ClientFuture<'_>;
 }
 
 /// Default HTTP-backed client (provider-agnostic JSON)
@@ -168,37 +176,39 @@ impl ModelClient for HttpModelClient {
         }
     }
 
-    async fn llm_request(&self, request: serde_json::Value) -> ClientResult<serde_json::Value> {
-        log::debug!("HttpModelClient::llm_request dispatching to /v1/chat/completions");
-        let body = serde_json::to_vec(&request)?;
-        let uni_req = self.build_universal_request("/v1/chat/completions", body);
+    fn llm_request(&self, request: serde_json::Value) -> ClientFuture<'_> {
+        Box::pin(async move {
+            log::debug!("HttpModelClient::llm_request dispatching to /v1/chat/completions");
+            let body = serde_json::to_vec(&request)?;
+            let uni_req = self.build_universal_request("/v1/chat/completions", body);
 
-        // Use dual-target HTTP from protocol_transport_core
-        let transport = TransportFactory::rest_http();
-        let resp: UniversalResponse = transport.send(uni_req).await?;
-        log::debug!(
-            "HttpModelClient::llm_request status={} resp_body_len={}",
-            resp.status,
-            resp.body.len()
-        );
-
-        if resp.status >= 400 {
-            let preview = String::from_utf8_lossy(&resp.body);
-            log::warn!(
-                "HttpModelClient::llm_request error status={} body={} headers={:?}",
+            // Use dual-target HTTP from protocol_transport_core
+            let transport = TransportFactory::rest_http();
+            let resp: UniversalResponse = transport.send(uni_req).await?;
+            log::debug!(
+                "HttpModelClient::llm_request status={} resp_body_len={}",
                 resp.status,
-                preview,
-                resp.headers
+                resp.body.len()
             );
-            return Err(ClientError::Transport(TransportError::Http {
-                status: resp.status,
-                message: "HTTP error".to_string(),
-                body: Some(resp.body),
-                headers: Some(resp.headers),
-            }));
-        }
-        let json: serde_json::Value = serde_json::from_slice(&resp.body)?;
-        Ok(json)
+
+            if resp.status >= 400 {
+                let preview = String::from_utf8_lossy(&resp.body);
+                log::warn!(
+                    "HttpModelClient::llm_request error status={} body={} headers={:?}",
+                    resp.status,
+                    preview,
+                    resp.headers
+                );
+                return Err(ClientError::Transport(TransportError::Http {
+                    status: resp.status,
+                    message: "HTTP error".to_string(),
+                    body: Some(resp.body),
+                    headers: Some(resp.headers),
+                }));
+            }
+            let json: serde_json::Value = serde_json::from_slice(&resp.body)?;
+            Ok(json)
+        })
     }
 }
 

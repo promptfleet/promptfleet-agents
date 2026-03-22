@@ -1,0 +1,36 @@
+---
+description: WASM-first constraints for OSS library crates — no native syscalls, no tokio compat layers
+globs: crates/**/*.rs
+alwaysApply: false
+---
+
+# WASM Compatibility Constraints
+
+All crates in this repo (except `pf_test_harness`) must compile to `wasm32-wasi`.
+
+## Forbidden patterns
+
+- `tokio::runtime::Runtime` or any full tokio runtime — use Spin SDK async
+- `std::net::TcpStream` / `std::net::UdpSocket` — use `spin_sdk::http`
+- `std::fs::*` — use Spin key-value store or external storage
+- `std::process::Command` — not available in WASM
+- `libc` or `nix` crate — native-only
+- `reqwest` with default features — use `spin_sdk::http::send` or WASM-compatible HTTP
+
+## Allowed patterns
+
+- `spin_sdk::*` for all I/O (HTTP, key-value, SQLite, variables)
+- `serde` / `serde_json` for serialization
+- Pure computation crates (no I/O)
+- Template engines: Sailfish, Askama, MiniJinja (all WASM-compatible)
+
+## Exceptions
+
+- `pf_test_harness` — native-only test crate, may use tokio/axum
+- `examples/a2a-echo-native` — native example
+
+## Quick check
+
+```bash
+cargo check --target wasm32-wasi -p <crate-name>
+```

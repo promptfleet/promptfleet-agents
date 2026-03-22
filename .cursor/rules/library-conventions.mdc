@@ -1,0 +1,26 @@
+---
+description: Conventions for OSS library crates in promptfleet-agents
+globs:
+alwaysApply: true
+---
+
+# Library Crate Conventions
+
+## Repo identity
+This is **`promptfleet-agents`** — the **public OSS** Rust crate library. All crates under `crates/`. This repo is a standalone library consumed by downstream projects.
+
+## Dependency discipline
+Crates here must be **self-contained**. No dependencies on external proprietary packages. Only depend on published crates or other crates within this workspace.
+
+## Public API discipline
+- Every public type, trait, and function should have a doc comment — this will be published.
+- Avoid exposing internal implementation details. Use `pub(crate)` for crate-internal items.
+- Breaking changes to public APIs affect downstream consumers — coordinate carefully.
+
+## WASM target
+All crates must compile to `wasm32-wasi` except `pf_test_harness` (native-only test infra).
+
+## Testing
+- Run tests: `cargo test -p <crate>`
+- `pf_test_harness` provides `LlmScenario`, `TestPipeline`, `SseCollector`, and `a2a_http` helpers for integration tests.
+- Never update `ai_changelogs.md` before tests pass.

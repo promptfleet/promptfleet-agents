@@ -1,0 +1,28 @@
+[package]
+name = "foundation_utils"
+version = "0.1.0"
+edition = "2021"
+description = "Foundation utilities for RAII patterns, resource management, and scoped operations"
+authors = ["PromptFleet Team"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# All features are optional - core functionality has zero dependencies
+
+[dependencies]
+# 🎯 ZERO DEPENDENCIES - Pure Rust stdlib only
+# This ensures maximum compatibility and minimal binary size for WASM
+
+# WASM-compatible time handling (only if needed)
+web-time = { version = "1.0", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# WASM-specific dependencies only when targeting WASM
+wasm-bindgen = { version = "0.2", optional = true }
+
+[dev-dependencies]
+# Only for testing
+tokio = { version = "1.0", features = ["rt", "macros", "time"] } 

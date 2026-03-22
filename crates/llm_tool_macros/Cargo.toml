@@ -1,0 +1,15 @@
+[package]
+name = "llm_tool_macros"
+version = "0.1.0"
+edition = "2021"
+description = "Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+schemars = { workspace = true }
+serde_json = { workspace = true }

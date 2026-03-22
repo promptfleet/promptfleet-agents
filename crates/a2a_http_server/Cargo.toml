@@ -1,0 +1,80 @@
+[package]
+name = "a2a_http_server"
+version = "0.1.0"
+edition = "2021"
+description = "A2A HTTP server - WASM default, native testing support"
+
+[dependencies]
+# Core (always included)
+protocol_transport_core = { workspace = true }
+a2a_protocol_core = { workspace = true, features = ["core"] }
+a2a_app_ports = { workspace = true }
+
+# Optional observability (OTLP push via observability facade)
+observability = { workspace = true, optional = true, features = ["otel"] }
+
+# Minimal serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+web-time = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+# Logging
+log = { workspace = true }
+
+# WASM-only deps (Spin SDK for HTTP)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+spin-sdk = "5.2"
+
+# Native-only deps (Axum for HTTP server)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+futures-util = "0.3"
+async-stream = "0.3"
+
+# Feature-gated dependencies
+schemars = { version = "0.8", optional = true }
+
+[dev-dependencies]
+# Testing deps (both targets)
+tokio = { version = "1.0", features = ["full"] }
+tokio-test = "0.4"
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+tower = { version = "0.4", features = ["util"] }
+tower-service = "0.3"
+futures-util = "0.3"
+# A2A HTTP client for E2E testing
+a2a_http_client = { workspace = true }
+pf_test_harness = { workspace = true, features = ["sse", "a2a-http"] }
+
+[features]
+default = ["core"]
+# Core A2A functionality (required for standard methods)
+core = ["a2a_protocol_core/core"]
+
+# Optional: emit OTEL spans/metrics + W3C propagation.
+observability = ["dep:observability"]
+
+# Advanced features - JSON schema generation
+schema = ["schemars", "a2a_protocol_core/spec-compliant"]
+
+# Extended functionality
+discovery = ["a2a_protocol_core/extended-discovery"]
+event-stream = ["a2a_protocol_core/event-stream"]
+streaming = ["event-stream"]
+files = ["a2a_protocol_core/file-handling"]
+push = ["a2a_protocol_core/push-notifications"]
+
+# All features
+all = ["schema", "discovery", "event-stream", "files", "push", "observability"]
+
+[lib]
+name = "a2a_http_server"
+crate-type = ["cdylib", "rlib"] 
+doctest = false

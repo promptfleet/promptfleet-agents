@@ -1,0 +1,39 @@
+[package]
+name = "protocol_transport_core"
+version = "0.1.0"
+edition = "2021"
+description = "Universal transport foundation for multiple protocols - SpinKube optimized"
+
+[dependencies]
+# Common deps (always included)
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+indexmap = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+
+# WASM-only deps (Spin SDK for HTTP)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+spin-sdk = "5.2"
+
+# Native-only deps (Reqwest for HTTP, Tokio for async runtime)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-stream = "0.1"
+
+[lib]
+name = "protocol_transport_core"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["client", "server"]
+client = []
+server = []
+batch = [] 

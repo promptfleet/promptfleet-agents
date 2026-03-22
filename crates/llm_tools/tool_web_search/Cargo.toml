@@ -1,0 +1,27 @@
+[package]
+name = "tool_web_search"
+version = "0.1.0"
+edition = "2021"
+description = "Reusable LLM tool: web search via Tavily API. Returns a ToolSpec for any agent's ToolRegistry."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Agent SDK for ToolSpec type (always-compiled, no heavy features)
+agent_sdk = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true, features = ["derive"] }
+log = { workspace = true }
+
+# WASM HTTP (Spin outbound)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+spin-sdk = { workspace = true }
+
+# Native HTTP (for cargo check / cargo test on host)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true, features = ["json"] }
+tokio = { workspace = true, features = ["rt"] }

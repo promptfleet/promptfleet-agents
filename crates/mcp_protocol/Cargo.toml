@@ -1,0 +1,51 @@
+[package]
+name = "mcp_protocol"
+version = "0.1.0"
+edition = "2021"
+description = "Model Context Protocol (MCP) implementation for PromptFleet - JSON-RPC 2.0 compatible"
+
+[dependencies]
+# Protocol transport foundation
+protocol_transport_core = { workspace = true }
+
+# Spin SDK for HTTP handling
+spin-sdk = "5.2"
+
+# Core serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = "0.1"
+
+# UUID for correlation tracking
+uuid = { workspace = true, features = ["v4"] }
+
+# Collections
+indexmap = { workspace = true }
+
+# Time for timestamps
+chrono = { workspace = true, features = ["serde"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+reqwest = { workspace = true, features = ["json"] }
+
+[lib]
+name = "mcp_protocol"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["client", "server", "proxy"]
+client = []
+server = []
+proxy = []
+# Direct SSE client - avoids proxy hop for performance
+sse-client = ["client"]
+# Direct SSE server - accepts direct SSE connections
+sse-server = ["server"]
+
+# Examples only
+[dev-dependencies]
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] } 
+axum = { version = "0.7" }

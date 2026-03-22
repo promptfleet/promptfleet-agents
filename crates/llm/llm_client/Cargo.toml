@@ -1,0 +1,35 @@
+[package]
+name = "llm_client"
+version = "0.1.0"
+edition = "2021"
+description = "Simplified, provider-agnostic LLM client built on protocol_transport_core"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+uuid = { workspace = true }
+log = { workspace = true }
+futures = { workspace = true }
+
+# Transport abstraction with dual-target (WASM/native) HTTP
+protocol_transport_core = { workspace = true }
+
+# Native-only: streaming SSE transport
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true, features = ["stream"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+futures = { workspace = true }
+axum = { version = "0.7" }
+
+[lib]
+name = "llm_client"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []

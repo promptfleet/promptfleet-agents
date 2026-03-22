@@ -1,0 +1,57 @@
+[package]
+name = "a2a_protocol_core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure A2A (Agent-to-Agent) protocol domain logic - WASM optimized"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# JSON-RPC 2.0 foundation
+protocol_transport_core = { workspace = true }
+
+# Core serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# UUID generation for agent IDs
+uuid = { workspace = true, features = ["v4"] }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging (no-op in WASM unless a logger is wired in upper layers)
+log = { version = "0.4" }
+
+# Optional features
+chrono = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Testing utilities
+proptest = "1.4"
+insta = "1.34"
+tokio = { version = "1.0", features = ["macros", "rt"] }
+
+[features]
+default = ["protocol-core"]
+protocol-core = []                           # Base Task + Message + AgentCard
+event-stream = ["protocol-core"]             # SSE streaming support
+file-handling = ["protocol-core"]            # File upload/download support
+time-stamps = ["chrono"]                     # Timestamp support for Task/Message
+all-features = ["event-stream", "file-handling", "time-stamps"]
+
+# A2A Specification Compliance Features
+spec-compliant = ["protocol-core", "event-stream"]  # Core A2A spec features
+wasm-optimized = ["protocol-core"]           # Minimal features for WASM targets
+
+# Backward-compat aliases (to ease downstream migration)
+core = ["protocol-core"]
+streaming = ["event-stream"]
+timestamps = ["time-stamps"]
+push-notifications = ["protocol-core"]
+extended-discovery = ["protocol-core"]
+
+# NO spin-sdk, NO http dependencies - pure domain layer
+# Uses JSON-RPC foundation from protocol_transport_core

@@ -1,0 +1,17 @@
+[package]
+name = "a2a-echo-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal A2A v1.0 echo agent — WASM (Spin), no LLM key needed"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+agent_sdk = { workspace = true, features = ["a2a-server"], default-features = false }
+spin-sdk = "5.2"
+anyhow = "1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+agent_sdk = { workspace = true, features = ["a2a-server"], default-features = false }

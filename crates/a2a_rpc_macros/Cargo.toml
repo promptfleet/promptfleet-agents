@@ -1,0 +1,22 @@
+[package]
+name = "a2a_rpc_macros"
+version = "0.1.0"
+edition = "2021"
+description = "Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# Proc-macro essentials
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+
+# Code generation
+serde_json = { workspace = true }
+
+[features]
+default = []
+# Feature for generating build scripts automatically
+build-script-gen = [] 

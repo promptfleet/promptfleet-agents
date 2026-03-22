@@ -1,0 +1,69 @@
+[package]
+name = "otel"
+version = "0.1.0"
+edition = "2021"
+description = "OpenTelemetry extension for SpinKube WASM environments"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["structured-logging"]
+otel-2025 = ["opentelemetry", "opentelemetry-otlp", "opentelemetry-semantic-conventions"]
+auto-instrumentation = ["otel-2025"]
+grpc-tonic = ["opentelemetry-otlp/grpc-tonic"]
+grpc-sys = ["opentelemetry-otlp/grpc-sys"]
+structured-logging = [
+    "serde_json",
+    "observability_core/structured-logging",
+    "opentelemetry-proto",
+    "prost",
+]
+
+[dependencies]
+# Core observability
+observability_core = { workspace = true }
+
+# Core dependencies only - extension system removed
+log = "0.4"
+base64 = "0.22"
+opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic-messages", "traces"], optional = true }
+prost = { version = "0.11", optional = true }
+
+# OpenTelemetry dependencies (feature-gated)
+opentelemetry = { version = "0.20", optional = true }
+opentelemetry-otlp = { version = "0.13", optional = true }
+opentelemetry-semantic-conventions = { version = "0.12", optional = true }
+# Note: opentelemetry-instrumentation doesn't exist as a separate crate
+
+# Core dependencies
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+
+# WASM-compatible time and async
+web-time = "1.1"
+futures = "0.3"
+
+# HTTP client for WASM
+reqwest = { version = "0.12", features = ["json"] }
+
+# Utility dependencies
+rand = "0.8"
+url = "2"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
+spin-sdk = "5.2"
+spin-executor = "5.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.0", features = ["rt", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] } 

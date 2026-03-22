@@ -1,0 +1,15 @@
+[package]
+name = "a2a-echo-native"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal A2A v1.0 echo agent — native (tokio + Axum), no LLM key needed"
+publish = false
+
+[[bin]]
+name = "a2a-echo-native"
+path = "src/main.rs"
+
+[dependencies]
+agent_sdk = { workspace = true, features = ["a2a-server", "event-stream"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0"

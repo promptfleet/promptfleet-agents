@@ -1,0 +1,16 @@
+[package]
+name = "a2a_app_ports"
+version = "0.1.0"
+edition = "2021"
+description = "Application layer ports for A2A servers (clean architecture)"
+
+[dependencies]
+a2a_protocol_core = { workspace = true, features = ["core"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "a2a_app_ports"
+crate-type = ["rlib"]

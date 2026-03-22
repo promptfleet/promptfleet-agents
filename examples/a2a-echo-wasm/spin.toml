@@ -1,0 +1,17 @@
+spin_manifest_version = 2
+
+[application]
+name = "a2a-echo-wasm"
+version = "1.0.0"
+description = "Minimal A2A v1.0 echo agent — WASM (Spin)"
+
+[[trigger.http]]
+route = "/..."
+component = "echo-agent"
+
+[component.echo-agent]
+source = "target/wasm32-wasip1/release/a2a_echo_wasm.wasm"
+allowed_outbound_hosts = []
+key_value_stores = ["default"]
+[component.echo-agent.build]
+command = "cargo build --target wasm32-wasip1 --release"

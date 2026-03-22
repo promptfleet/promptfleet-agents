@@ -1,0 +1,25 @@
+[package]
+name = "pf_config"
+version = "0.1.0"
+edition = "2021"
+description = "Layered configuration loader (JSON, env, dotenv, Cargo.toml section) with optional WASM-friendly path later"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+dotenv = ["dep:dotenvy"]
+cargo-toml = ["dep:toml"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Optional features
+dotenvy = { version = "0.15", optional = true }
+toml = { version = "0.8", optional = true }
+
+# Native only helpers (no WASM binding yet). Keep target guard in code, not here.

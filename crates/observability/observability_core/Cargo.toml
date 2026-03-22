@@ -1,0 +1,48 @@
+[package]
+name = "observability_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# 🎯 Enable structured-logging by default for standard logging integration
+default = ["structured-logging"]
+observability = ["otel-2025", "structured-logging", "prometheus-federation"]
+otel-2025 = ["opentelemetry", "opentelemetry-semantic-conventions"]
+auto-instrumentation = ["otel-2025", "opentelemetry-semantic-conventions"]
+structured-logging = ["serde", "serde_json", "chrono", "log", "tracing", "rand"]
+prometheus-federation = ["prometheus"]
+
+[dependencies]
+# Core dependencies (always available)
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Observability dependencies (feature-gated)
+opentelemetry = { version = "0.21", optional = true }
+opentelemetry-semantic-conventions = { version = "0.13", optional = true }
+prometheus = { version = "0.13", optional = true }
+
+# Structured logging dependencies (feature-gated)
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+log = { version = "0.4", features = ["kv_unstable"], optional = true }
+tracing = { version = "0.1", optional = true }
+
+# Tracing integration dependencies (feature-gated)
+rand = { version = "0.8", optional = true, default-features = false, features = ["std", "std_rng"] }
+
+# No direct dependency on extensions - use ports/adapters pattern
+
+# Foundation utils for RAII patterns
+foundation_utils = { workspace = true }
+
+# WASM-compatible time handling
+web-time = "1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3" 

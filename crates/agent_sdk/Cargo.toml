@@ -1,0 +1,176 @@
+[package]
+name = "agent_sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters"
+readme = "README.md"
+repository = "https://github.com/promptfleet/promptfleet-agents.git"
+keywords = ["agent", "a2a", "agui", "sdk", "wasm"]
+categories = ["api-bindings", "asynchronous", "wasm"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Protocol-agnostic agent domain types
+agent_core = { workspace = true }
+
+# Core A2A protocol - always included
+a2a_protocol_core = { workspace = true, features = ["core", "timestamps", "streaming"] }
+protocol_transport_core = { workspace = true }
+
+# Core utilities
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+# Async runtime for user functions
+async-trait = "0.1"
+log = "0.4"
+
+# Optional config loader + observability auto-init (opt-in).
+pf_config = { workspace = true, optional = true }
+observability = { workspace = true, optional = true }
+
+# HTTP transport (now supports both WASM and native targets automatically)
+a2a_http_client = { workspace = true, optional = true }
+a2a_http_server = { workspace = true, optional = true }
+a2a_app_ports = { workspace = true }
+
+# LLM integration (opt-in) — provider-agnostic minimal client
+llm_client = { workspace = true, optional = true }
+# LLM context window management (opt-in)
+llm_context_core = { workspace = true, optional = true }
+# Tools macros/runtime registry (adapter)
+llm_tools = { workspace = true, optional = true }
+
+# WASM-only optional deps
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+spin-sdk = { version = "5.2", optional = true }
+# MCP client — lightweight Streamable HTTP via spin-sdk (WASM only)
+mcp_protocol = { workspace = true, features = ["client"], optional = true }
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
+# Force wasm feature unification for older transitive users still on getrandom 0.2.x.
+getrandom_02 = { package = "getrandom", version = "0.2.16", features = ["js"] }
+
+# Native-only deps (for testing and development)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+axum = { version = "0.7", features = ["json"], optional = true }
+tokio = { version = "1.0", features = ["macros", "rt", "time", "sync"] }
+futures = { workspace = true }
+async-stream = { version = "0.3", optional = true }
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
+futures-util = { version = "0.3", optional = true }
+# MCP client — full spec: stdio + streamable HTTP (native only)
+rmcp = { version = "0.14", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"], optional = true }
+# Redis/Valkey client for shared task storage (native only)
+redis = { version = "0.28", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["macros", "rt", "time"] }
+axum = { version = "0.7", features = ["json"] }
+rmcp = { version = "0.14", features = ["server", "transport-streamable-http-server", "schemars"] }
+mcp_protocol = { workspace = true, features = ["client"] }
+pf_test_harness = { workspace = true, features = ["scenario", "agent-sdk", "a2a-http", "a2a-mock"] }
+a2a_http_client = { workspace = true, features = ["streaming"] }
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[features]
+default = ["agent-core"]
+
+# Runtime-first base
+agent-core = ["a2a_protocol_core/core"]
+
+# A2A transport surfaces
+a2a-server = ["a2a_http_server", "agent-core", "dep:spin-sdk", "dep:axum"]
+a2a-client = ["a2a_http_client", "agent-core"]
+
+# Full features (both client and server with complete testing support)
+full = ["a2a-server", "a2a-client"]
+
+# A2A specification compliance
+spec-compliant = ["a2a_protocol_core/spec-compliant"]
+
+# WASM optimization
+wasm-optimized = ["a2a_protocol_core/wasm-optimized"]
+
+# File handling support
+file-handling = ["a2a_protocol_core/file-handling"]
+
+# LLM: Tools-first orchestrator (unified path)
+llm-engine = ["llm_client", "agent-core", "dep:llm_tools"]
+
+# LLM context window management (token budgeting, history strategies)
+context-window = ["llm-engine", "dep:llm_context_core"]
+
+# A2A-native tools (agent/card/get + message/send exposed as LLM tools).
+a2a-tools = ["agent-core", "a2a_http_client", "dep:spin-sdk"]
+
+# MCP tools: Connect to external MCP servers and inject tools into ToolRegistry.
+# - Native: rmcp (stdio + streamable HTTP)
+# - WASM: mcp_protocol (Streamable HTTP via spin-sdk)
+# Platform-conditional deps are silently ignored on the wrong target.
+mcp-client = ["agent-core", "dep:rmcp", "dep:mcp_protocol"]
+
+# Live E2E tests against real MCP servers (never in default/CI).
+# Run: TAVILY_API_KEY=... cargo test -p agent_sdk --features mcp-e2e --test mcp_e2e -- --ignored
+mcp-e2e = ["mcp-client"]
+
+# Config loading via pf_config (JSON + env).
+config-loader = ["dep:pf_config"]
+
+# Observability facade wiring (allows AgentBuilder to init observability).
+agent-observability = ["dep:observability", "observability/otel", "a2a_http_server?/observability", "a2a_http_client?/observability"]
+
+# Redis/Valkey task storage for native multi-replica agents.
+# Enables RedisTaskStorage — used when PF_TASK_VALKEY_URL is set.
+redis-storage = ["dep:redis"]
+
+# Native streaming adapters for Agent I/O and A2A SSE.
+event-stream = ["a2a-server", "llm-engine", "dep:async-stream", "dep:tokio-stream", "dep:futures-util", "a2a_http_server?/streaming", "a2a_http_client?/streaming"]
+
+# Public AG-UI stream surface; implemented on top of the shared event stream.
+agui-stream = ["event-stream"]
+
+# Sub-agent delegation tools (native-only in v1).
+sub-agents = ["event-stream", "a2a-client", "a2a_http_client/streaming"]
+
+# Test-only engine seam accessors for cross-crate harnesses (native-focused).
+test-support = ["llm-engine"]
+
+# Convenience: load config and init observability.
+auto-observability = ["config-loader", "agent-observability"]
+
+# Typed interaction contracts for reusable ask-question/confirmation flows.
+interactive-tools = ["agent-core"]
+
+# Capability bundles
+agui-agent = ["agent-core", "llm-engine", "agui-stream"]
+a2a-agent = ["agent-core", "llm-engine", "a2a-server", "a2a-client", "event-stream"]
+dual-agent = ["agui-agent", "a2a-agent"]
+pf-agent = ["dual-agent", "mcp-client", "agent-observability"]
+
+[package.metadata.docs.rs]
+features = [
+    "pf-agent",
+    "a2a-tools",
+    "sub-agents",
+    "redis-storage",
+    "interactive-tools",
+    "context-window",
+    "file-handling",
+    "spec-compliant",
+    "auto-observability",
+]
+
+[[bench]]
+name = "native_hot_path"
+harness = false
+required-features = ["event-stream", "test-support"]
+
+[[bench]]
+name = "a2a_roundtrip"
+harness = false
+required-features = ["a2a-client", "a2a-server", "event-stream", "test-support"]

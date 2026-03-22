@@ -1,0 +1,131 @@
+[workspace]
+resolver = "2"
+members = [
+    # Foundation / Transport
+    "crates/foundation_utils",
+    "crates/protocol_transport_core",
+
+    # Agent Core
+    "crates/agent_core",
+
+    # A2A Protocol
+    "crates/a2a_protocol_core",
+    "crates/a2a_http_client",
+    "crates/a2a_http_server",
+    "crates/a2a_app_ports",
+    "crates/a2a_rpc_macros",
+
+    # LLM
+    "crates/llm/llm_client",
+    "crates/llm_context_core",
+    "crates/llm_tools",
+    "crates/llm_tools/tool_web_search",
+    "crates/llm_tool_macros",
+
+    # Observability
+    "crates/observability/observability",
+    "crates/observability/observability_core",
+    "crates/observability/structured_logging",
+    "crates/observability/otel",
+    "crates/observability/prometheus",
+
+    # MCP
+    "crates/mcp_protocol",
+
+    # Macros / Types
+    "crates/pf_macros",
+    "crates/commons/pf-types",
+
+    # Config
+    "crates/config/pf_config",
+
+    # SDK
+    "crates/agent_sdk",
+
+    # Test Harness
+    "crates/pf_test_harness",
+
+    # Examples
+    "examples/a2a-echo-native",
+    "examples/a2a-echo-wasm",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+repository = "https://github.com/promptfleet/promptfleet-agents"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# ── Internal crates ──
+agent_core = { path = "crates/agent_core" }
+agent_sdk = { path = "crates/agent_sdk" }
+a2a_protocol_core = { path = "crates/a2a_protocol_core" }
+a2a_http_client = { path = "crates/a2a_http_client" }
+a2a_http_server = { path = "crates/a2a_http_server" }
+a2a_app_ports = { path = "crates/a2a_app_ports" }
+a2a_rpc_macros = { path = "crates/a2a_rpc_macros" }
+protocol_transport_core = { path = "crates/protocol_transport_core" }
+foundation_utils = { path = "crates/foundation_utils" }
+observability = { path = "crates/observability/observability" }
+observability_core = { path = "crates/observability/observability_core" }
+structured_logging = { path = "crates/observability/structured_logging" }
+llm_client = { path = "crates/llm/llm_client" }
+llm_context_core = { path = "crates/llm_context_core" }
+llm_tools = { path = "crates/llm_tools" }
+llm_tool_macros = { path = "crates/llm_tool_macros" }
+tool_web_search = { path = "crates/llm_tools/tool_web_search" }
+mcp_protocol = { path = "crates/mcp_protocol" }
+pf_config = { path = "crates/config/pf_config" }
+pf_macros = { path = "crates/pf_macros" }
+pf-types = { path = "crates/commons/pf-types" }
+pf_test_harness = { path = "crates/pf_test_harness" }
+
+# ── External dependencies ──
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.141"
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "v5", "js"] }
+ulid = "1.1"
+indexmap = "2.0"
+web-time = "1.0"
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+futures = "0.3"
+http = "1.0"
+bytes = "1.0"
+async-trait = "0.1"
+spin-sdk = "5.2"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+schemars = { version = "0.8", features = ["derive"] }
+opentelemetry = "0.21"
+opentelemetry-otlp = "0.14"
+opentelemetry-semantic-conventions = "0.13"
+prometheus = "0.13"
+string-interner = "0.17"
+env_logger = "0.11"
+
+# ── Profiles ──
+[profile.release]
+lto = "fat"
+opt-level = "z"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+overflow-checks = false
+debug-assertions = false
+incremental = false
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

@@ -1,0 +1,11 @@
+[package]
+name = "llm_tools"
+version = "0.1.0"
+edition = "2021"
+description = "Lightweight WASM-safe tool registry and macro to collect LLM tools and execute by name"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+llm_client = { workspace = true }
+paste = "1.0"

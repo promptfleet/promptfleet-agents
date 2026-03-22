@@ -1,0 +1,41 @@
+[package]
+name = "observability"
+version = "0.1.0"
+edition = "2021"
+description = "PromptFleet observability facade (happy path)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Keep the default build lightweight: structured logging + context via observability_core.
+default = ["logging", "config"]
+
+# Serde support for config types (Serialize/Deserialize on ObservabilityConfig et al.).
+serde = ["dep:serde", "dep:serde_json"]
+
+# Global logging + structured fields through observability_core singleton.
+logging = ["serde", "dep:log"]
+
+# Config parsing helpers (JSON value parsing) without requiring logging.
+config = ["serde"]
+
+# Optional backends.
+otel = ["dep:otel"]
+prometheus = ["dep:obs_prometheus", "obs_prometheus/prometheus-federation", "obs_prometheus/structured-logging"]
+prometheus-pushgateway = ["prometheus", "obs_prometheus/pushgateway-client"]
+
+# Convenience feature for "turn everything on".
+full = ["otel", "prometheus"]
+
+[dependencies]
+observability_core = { workspace = true }
+log = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+web-time = { workspace = true }
+
+# Optional backend crates (renamed to avoid name collisions in dependents).
+otel = { path = "../otel", package = "otel", optional = true }
+obs_prometheus = { path = "../prometheus", package = "prometheus", optional = true }
+

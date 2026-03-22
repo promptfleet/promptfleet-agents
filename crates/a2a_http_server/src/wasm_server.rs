@@ -251,7 +251,7 @@ impl A2AHttpServer {
                         g.add_attribute(attr::OPERATION, m);
                         g.add_attribute(attr::RPC_METHOD, m);
                     }
-                    if m == "SendMessage" {
+                    if m == crate::method::SEND_MESSAGE {
                         let params_val = root_val
                             .get("params")
                             .cloned()
@@ -378,7 +378,7 @@ impl A2AHttpServer {
                             .header("x-server", "a2a-http-server")
                             .body(body)
                             .build());
-                    } else if m == "GetAgentCard" {
+                    } else if m == crate::method::GET_AGENT_CARD {
                         let card = app.build_agent_card();
                         let id = root_val
                             .get("id")
@@ -627,7 +627,7 @@ impl A2AHttpServer {
                     "Sync app adapter present, considering delegation for method={}",
                     method
                 );
-                if method == "SendMessage" {
+                if method == crate::method::SEND_MESSAGE {
                     let params_val = root_val
                         .get("params")
                         .cloned()
@@ -658,7 +658,7 @@ impl A2AHttpServer {
                             .build(),
                         STATUS_OK,
                     ));
-                } else if method == "GetAgentCard" {
+                } else if method == crate::method::GET_AGENT_CARD {
                     let card = app.build_agent_card();
                     let id = root_val
                         .get("id")

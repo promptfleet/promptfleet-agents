@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 #[cfg(feature = "time-stamps")]
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 /// **Task**: Core A2A work unit (v1.0)
 #[derive(Debug, Clone, Serialize, Deserialize)]

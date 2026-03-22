@@ -220,7 +220,9 @@ pub struct ObsHealth {
 struct ObsInner {
     _manager: ObservabilityManager,
 
+    #[cfg_attr(not(any(feature = "otel", feature = "prometheus")), allow(dead_code))]
     otel_configured: bool,
+    #[cfg_attr(not(any(feature = "otel", feature = "prometheus")), allow(dead_code))]
     prometheus_configured: bool,
     init_notes: Vec<String>,
 
@@ -315,6 +317,7 @@ impl Obs {
         let mut manager = ObservabilityManager::new(cfg.logging)?;
         manager.initialize()?;
 
+        #[allow(unused_mut)]
         let mut init_notes = Vec::<String>::new();
 
         let flush_interval = flush_interval_from_env();

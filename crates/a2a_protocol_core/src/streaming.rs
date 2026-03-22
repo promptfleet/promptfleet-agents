@@ -1,6 +1,6 @@
 //! A2A v1.0 Streaming Event Types
 
-use crate::data::{Artifact, Message, TaskState, TaskStatus};
+use crate::data::{Artifact, Message, TaskStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

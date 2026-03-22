@@ -2,7 +2,7 @@
 
 use observability_core::{
     ports::MetricsPort,
-    traits::{LogLevel, SpanGuard, SpanStatus, METRIC_LABEL_ALLOWLIST},
+    traits::{SpanGuard, SpanStatus, METRIC_LABEL_ALLOWLIST},
     ObservabilityError, ObservabilityPlugin, ObservabilityResult,
 };
 
@@ -14,9 +14,6 @@ use crate::pushgateway_client::PushGatewayClient;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use web_time::{Duration, Instant};
-
-#[cfg(feature = "structured-logging")]
-use serde_json::Value as JsonValue;
 
 #[cfg(feature = "prometheus-federation")]
 use prometheus::{CounterVec, GaugeVec, HistogramVec, Registry};
@@ -366,36 +363,19 @@ impl Prometheus {
         }
         Ok(())
     }
-}
 
-/// Span tracking data for Prometheus metrics
-#[derive(Debug, Clone)]
-struct SpanTrackingData {
-    start_time: web_time::Instant,
-    span_name: String,
-    labels: HashMap<String, String>,
+    /// Async-safe flush — safe to call from within tokio or any async runtime.
+    pub async fn flush_async(&self) -> ObservabilityResult<()> {
+        self.force_push().await
+    }
 }
 
 impl Prometheus {
-    /// Store span start data for duration tracking
-    fn store_span_start(&self, _span_id: &str, name: &str, labels: HashMap<String, String>) {
-        let _data = SpanTrackingData {
-            start_time: web_time::Instant::now(),
-            span_name: name.to_string(),
-            labels,
-        };
-
-        // We'll store this in a simple way since PrometheusPlugin doesn't have span storage
-        // For now, we'll just record the start count and duration will be recorded on end
-    }
-
-    /// Record span duration when span ends
-    fn record_span_duration(&self, _span_id: &str, labels: &HashMap<String, String>) {
-        // For Prometheus plugin, we record span completion with a minimal duration
-        // The actual duration tracking would require more complex span state management
-        // which is better handled by the OpenTelemetry plugin for detailed tracing
-        let duration = 0.001; // Minimal duration to indicate span completion
-
+    /// Record span completion with a nominal duration.
+    ///
+    /// Full duration tracking requires span-state storage (OTel plugin handles that).
+    /// Here we just record that a span ended so counters stay consistent.
+    fn record_span_end(&self, labels: &HashMap<String, String>) {
         let label_values: Vec<&str> = METRIC_LABEL_ALLOWLIST
             .iter()
             .map(|&label| labels.get(label).map(|s| s.as_str()).unwrap_or("unknown"))
@@ -405,15 +385,29 @@ impl Prometheus {
             metrics
                 .span_duration
                 .with_label_values(&label_values)
-                .observe(duration);
+                .observe(0.001);
         }
+    }
+
+    /// Build a full label-values vector from partial overrides, filling
+    /// missing positions with `"unknown"`.
+    fn allowlist_values<'a>(overrides: &[(&str, &'a str)]) -> Vec<&'a str> {
+        METRIC_LABEL_ALLOWLIST
+            .iter()
+            .map(|&label| {
+                overrides
+                    .iter()
+                    .find(|(k, _)| *k == label)
+                    .map(|(_, v)| *v)
+                    .unwrap_or("unknown")
+            })
+            .collect()
     }
 }
 
 #[cfg(feature = "prometheus-federation")]
 impl ObservabilityPlugin for Prometheus {
-    fn start_span(&self, name: &str, attributes: &[(&str, &str)]) -> SpanGuard {
-        // Prometheus doesn't track individual spans, but we count them and record duration
+    fn start_span(&self, _name: &str, attributes: &[(&str, &str)]) -> SpanGuard {
         let labels: HashMap<String, String> = attributes
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -429,33 +423,20 @@ impl ObservabilityPlugin for Prometheus {
             metrics.span_count.with_label_values(&label_values).inc();
         }
 
-        // Store span start for duration tracking
-        #[cfg(feature = "prometheus-federation")]
-        {
-            #[cfg(feature = "uuid")]
-            let span_id = uuid::Uuid::new_v4().to_string();
-            #[cfg(not(feature = "uuid"))]
-            let span_id = format!("span_{}", std::ptr::addr_of!(*self) as usize);
+        #[cfg(feature = "uuid")]
+        let span_id = uuid::Uuid::new_v4().to_string();
+        #[cfg(not(feature = "uuid"))]
+        let span_id = format!("span_{}", std::ptr::addr_of!(*self) as usize);
 
-            self.store_span_start(&span_id, name, labels.clone());
-
-            // Return standard span guard
-            SpanGuard::new(
-                span_id,
-                Arc::new(self.clone()) as Arc<dyn ObservabilityPlugin>,
-            )
-        }
-
-        #[cfg(not(feature = "prometheus-federation"))]
-        SpanGuard::no_op()
+        SpanGuard::new(
+            span_id,
+            Arc::new(self.clone()) as Arc<dyn ObservabilityPlugin>,
+        )
     }
 
-    fn end_span(&self, span_id: &str) {
-        // Record span duration when span ends
-        // Note: In a real implementation, we'd retrieve the stored span data
-        // For now, we'll record with empty labels as this is called from SpanGuard drop
+    fn end_span(&self, _span_id: &str) {
         let labels = HashMap::new();
-        self.record_span_duration(span_id, &labels);
+        self.record_span_end(&labels);
     }
 
     fn add_span_attribute(&self, _span_id: &str, _key: &str, _value: &str) {
@@ -503,8 +484,12 @@ impl ObservabilityPlugin for Prometheus {
             .inc();
     }
 
+    /// # Deadlock hazard
+    ///
+    /// This calls `futures::executor::block_on` internally. **Do not** call from
+    /// inside a tokio (or other async) runtime — it will deadlock.
+    /// Use [`Prometheus::flush_async`] instead when running in an async context.
     fn flush(&self) -> ObservabilityResult<()> {
-        // Use futures::executor::block_on for sync interface compatibility
         futures::executor::block_on(async { self.force_push().await })
     }
 
@@ -536,14 +521,12 @@ impl Clone for Prometheus {
 
 #[cfg(feature = "prometheus-federation")]
 impl MetricsPort for Prometheus {
-    /// Emit a simple counter metric
     fn emit_counter_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
         let mut metrics = self
             .metrics
             .lock()
             .map_err(|e| ObservabilityError::metric(format!("Failed to lock metrics: {}", e)))?;
 
-        // Get or create counter metric
         let counter = metrics
             .custom_counters
             .entry(name.to_string())
@@ -555,32 +538,28 @@ impl MetricsPort for Prometheus {
                 .unwrap()
             });
 
-        // Emit metric with default labels
         counter
             .with_label_values(&["prometheus_plugin", "metric_emission"])
             .inc_by(value);
 
-        // Update internal metric count
-        metrics
-            .metric_count
-            .with_label_values(&["counter", "prometheus_plugin", "emit_counter_simple"])
-            .inc();
+        let vals = Self::allowlist_values(&[
+            ("component", "prometheus_plugin"),
+            ("operation", "emit_counter"),
+        ]);
+        metrics.metric_count.with_label_values(&vals).inc();
 
-        // Check if we should push to gateway
         drop(metrics);
         self.check_and_schedule_push()?;
 
         Ok(())
     }
 
-    /// Emit a simple histogram/timing metric
     fn emit_histogram_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
         let mut metrics = self
             .metrics
             .lock()
             .map_err(|e| ObservabilityError::metric(format!("Failed to lock metrics: {}", e)))?;
 
-        // Get or create histogram metric
         let histogram = metrics
             .custom_histograms
             .entry(name.to_string())
@@ -593,32 +572,28 @@ impl MetricsPort for Prometheus {
                 .unwrap()
             });
 
-        // Emit metric with default labels
         histogram
             .with_label_values(&["prometheus_plugin", "metric_emission"])
             .observe(value);
 
-        // Update internal metric count
-        metrics
-            .metric_count
-            .with_label_values(&["histogram", "prometheus_plugin", "emit_histogram_simple"])
-            .inc();
+        let vals = Self::allowlist_values(&[
+            ("component", "prometheus_plugin"),
+            ("operation", "emit_histogram"),
+        ]);
+        metrics.metric_count.with_label_values(&vals).inc();
 
-        // Check if we should push to gateway
         drop(metrics);
         self.check_and_schedule_push()?;
 
         Ok(())
     }
 
-    /// Emit a simple gauge metric
     fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
         let mut metrics = self
             .metrics
             .lock()
             .map_err(|e| ObservabilityError::metric(format!("Failed to lock metrics: {}", e)))?;
 
-        // Get or create gauge metric
         let gauge = metrics
             .custom_gauges
             .entry(name.to_string())
@@ -630,18 +605,16 @@ impl MetricsPort for Prometheus {
                 .unwrap()
             });
 
-        // Emit metric with default labels
         gauge
             .with_label_values(&["prometheus_plugin", "metric_emission"])
             .set(value);
 
-        // Update internal metric count
-        metrics
-            .metric_count
-            .with_label_values(&["gauge", "prometheus_plugin", "emit_gauge_simple"])
-            .inc();
+        let vals = Self::allowlist_values(&[
+            ("component", "prometheus_plugin"),
+            ("operation", "emit_gauge"),
+        ]);
+        metrics.metric_count.with_label_values(&vals).inc();
 
-        // Check if we should push to gateway
         drop(metrics);
         self.check_and_schedule_push()?;
 

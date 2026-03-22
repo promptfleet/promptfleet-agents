@@ -10,6 +10,17 @@
 
 use log::{debug, info};
 
+/// A2A v1.0 JSON-RPC method names.
+pub mod method {
+    pub const SEND_MESSAGE: &str = "SendMessage";
+    pub const SEND_STREAMING_MESSAGE: &str = "SendStreamingMessage";
+    pub const GET_AGENT_CARD: &str = "GetAgentCard";
+    pub const GET_EXTENDED_AGENT_CARD: &str = "GetExtendedAgentCard";
+    pub const GET_TASK: &str = "GetTask";
+    pub const CANCEL_TASK: &str = "CancelTask";
+    pub const LIST_TASKS: &str = "ListTasks";
+}
+
 // Target-specific implementations
 #[cfg(target_arch = "wasm32")]
 mod wasm_server;

@@ -178,7 +178,8 @@ impl<T> SharedGuard<T> {
     /// This is a convenience method that handles the lock/unlock pattern
     pub fn lock(
         &mut self,
-    ) -> Result<std::sync::MutexGuard<T>, std::sync::PoisonError<std::sync::MutexGuard<T>>> {
+    ) -> Result<std::sync::MutexGuard<'_, T>, std::sync::PoisonError<std::sync::MutexGuard<'_, T>>>
+    {
         if let Some(ref resource) = self.resource {
             self.was_locked = true;
             resource.lock()
@@ -236,8 +237,8 @@ where
     ///
     /// let _guard = ContextGuard::new(
     ///     "my_context",
-    ///     |ctx| set_global_context(ctx),
-    ///     || clear_global_context()
+    ///     |ctx| println!("set: {}", ctx),
+    ///     || println!("cleared"),
     /// );
     /// // Context is automatically cleared when guard drops
     /// ```
@@ -314,8 +315,8 @@ impl Drop for NoOpGuard {
 /// ```rust
 /// use foundation_utils::raii_guard;
 ///
-/// let _guard = raii_guard!(resource, |r| {
-///     println!("Cleaning up: {:?}", r);
+/// let _guard = raii_guard!("my_resource", |r| {
+///     println!("Cleaning up: {}", r);
 /// });
 /// ```
 #[macro_export]
@@ -336,8 +337,8 @@ macro_rules! raii_guard {
 ///
 /// let _guard = context_guard!(
 ///     "my_context",
-///     |ctx| set_context(ctx),
-///     || clear_context()
+///     |ctx| println!("set: {}", ctx),
+///     || println!("cleared")
 /// );
 /// ```
 #[macro_export]

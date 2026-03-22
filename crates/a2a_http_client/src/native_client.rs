@@ -3,8 +3,7 @@
 use a2a_protocol_core::{data::message::Message, data::task::Task, A2A_PROTOCOL_VERSION};
 use anyhow::Result;
 use protocol_transport_core::{
-    IdleTimeoutStream, JsonRpcRequest, JsonRpcResponse, StreamingPolicy, RPC_REQUEST_TIMEOUT,
-    JSONRPC_VERSION,
+    JsonRpcRequest, JsonRpcResponse, StreamingPolicy, RPC_REQUEST_TIMEOUT, JSONRPC_VERSION,
 };
 use reqwest;
 use serde_json::{json, Value};
@@ -17,6 +16,7 @@ use {
         StreamResponse, TaskArtifactUpdateEvent, TaskStatusUpdateEvent,
     },
     futures_util::{Stream, StreamExt},
+    protocol_transport_core::IdleTimeoutStream,
     std::pin::Pin,
 };
 
@@ -70,6 +70,7 @@ pub struct Client {
     url: String,
     headers: HashMap<String, String>,
     http_client: reqwest::Client,
+    #[cfg(feature = "streaming")]
     streaming_policy: StreamingPolicy,
     #[cfg(feature = "observability")]
     obs: Option<observability::Obs>,
@@ -96,6 +97,7 @@ impl Client {
             url: url.into(),
             headers,
             http_client,
+            #[cfg(feature = "streaming")]
             streaming_policy: policy,
             #[cfg(feature = "observability")]
             obs: None,

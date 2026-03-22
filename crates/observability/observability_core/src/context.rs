@@ -150,24 +150,23 @@ impl W3CTraceContext {
     /// Add or update trace state
     pub fn add_trace_state(&mut self, key: &str, value: &str) {
         let new_entry = format!("{}={}", key, value);
+        let prefix = format!("{}=", key);
 
-        match &self.trace_state {
+        match self.trace_state.take() {
             Some(existing) => {
-                // Parse existing tracestate and update/add entry
-                let mut entries: Vec<&str> = existing.split(',').collect();
+                let mut entries: Vec<String> = existing.split(',').map(String::from).collect();
 
-                // Check if key already exists and update
                 let mut found = false;
                 for entry in &mut entries {
-                    if entry.starts_with(&format!("{}=", key)) {
-                        *entry = &new_entry;
+                    if entry.starts_with(&prefix) {
+                        *entry = new_entry.clone();
                         found = true;
                         break;
                     }
                 }
 
                 if !found {
-                    entries.insert(0, &new_entry); // Add new entry at beginning
+                    entries.insert(0, new_entry);
                 }
 
                 self.trace_state = Some(entries.join(","));
@@ -261,7 +260,7 @@ impl TraceContext {
     }
 }
 
-/// Thread-local storage for current trace context
+// Thread-local storage for current trace context
 thread_local! {
     static CURRENT_CONTEXT: std::cell::RefCell<Option<TraceContext>> = std::cell::RefCell::new(None);
 }

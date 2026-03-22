@@ -6,7 +6,6 @@ use crate::security::{SecurityRequirement, SecurityScheme};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 /// **Agent Skill** (v1.0)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,7 +273,6 @@ impl AgentSkill {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_agent_card_creation() {

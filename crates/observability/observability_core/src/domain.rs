@@ -29,13 +29,19 @@ pub struct LogSource {
     pub target: Option<String>,
 }
 
-/// Trace context for correlation
+/// Serializable trace identifiers for log/metric correlation.
+///
+/// Distinct from [`crate::context::TraceContext`] which is the runtime
+/// tracing context with sampling decisions and W3C conversion methods.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TraceContext {
+pub struct TraceCorrelation {
     pub trace_id: String,
     pub span_id: String,
     pub parent_span_id: Option<String>,
 }
+
+/// Backwards-compatible alias.
+pub type TraceContext = TraceCorrelation;
 
 /// Core processor interface - transforms log entries
 pub trait LogProcessor: Send + Sync + std::fmt::Debug {
@@ -264,21 +270,6 @@ impl LogKvExtractor {
         serde_json::Value::Object(fields)
     }
 
-    /// Merge extracted key-value fields into existing LogEntry fields
-    fn merge_kv_fields(&self, mut entry: LogEntry, kv_fields: serde_json::Value) -> LogEntry {
-        if let (
-            serde_json::Value::Object(ref mut entry_fields),
-            serde_json::Value::Object(kv_map),
-        ) = (&mut entry.fields, kv_fields)
-        {
-            // Merge kv fields into entry fields, preferring kv fields over existing ones
-            for (key, value) in kv_map {
-                entry_fields.insert(key, value);
-            }
-        }
-
-        entry
-    }
 }
 
 impl LogProcessor for LogKvExtractor {

@@ -53,7 +53,7 @@ pub trait ModelClient: Send + Sync {
     fn capabilities(&self) -> ClientCapabilities;
 
     /// Generic non-streaming LLM request (chat, tools, structured output)
-    async fn llm_request(&self, request: serde_json::Value) -> ClientResult<serde_json::Value>;
+    fn llm_request(&self, request: serde_json::Value) -> impl std::future::Future<Output = ClientResult<serde_json::Value>> + Send;
 }
 
 /// Default HTTP-backed client (provider-agnostic JSON)
@@ -139,7 +139,7 @@ impl HttpModelClient {
                     );
                     return Err(ClientError::Transport(TransportError::Http {
                         status: resp.status,
-                        message: "HTTP error".to_string(),
+                        message: format!("HTTP {} error", resp.status),
                         body: Some(resp.body),
                         headers: Some(resp.headers),
                     }));
@@ -147,25 +147,10 @@ impl HttpModelClient {
                 let json: serde_json::Value = serde_json::from_slice(&resp.body)?;
                 Ok(json)
             }
-            Err(TransportError::Http {
-                status,
-                message,
-                body,
-                headers,
-            }) => {
-                let preview = body
-                    .as_ref()
-                    .map(|b| String::from_utf8_lossy(b).to_string())
-                    .unwrap_or_default();
-                log::warn!("HttpModelClient::post_json transport HTTP error status={} message={} body={} headers={:?}", status, message, preview, headers);
-                Err(ClientError::Transport(TransportError::Http {
-                    status,
-                    message,
-                    body,
-                    headers,
-                }))
+            Err(e) => {
+                log::warn!("HttpModelClient::post_json transport error: {}", e);
+                Err(ClientError::Transport(e))
             }
-            Err(e) => Err(ClientError::Transport(e)),
         }
     }
 }

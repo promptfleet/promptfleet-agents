@@ -4,7 +4,9 @@
 //! This trait provides a clean interface between the A2A protocol logic
 //! and the underlying transport implementation (HTTP, WebSocket, etc.).
 
-use crate::{A2AError, A2AResult};
+use crate::A2AResult;
+#[cfg(test)]
+use crate::A2AError;
 use protocol_transport_core::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -48,6 +50,8 @@ use std::collections::HashMap;
 ///     }
 /// }
 /// ```
+// Intentional: WASM targets don't require Send on futures, so async-in-trait is fine.
+#[allow(async_fn_in_trait)]
 pub trait A2ATransport: Send + Sync {
     /// Send a JSON-RPC request and wait for response
     ///
@@ -119,6 +123,8 @@ pub trait A2ATransport: Send + Sync {
 /// Factory for creating transport instances for different agents or endpoints.
 /// This enables connection pooling, load balancing, and dynamic transport
 /// configuration.
+// Intentional: WASM targets don't require Send on futures, so async-in-trait is fine.
+#[allow(async_fn_in_trait)]
 pub trait A2ATransportFactory: Send + Sync {
     /// Transport type created by this factory
     type Transport: A2ATransport;

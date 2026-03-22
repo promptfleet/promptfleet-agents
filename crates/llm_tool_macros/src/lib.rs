@@ -49,7 +49,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let fn_ident = func.sig.ident.clone();
     let fn_name_str = fn_ident.to_string();
     let tool_name_str = tool_name.unwrap_or(fn_name_str.clone());
-    let desc_str = tool_desc.unwrap_or_else(|| "".to_string());
+    let desc_str = tool_desc.unwrap_or_default();
 
     // Build a synthetic Params struct based on inputs (all must be typed)
     let params_ident = format_ident!("{}Params", fn_ident);

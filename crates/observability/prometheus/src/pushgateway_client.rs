@@ -214,7 +214,7 @@ impl BatchPushClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prometheus::{Counter, Opts};
+    use prometheus::Counter;
 
     #[test]
     fn test_push_client_creation() {

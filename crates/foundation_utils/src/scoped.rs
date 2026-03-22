@@ -136,15 +136,14 @@ pub trait ScopedCallback<T> {
 ///
 /// let result = ScopedBuilder::new()
 ///     .with_resource("resource1", |r| println!("cleanup: {}", r))
-///     .with_resource(42, |r| println!("cleanup: {}", r))
+///     .with_resource("resource2", |r| println!("cleanup: {}", r))
 ///     .execute(|resources| {
-///         // Work with all resources
-///         format!("used: {:?}", resources)
+///         format!("used {} resources", resources.len())
 ///     });
 /// ```
 pub struct ScopedBuilder<T> {
     resources: Vec<T>,
-    cleanups: Vec<Box<dyn FnOnce()>>,
+    cleanups: Vec<Box<dyn FnOnce(T)>>,
 }
 
 impl<T> ScopedBuilder<T> {
@@ -160,21 +159,13 @@ impl<T> ScopedBuilder<T> {
     ///
     /// # Arguments
     /// - `resource`: The resource to manage
-    /// - `_cleanup`: Function to clean up the resource (currently unused in simplified implementation)
-    pub fn with_resource<F>(mut self, resource: T, _cleanup: F) -> Self
+    /// - `cleanup`: Function to clean up the resource when the scope ends
+    pub fn with_resource<F>(mut self, resource: T, cleanup: F) -> Self
     where
         F: FnOnce(T) + 'static,
     {
-        // We need to be careful about order here - cleanups should happen
-        // in reverse order of setup (LIFO)
         self.resources.push(resource);
-
-        // Create a placeholder cleanup for now
-        // In a real implementation, we'd store the actual cleanup functions
-        self.cleanups.push(Box::new(move || {
-            // Placeholder - cleanup would happen here
-        }));
-
+        self.cleanups.push(Box::new(cleanup));
         self
     }
 
@@ -182,19 +173,31 @@ impl<T> ScopedBuilder<T> {
     ///
     /// All cleanup functions will be called in reverse order (LIFO)
     /// even if the work function panics.
-    pub fn execute<F, R>(self, work: F) -> R
+    pub fn execute<F, R>(mut self, work: F) -> R
     where
         F: FnOnce(&[T]) -> R,
     {
-        // Create guards for all resources
-        let _guards: Vec<_> = self
-            .cleanups
-            .into_iter()
-            .map(|cleanup| Guard::new((), move |_| cleanup()))
-            .collect();
+        struct CleanupGuard<T> {
+            resources: Vec<T>,
+            cleanups: Vec<Box<dyn FnOnce(T)>>,
+        }
 
-        // Execute the work function
-        work(&self.resources)
+        impl<T> Drop for CleanupGuard<T> {
+            fn drop(&mut self) {
+                while let (Some(resource), Some(cleanup)) =
+                    (self.resources.pop(), self.cleanups.pop())
+                {
+                    cleanup(resource);
+                }
+            }
+        }
+
+        let guard = CleanupGuard {
+            resources: std::mem::take(&mut self.resources),
+            cleanups: std::mem::take(&mut self.cleanups),
+        };
+
+        work(&guard.resources)
     }
 }
 
@@ -246,28 +249,6 @@ where
 
     // Execute the work function
     work(&contexts)
-}
-
-/// Execute a nested scoped operation
-///
-/// This allows you to create nested scopes where inner scopes can
-/// access outer scope resources.
-///
-/// # Example
-/// ```rust
-/// use foundation_utils::scoped::{with_context, with_nested_scope};
-///
-/// let result = with_context("outer", |outer_ctx| {
-///     with_nested_scope("inner", |inner_ctx| {
-///         format!("outer: {}, inner: {}", outer_ctx, inner_ctx)
-///     })
-/// });
-/// ```
-pub fn with_nested_scope<T, F, R>(context: T, f: F) -> R
-where
-    F: FnOnce(&T) -> R,
-{
-    with_context(context, f)
 }
 
 /// Macro for creating scoped operations
@@ -379,7 +360,7 @@ where
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn test_with_context() {
@@ -509,7 +490,60 @@ mod tests {
         });
 
         assert!(result.is_err());
-        // Cleanup should still have been called
         assert_eq!(cleanup_called.load(Ordering::Relaxed), 42);
+    }
+
+    #[test]
+    fn test_scoped_builder_cleanups_called() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c1 = counter.clone();
+        let c2 = counter.clone();
+        let c3 = counter.clone();
+
+        let result = ScopedBuilder::new()
+            .with_resource(10, move |_| { c1.fetch_add(1, Ordering::SeqCst); })
+            .with_resource(20, move |_| { c2.fetch_add(1, Ordering::SeqCst); })
+            .with_resource(30, move |_| { c3.fetch_add(1, Ordering::SeqCst); })
+            .execute(|resources| {
+                assert_eq!(resources, &[10, 20, 30]);
+                resources.iter().sum::<i32>()
+            });
+
+        assert_eq!(result, 60);
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn test_scoped_builder_lifo_cleanup_order() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let o1 = order.clone();
+        let o2 = order.clone();
+        let o3 = order.clone();
+
+        ScopedBuilder::new()
+            .with_resource("first", move |r| { o1.lock().unwrap().push(r); })
+            .with_resource("second", move |r| { o2.lock().unwrap().push(r); })
+            .with_resource("third", move |r| { o3.lock().unwrap().push(r); })
+            .execute(|_| {});
+
+        let cleaned = order.lock().unwrap();
+        assert_eq!(&*cleaned, &["third", "second", "first"]);
+    }
+
+    #[test]
+    fn test_scoped_builder_panic_safety() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c1 = counter.clone();
+        let c2 = counter.clone();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            ScopedBuilder::new()
+                .with_resource(1, move |_| { c1.fetch_add(1, Ordering::SeqCst); })
+                .with_resource(2, move |_| { c2.fetch_add(1, Ordering::SeqCst); })
+                .execute(|_| panic!("work panicked"))
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 }

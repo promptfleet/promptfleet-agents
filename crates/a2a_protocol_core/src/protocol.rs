@@ -108,13 +108,6 @@ impl A2AProtocol {
                 self.handle_notification(notification)?;
                 Ok(None)
             }
-            #[cfg(feature = "batch")]
-            JsonRpcIncoming::Batch(messages) => {
-                for message in messages {
-                    self.handle_incoming(message)?;
-                }
-                Ok(None)
-            }
         }
     }
 

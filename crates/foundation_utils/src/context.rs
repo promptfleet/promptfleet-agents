@@ -211,7 +211,7 @@ impl ContextManager for HashMapContext {
     }
 }
 
-/// Convenience functions for working with a global thread-local context
+// Convenience functions for working with a global thread-local context
 thread_local! {
     static GLOBAL_THREAD_CONTEXT: ThreadLocalContext = ThreadLocalContext::new();
 }

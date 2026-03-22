@@ -5,14 +5,10 @@
 //! - **Proxy ↔ MCP Server**: SSE (web-standard)
 //! - **Multi-server routing** with authentication
 
-use crate::{
-    AuthHandler, CallToolRequest, CallToolResult, ListToolsResult, McpProtocolHandler, Tool,
-    ToolProvider,
-};
+use crate::{CallToolResult, ListToolsResult, Tool, ToolProvider};
 use async_trait::async_trait;
 use protocol_transport_core::{
-    HttpTransport, ProtocolError, SseTransport, Transport, TransportFactory, UniversalRequest,
-    UniversalResponse,
+    ProtocolError, SseTransport, Transport, TransportFactory, UniversalRequest,
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -20,17 +16,17 @@ use std::collections::HashMap;
 /// **MCP Proxy Configuration**
 #[derive(Debug, Clone)]
 pub struct McpProxyConfig {
-    /// MCP servers
-    pub servers: Vec<McpServer>,
+    /// Target MCP servers the proxy routes to
+    pub servers: Vec<McpProxyTarget>,
     /// Proxy authentication (for incoming requests)
     pub proxy_auth: Option<String>,
     /// Default timeout for requests (seconds)
     pub timeout_seconds: u64,
 }
 
-/// **MCP Server Configuration**
+/// **MCP Proxy Target** - An external MCP server the proxy connects to
 #[derive(Debug, Clone)]
-pub struct McpServer {
+pub struct McpProxyTarget {
     /// Server identifier
     pub name: String,
     /// SSE endpoint URL (e.g., "https://api.example.com/sse")
@@ -47,8 +43,6 @@ pub struct McpProxy {
     config: McpProxyConfig,
     /// SSE transports for external servers
     sse_transports: HashMap<String, SseTransport>,
-    /// HTTP transport for internal communication
-    http_transport: HttpTransport,
 }
 
 impl McpProxy {
@@ -68,7 +62,6 @@ impl McpProxy {
         Self {
             config,
             sse_transports,
-            http_transport: TransportFactory::mcp_http(),
         }
     }
 
@@ -143,9 +136,8 @@ impl McpProxy {
                     all_tools.extend(tools);
                 }
                 Err(e) => {
-                    // Log error but continue with other servers
-                    eprintln!(
-                        "Failed to list tools from server '{}': {:?}",
+                    log::warn!(
+                        "Failed to list tools from proxy target '{}': {:?}",
                         server.name, e
                     );
                 }
@@ -219,9 +211,8 @@ impl ToolProvider for McpProxy {
     async fn call_tool(
         &self,
         name: &str,
-        arguments: Option<serde_json::Value>,
+        _arguments: Option<serde_json::Value>,
     ) -> Result<CallToolResult, ProtocolError> {
-        // Parse tool name: "server:tool" format
         let parts: Vec<&str> = name.splitn(2, ':').collect();
         if parts.len() != 2 {
             return Err(ProtocolError::internal_error(
@@ -229,11 +220,6 @@ impl ToolProvider for McpProxy {
             ));
         }
 
-        let _server_name = parts[0];
-        let _tool_name = parts[1];
-
-        // Note: Since ToolProvider is sync but SSE calls are async,
-        // in practice this would use an async runtime or different pattern
         Err(ProtocolError::internal_error(
             "Async tool calls not supported in sync context. Use async proxy methods.",
         ))
@@ -242,7 +228,7 @@ impl ToolProvider for McpProxy {
 
 /// **MCP Proxy Builder** - Convenient proxy configuration
 pub struct McpProxyBuilder {
-    servers: Vec<McpServer>,
+    servers: Vec<McpProxyTarget>,
     proxy_auth: Option<String>,
     timeout_seconds: u64,
 }
@@ -259,7 +245,7 @@ impl McpProxyBuilder {
 
     /// Add MCP server
     pub fn add_server(mut self, name: &str, sse_endpoint: &str) -> Self {
-        self.servers.push(McpServer {
+        self.servers.push(McpProxyTarget {
             name: name.to_string(),
             sse_endpoint: sse_endpoint.to_string(),
             auth_token: None,
@@ -275,7 +261,7 @@ impl McpProxyBuilder {
         sse_endpoint: &str,
         auth_token: &str,
     ) -> Self {
-        self.servers.push(McpServer {
+        self.servers.push(McpProxyTarget {
             name: name.to_string(),
             sse_endpoint: sse_endpoint.to_string(),
             auth_token: Some(auth_token.to_string()),

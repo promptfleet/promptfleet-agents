@@ -6,7 +6,7 @@
 use crate::{
     AuthHandler, CallToolResult, ClientCapabilities, ClientInfo, InitializeRequest,
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListToolsResult, Tool, ToolCapabilities,
-    ToolProvider, MCP_PROTOCOL_VERSION,
+    MCP_PROTOCOL_VERSION,
 };
 use protocol_transport_core::{ProtocolError, TransportError};
 use serde_json::json;

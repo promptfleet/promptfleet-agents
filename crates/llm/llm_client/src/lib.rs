@@ -2,7 +2,6 @@ pub mod model_client;
 pub mod prepare;
 pub mod profile;
 pub mod providers;
-pub mod retry;
 pub mod stream;
 pub mod types;
 

@@ -462,13 +462,13 @@ mod tests {
 
     #[derive(Debug)]
     struct TestResource {
-        id: usize,
+        _id: usize,
         closed: Arc<AtomicUsize>,
     }
 
     impl TestResource {
         fn new(id: usize, closed: Arc<AtomicUsize>) -> Self {
-            Self { id, closed }
+            Self { _id: id, closed }
         }
     }
 

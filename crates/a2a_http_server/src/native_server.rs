@@ -8,7 +8,7 @@ use anyhow::Result;
 use axum::{
     body::Body,
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Json, Response},
+    response::{Json, Response},
     routing::{get, post},
     Router,
 };
@@ -18,19 +18,22 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use web_time::Instant;
 #[cfg(feature = "event-stream")]
 use {
     a2a_protocol_core::methods::params::{MessageSendParams, MessageSendResponse},
     a2a_protocol_core::streaming::StreamResponse,
+    axum::response::IntoResponse,
     futures_util::Stream,
     protocol_transport_core::JsonRpcRequest,
 };
 
 #[cfg(feature = "observability")]
-use observability::{
-    attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-    ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+use {
+    observability::{
+        attr, clear_current_context, get_current_context, metric, set_current_context, span,
+        value, ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+    },
+    web_time::Instant,
 };
 
 /// **A2A HTTP Server** - Native implementation using Axum
@@ -468,7 +471,7 @@ impl A2AHttpServer {
         );
 
         #[cfg(feature = "event-stream")]
-        if method == "SendStreamingMessage" {
+        if method == crate::method::SEND_STREAMING_MESSAGE {
             if let JsonRpcIncoming::Request(req) = &incoming {
                 if self.streaming_port.is_some() {
                     let prop_headers = protocol_transport_core::sanitize_header_map(&headers).into_map();
@@ -549,7 +552,7 @@ impl A2AHttpServer {
             match serde_json::from_str::<serde_json::Value>(&body) {
                 Ok(root) => {
                     let method = root.get("method").and_then(|m| m.as_str()).unwrap_or("");
-                    if method == "SendMessage" {
+                    if method == crate::method::SEND_MESSAGE {
                         let params_val = root
                             .get("params")
                             .cloned()
@@ -592,7 +595,7 @@ impl A2AHttpServer {
                                 JsonRpcResponse::error(id, jsonrpc_error.code, jsonrpc_error.message)
                             }
                         }
-                    } else if method == "GetAgentCard" {
+                    } else if method == crate::method::GET_AGENT_CARD {
                         let card = app.build_agent_card();
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(
@@ -627,7 +630,7 @@ impl A2AHttpServer {
             match serde_json::from_str::<serde_json::Value>(&body) {
                 Ok(root) => {
                     let method = root.get("method").and_then(|m| m.as_str()).unwrap_or("");
-                    if method == "SendMessage" {
+                    if method == crate::method::SEND_MESSAGE {
                         let params_val = root
                             .get("params")
                             .cloned()
@@ -670,7 +673,7 @@ impl A2AHttpServer {
                                 JsonRpcResponse::error(id, jsonrpc_error.code, jsonrpc_error.message)
                             }
                         }
-                    } else if method == "GetAgentCard" {
+                    } else if method == crate::method::GET_AGENT_CARD {
                         let card = app.build_agent_card();
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(

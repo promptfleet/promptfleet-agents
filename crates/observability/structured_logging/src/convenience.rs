@@ -4,16 +4,15 @@
 //! based on context and structured fields, maintaining standard Rust logging interface.
 
 use crate::error::{Result, StructuredLoggingError};
-use crate::extension::ConvenienceConfig;
 use observability_core::{
-    domain::LogProcessor, ports::MetricsPort, BasicMetricType, LogEntry, MetricsEntry,
+    domain::LogProcessor, ports::MetricsPort, LogEntry,
 };
 use serde_json::Value;
 
 #[cfg(test)]
 use observability_core::{domain::create_log_entry, traits::LogLevel};
 
-/// Thread-local context for domain operations
+// Thread-local context for domain operations
 thread_local! {
     static LLM_CONTEXT: std::cell::RefCell<Option<LLMContext>> = std::cell::RefCell::new(None);
     static TEMPLATE_CONTEXT: std::cell::RefCell<Option<TemplateContext>> = std::cell::RefCell::new(None);
@@ -188,13 +187,11 @@ fn get_current_timestamp() -> String {
 
 /// Processor that automatically enhances standard log calls with domain-specific structure
 #[derive(Debug)]
-pub struct DomainContextProcessor {
-    config: ConvenienceConfig,
-}
+pub struct DomainContextProcessor;
 
 impl DomainContextProcessor {
-    pub fn new(config: ConvenienceConfig) -> Self {
-        Self { config }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Detect if this is an LLM operation and enhance accordingly
@@ -425,15 +422,13 @@ impl LogProcessor for DomainContextProcessor {
 /// Convenience manager that integrates domain-aware processing into the processor chain
 pub struct ConvenienceManager {
     processor: DomainContextProcessor,
-    config: ConvenienceConfig,
 }
 
 impl ConvenienceManager {
     /// Create new convenience manager
-    pub fn new(config: &ConvenienceConfig) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
-            processor: DomainContextProcessor::new(config.clone()),
-            config: config.clone(),
+            processor: DomainContextProcessor::new(),
         })
     }
 
@@ -822,8 +817,7 @@ mod tests {
 
     #[test]
     fn test_llm_context_enhancement() {
-        let config = ConvenienceConfig::default();
-        let processor = DomainContextProcessor::new(config);
+        let processor = DomainContextProcessor::new();
 
         // Set LLM context
         set_llm_context("gpt-4", "openai_client");
@@ -862,8 +856,7 @@ mod tests {
 
     #[test]
     fn test_template_context_enhancement() {
-        let config = ConvenienceConfig::default();
-        let processor = DomainContextProcessor::new(config);
+        let processor = DomainContextProcessor::new();
 
         // Set template context
         set_template_context("Sailfish", "agent_card.stpl", "template_engine");
@@ -899,8 +892,7 @@ mod tests {
 
     #[test]
     fn test_auto_detection() {
-        let config = ConvenienceConfig::default();
-        let processor = DomainContextProcessor::new(config);
+        let processor = DomainContextProcessor::new();
 
         // Test auto-detection without context
         let entry = create_log_entry(

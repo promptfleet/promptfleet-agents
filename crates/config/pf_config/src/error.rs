@@ -12,9 +12,6 @@ pub enum ConfigError {
     #[error("TOML parse error: {0}")]
     TomlParse(#[from] toml::de::Error),
 
-    #[error("Environment parse error: {0}")]
-    EnvParse(String),
-
     #[error("Type mismatch while deserializing: {0}")]
     TypeMismatch(serde_json::Error),
 

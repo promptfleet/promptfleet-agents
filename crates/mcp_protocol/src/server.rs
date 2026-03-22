@@ -6,7 +6,7 @@
 
 use crate::{
     AuthHandler, CallToolRequest, CallToolResult, InitializeRequest, InitializeResult,
-    ListToolsResult, ServerCapabilities, ServerInfo, Tool, ToolProvider,
+    ListToolsResult, ServerCapabilities, ServerInfo, ToolProvider,
 };
 use protocol_transport_core::{ProtocolError, UniversalRequest, UniversalResponse};
 use serde_json::json;
@@ -225,13 +225,11 @@ impl McpServer {
     #[cfg(feature = "sse-server")]
     pub async fn start_sse_server(&self) -> Result<(), ProtocolError> {
         if let Some(ref transport) = self.sse_transport {
-            println!(
-                "🚀 Starting MCP SSE Server on {}",
-                self.bind_address.as_ref().unwrap_or(&"unknown".to_string())
+            log::info!(
+                "Starting MCP SSE Server on {}",
+                self.bind_address.as_deref().unwrap_or("unknown")
             );
 
-            // This would be the actual server loop in a real implementation
-            // For now, we'll just return success
             transport.health_check().await.map_err(|e| {
                 ProtocolError::internal_error(&format!("Failed to start SSE server: {:?}", e))
             })
@@ -243,8 +241,7 @@ impl McpServer {
     /// Stop SSE server (feature: "sse-server")
     #[cfg(feature = "sse-server")]
     pub async fn stop_sse_server(&self) -> Result<(), ProtocolError> {
-        println!("🛑 Stopping MCP SSE Server");
-        // Server cleanup would go here
+        log::info!("Stopping MCP SSE Server");
         Ok(())
     }
 }

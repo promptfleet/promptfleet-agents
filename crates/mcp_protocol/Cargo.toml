@@ -18,14 +18,12 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 async-trait = "0.1"
 
+# Logging facade
+log = { workspace = true }
+
 # UUID for correlation tracking
 uuid = { workspace = true, features = ["v4"] }
 
-# Collections
-indexmap = { workspace = true }
-
-# Time for timestamps
-chrono = { workspace = true, features = ["serde"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

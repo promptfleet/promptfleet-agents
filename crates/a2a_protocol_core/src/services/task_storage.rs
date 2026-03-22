@@ -5,7 +5,6 @@
 
 use crate::{data::message::Message, data::task::Task, A2AError, A2AResult};
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 /// **Context Information for Conversation Management**
@@ -380,7 +379,6 @@ impl TaskStorage for InMemoryTaskStorage {
 mod tests {
     use super::*;
     use crate::data::task::TaskState;
-    use std::collections::HashSet;
 
     #[test]
     fn test_in_memory_storage_basic_operations() {
@@ -649,9 +647,9 @@ mod tests {
         let task2_ctx1 = Task::new("context-1".to_string());
         let task1_ctx2 = Task::new("context-2".to_string());
 
-        let task1_ctx1_id = task1_ctx1.id.clone();
+        let _task1_ctx1_id = task1_ctx1.id.clone();
         let task2_ctx1_id = task2_ctx1.id.clone();
-        let task1_ctx2_id = task1_ctx2.id.clone();
+        let _task1_ctx2_id = task1_ctx2.id.clone();
 
         // Store tasks
         storage.store_task(task1_ctx1).unwrap();

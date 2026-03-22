@@ -5,9 +5,6 @@ edition = "2021"
 description = "Foundation utilities for RAII patterns, resource management, and scoped operations"
 authors = ["PromptFleet Team"]
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [features]
 default = []
 # All features are optional - core functionality has zero dependencies

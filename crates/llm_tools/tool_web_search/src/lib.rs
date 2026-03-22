@@ -13,6 +13,17 @@
 //!
 //! The tool is WASM-compatible (uses `spin_sdk::http::send` on wasm32,
 //! `reqwest` on native for testing).
+//!
+//! ## Dependency note
+//!
+//! This crate lives under `llm_tools/` but depends on `agent_sdk` (not
+//! `llm_tools` itself). The layering is:
+//!   `tool_web_search` → `agent_sdk` → `llm_tools`
+//!
+//! There is no Cargo-level cycle because `llm_tools` does not depend on
+//! this crate, but the physical nesting is misleading. A future refactor
+//! should move `tool_web_search` to a top-level `crates/tool_web_search`
+//! to clarify the actual dependency direction.
 
 use agent_sdk::agent::tools::{ToolExecutor, ToolSpec};
 use schemars::JsonSchema;

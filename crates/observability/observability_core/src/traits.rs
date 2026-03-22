@@ -1,6 +1,6 @@
 //! Core traits for the observability plugin system
 
-use crate::error::{ObservabilityError, ObservabilityResult};
+use crate::error::ObservabilityResult;
 use std::collections::HashMap;
 use std::sync::Arc;
 use web_time::{Duration, Instant};

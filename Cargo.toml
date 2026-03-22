@@ -47,6 +47,10 @@ members = [
 
     # Examples
     "examples/a2a-echo-native",
+]
+
+# WASM-only examples can't compile on host — exclude from default workspace check
+exclude = [
     "examples/a2a-echo-wasm",
 ]
 
@@ -59,7 +63,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 # ── Internal crates ──
 agent_core = { path = "crates/agent_core" }
-agent_sdk = { path = "crates/agent_sdk" }
+agent_sdk = { path = "crates/agent_sdk", default-features = false }
 a2a_protocol_core = { path = "crates/a2a_protocol_core" }
 a2a_http_client = { path = "crates/a2a_http_client" }
 a2a_http_server = { path = "crates/a2a_http_server" }

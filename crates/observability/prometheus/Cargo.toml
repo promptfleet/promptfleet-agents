@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["structured-logging"]
-prometheus-federation = ["prometheus", "reqwest", "uuid"]
+prometheus-federation = ["prometheus", "reqwest", "uuid", "serde_json"]
 pushgateway-client = ["prometheus-federation"]
 cardinality-reduction = ["prometheus-federation", "url"]
 recording-rules = ["prometheus-federation", "serde_yaml"]

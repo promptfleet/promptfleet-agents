@@ -1,5 +1,4 @@
 use crate::{
-    model_client::ApiMode,
     profile::{ModelConfig, ModelFamily, ModelProfile},
     types::LlmRequest,
 };

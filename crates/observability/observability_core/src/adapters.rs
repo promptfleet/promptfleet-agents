@@ -258,7 +258,7 @@ impl StandardLogAdapter {
     /// Convert log::Record to our LogEntry
     fn record_to_log_entry(&self, record: &log::Record) -> LogEntry {
         use crate::domain::LogSource;
-        use crate::domain::TraceContext as DomainTraceContext;
+        use crate::domain::TraceCorrelation;
 
         // Extract structured fields from log::kv
         let kv_fields = crate::domain::LogKvExtractor::extract_kv_from_record(record);
@@ -266,7 +266,7 @@ impl StandardLogAdapter {
         // Best-effort trace correlation:
         // If the SDK (A2A server/client) has set a thread-local trace context,
         // attach it to the log entry so downstream processors can emit trace_id/span_id.
-        let trace_context = crate::context::get_current_context().map(|ctx| DomainTraceContext {
+        let trace_context = crate::context::get_current_context().map(|ctx| TraceCorrelation {
             trace_id: ctx.trace_id,
             span_id: ctx.span_id,
             parent_span_id: ctx.parent_span_id,
@@ -524,7 +524,7 @@ impl TracingSubscriberAdapter {
     }
 
     /// Get current span context from tracing
-    fn get_current_span_context(&self) -> Option<crate::domain::TraceContext> {
+    fn get_current_span_context(&self) -> Option<crate::domain::TraceCorrelation> {
         // Use tracing's span system to get current context
         let current_span = tracing::Span::current();
         if current_span.is_none() {
@@ -540,7 +540,7 @@ impl TracingSubscriberAdapter {
         // In a full implementation, this would come from W3C headers
         let trace_id = self.generate_trace_id_from_span(&current_span);
 
-        Some(crate::domain::TraceContext {
+        Some(crate::domain::TraceCorrelation {
             trace_id,
             span_id,
             parent_span_id: None, // TODO: Extract parent span ID

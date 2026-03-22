@@ -23,13 +23,15 @@
 //! use foundation_utils::scoped::with_context;
 //!
 //! // RAII guard for automatic cleanup
-//! let _guard = Guard::new(resource, |r| cleanup(r));
+//! let _guard = Guard::new("my_resource", |r| {
+//!     println!("Cleaning up: {}", r);
+//! });
 //!
-//! // Scoped operation with guaranteed cleanup
-//! let result = with_context(setup_value, |ctx| {
-//!     // Work with context
-//!     process(ctx)
-//! }); // Context automatically cleaned up
+//! // Scoped access to a value (value drops when scope ends)
+//! let result = with_context(42, |ctx| {
+//!     ctx + 1
+//! });
+//! assert_eq!(result, 43);
 //! ```
 
 pub mod context;
@@ -54,8 +56,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// ```rust
 /// use foundation_utils::guard;
 ///
-/// let _guard = guard(resource, |r| {
-///     println!("Cleaning up: {:?}", r);
+/// let _guard = guard("my_resource", |r| {
+///     println!("Cleaning up: {}", r);
 /// });
 /// // Cleanup happens automatically when guard drops
 /// ```
@@ -75,10 +77,11 @@ where
 /// use foundation_utils::with_scoped;
 ///
 /// let result = with_scoped(
-///     || setup_resource(),           // Setup
-///     |resource| process(resource),  // Work  
-///     |resource| cleanup(resource)   // Cleanup
+///     || 42,
+///     |resource| *resource + 10,
+///     |resource| println!("cleanup: {}", resource),
 /// );
+/// assert_eq!(result, 52);
 /// ```
 pub fn with_scoped<S, W, C, T, R>(setup: S, work: W, cleanup: C) -> R
 where

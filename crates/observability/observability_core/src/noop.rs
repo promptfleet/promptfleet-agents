@@ -1,6 +1,6 @@
 //! Zero-cost no-op implementations for observability when features are disabled
 
-use crate::error::{ObservabilityError, ObservabilityResult};
+use crate::error::ObservabilityResult;
 #[cfg(feature = "structured-logging")]
 use crate::traits::StructuredLogger;
 use crate::traits::{LogLevel, MetricsCollector, ObservabilityPlugin, SpanGuard, SpanStatus};
@@ -422,11 +422,11 @@ mod tests {
 
     #[test]
     fn test_macros_compile() {
-        let plugin = create_noop_plugin();
+        let _plugin = create_noop_plugin();
 
         // Test that macros compile without errors
-        let _span = observability_span!(plugin, "test_span", "key" => "value");
-        observability_metric!(plugin, "test_metric", 1.0, "label" => "value");
-        observability_log!(plugin, LogLevel::Info, "test message");
+        let _span = observability_span!(_plugin, "test_span", "key" => "value");
+        observability_metric!(_plugin, "test_metric", 1.0, "label" => "value");
+        observability_log!(_plugin, LogLevel::Info, "test message");
     }
 }

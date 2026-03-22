@@ -54,6 +54,7 @@ pub use adapters::{TracingIntegrationBuilder, TracingSubscriberAdapter};
 pub use domain::{
     create_counter_metric, create_gauge_metric, create_histogram_metric, BasicMetricType,
     EnhancedContextEnricher, LogEntry, LogKvExtractor, MetricsEntry, MetricsSource, ProcessorChain,
+    TraceCorrelation,
 };
 pub use extension::{
     create_observability_manager, GlobalLoggerSingleton, ObservabilityConfig, ObservabilityManager,

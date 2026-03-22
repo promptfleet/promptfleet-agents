@@ -12,16 +12,10 @@
 //! - **Zero-Copy**: Minimal serialization overhead
 //! - **Composable**: Mix and match transports and protocols
 
-#![allow(async_fn_in_trait)]
-
-#[cfg(feature = "client")]
-pub mod client;
 pub mod error;
 pub mod forward_headers;
 pub mod headers;
 pub mod jsonrpc;
-#[cfg(feature = "server")]
-pub mod routing;
 pub mod serialization;
 #[cfg(feature = "server")]
 pub mod server;
@@ -29,8 +23,6 @@ pub mod streaming;
 #[cfg(feature = "client")]
 pub mod transport;
 
-#[cfg(feature = "server")]
-pub use routing::*;
 #[cfg(feature = "client")]
 pub use transport::*;
 
@@ -93,12 +85,13 @@ pub trait ProtocolHandler {
         -> Result<Self::Response, Self::Error>;
 }
 
-/// **Transport Trait** - HTTP, WebSocket, etc.
+/// **Transport Trait** - HTTP, SSE, etc.
+///
+/// Uses `async fn` in trait without `Send` bounds because WASM
+/// targets (Spin SDK) do not produce `Send` futures.
+#[allow(async_fn_in_trait)]
 pub trait Transport {
-    /// Send request and get response
     async fn send(&self, request: UniversalRequest) -> Result<UniversalResponse, TransportError>;
-
-    /// Check if transport is available
     async fn health_check(&self) -> Result<(), TransportError>;
 }
 

@@ -3,8 +3,6 @@
 //! Spec-aligned types for task push notification configuration CRUD.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
 
 /// Authentication information for push notification delivery.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

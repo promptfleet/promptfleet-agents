@@ -81,7 +81,7 @@ impl AgentDiscovery for DefaultAgentDiscovery {
     ) -> A2AResult<AuthenticatedExtendedCardResult> {
         self.validate_authentication(&params)?;
 
-        let mut agent_card = self.agent_card.clone();
+        let agent_card = self.agent_card.clone();
 
         let mut discovery_metadata = HashMap::new();
         discovery_metadata.insert(

@@ -32,7 +32,6 @@ pub mod types;
 pub mod proxy;
 
 pub use error::*;
-pub use handler::*;
 pub use types::*;
 
 #[cfg(feature = "client")]
@@ -46,14 +45,11 @@ pub use auth::*;
 #[cfg(feature = "proxy")]
 pub use proxy::*;
 
-use chrono::{DateTime, Utc};
 use async_trait::async_trait;
 use protocol_transport_core::{
     AsyncProtocolHandler, ProtocolError, ProtocolHandler, UniversalRequest, UniversalResponse,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 /// **MCP Protocol Version** - Current specification version
 pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
@@ -135,15 +131,6 @@ impl McpProtocolHandler {
     pub fn with_query_mode(mut self, query_mode: QueryMode) -> Self {
         self.query_mode = query_mode;
         self
-    }
-
-    /// Check if request has valid authentication
-    fn check_auth(&self, request: &UniversalRequest) -> Result<(), ProtocolError> {
-        if let Some(ref auth_handler) = self.auth_handler {
-            auth_handler.validate_request(request)
-        } else {
-            Ok(()) // No auth required
-        }
     }
 
     /// Handle MCP method request

@@ -1,6 +1,5 @@
 //! Universal HTTP transport implementation
 
-use crate::error::TransportResult;
 use crate::{Transport, TransportError, UniversalRequest, UniversalResponse};
 use std::collections::HashMap;
 
@@ -249,32 +248,6 @@ impl Transport for HttpTransport {
 impl Default for HttpTransport {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// **WebSocket Transport** - For future real-time protocols
-pub struct WebSocketTransport {
-    // Placeholder for WebSocket implementation
-    _placeholder: (),
-}
-
-impl WebSocketTransport {
-    pub fn new() -> Self {
-        Self { _placeholder: () }
-    }
-}
-
-impl Transport for WebSocketTransport {
-    async fn send(&self, _request: UniversalRequest) -> Result<UniversalResponse, TransportError> {
-        Err(TransportError::Configuration(
-            "WebSocket not yet implemented".to_string(),
-        ))
-    }
-
-    async fn health_check(&self) -> Result<(), TransportError> {
-        Err(TransportError::Configuration(
-            "WebSocket not yet implemented".to_string(),
-        ))
     }
 }
 

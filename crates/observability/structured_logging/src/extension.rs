@@ -5,7 +5,7 @@
 
 use crate::error::{Result, StructuredLoggingError};
 use observability_core::{
-    LogEntry, ObservabilityConfig, ObservabilityManager, ObservabilityResult, ProcessorChain,
+    LogEntry, ObservabilityConfig, ObservabilityManager,
 };
 use serde::{Deserialize, Serialize};
 
@@ -309,8 +309,7 @@ impl PerformanceExtension {
         #[cfg(feature = "convenience")]
         {
             if self.is_convenience_enabled() {
-                let manager =
-                    crate::convenience::ConvenienceManager::new(&self.config.convenience)?;
+                let manager = crate::convenience::ConvenienceManager::new()?;
                 self.convenience = Some(manager);
             }
         }

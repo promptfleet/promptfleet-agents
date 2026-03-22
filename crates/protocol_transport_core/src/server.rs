@@ -1,7 +1,6 @@
 //! Universal server abstractions for all protocols
 
-use crate::error::ProtocolResult;
-use crate::{ProtocolError, ProtocolHandler, ProtocolRouter, UniversalRequest, UniversalResponse};
+use crate::ProtocolRouter;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -239,8 +238,8 @@ impl UniversalServer {
     pub fn serve_mock_request(
         &self,
         path: &str,
-        method: &str,
-        body: &[u8],
+        _method: &str,
+        _body: &[u8],
     ) -> anyhow::Result<(u16, HashMap<String, String>, Vec<u8>)> {
         // Mock implementation for native testing
         let headers = {
@@ -281,15 +280,6 @@ impl Default for UniversalServer {
     }
 }
 
-/// Request classification
-#[derive(Debug)]
-enum RequestType {
-    Protocol(String),
-    Health,
-    Discovery,
-    NotFound,
-}
-
 /// **SERVER MACRO** - Create universal server with protocol registration
 ///
 /// The key insight: Spin http_component functions are sync, but can call async operations internally
@@ -321,9 +311,8 @@ mod tests {
 
     #[test]
     fn test_request_classification() {
-        let server = UniversalServer::new();
+        let _server = UniversalServer::new();
 
-        // Mock test for request classification - test will expand when methods are implemented
         let test_paths = vec!["/health", "/a2a/jsonrpc", "/unknown"];
         for path in test_paths {
             assert!(path.starts_with("/"));
@@ -415,17 +404,14 @@ mod tests {
 
     #[test]
     fn test_spin_to_universal_request() {
-        let server = UniversalServer::new();
+        let _server = UniversalServer::new();
 
-        // Create a mock SpinRequest using the builder
         let mut headers = std::collections::HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.insert(
             "x-correlation-id".to_string(),
             "test-correlation-123".to_string(),
         );
-
-        let body = b"test request body";
 
         // Since we can't easily create a SpinRequest in tests, test the logic conceptually
         // by testing the conversion logic with mock data
@@ -448,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_universal_to_spin_response() {
-        let server = UniversalServer::new();
+        let _server = UniversalServer::new();
 
         let mut headers = std::collections::HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
@@ -668,26 +654,6 @@ mod tests {
             result.headers.get("content-type"),
             Some(&"text/plain".to_string())
         );
-    }
-
-    #[test]
-    fn test_request_type_debug() {
-        // Test Debug trait for RequestType enum
-        let protocol_type = RequestType::Protocol("A2A".to_string());
-        let health_type = RequestType::Health;
-        let discovery_type = RequestType::Discovery;
-        let not_found_type = RequestType::NotFound;
-
-        let protocol_debug = format!("{:?}", protocol_type);
-        let health_debug = format!("{:?}", health_type);
-        let discovery_debug = format!("{:?}", discovery_type);
-        let not_found_debug = format!("{:?}", not_found_type);
-
-        assert!(protocol_debug.contains("Protocol"));
-        assert!(protocol_debug.contains("A2A"));
-        assert!(health_debug.contains("Health"));
-        assert!(discovery_debug.contains("Discovery"));
-        assert!(not_found_debug.contains("NotFound"));
     }
 
     #[test]

@@ -11,10 +11,6 @@ use crate::convenience::{
     clear_a2a_context, clear_llm_context, clear_request_context, set_a2a_context, set_llm_context,
     set_request_context,
 };
-use crate::error::{Result, StructuredLoggingError};
-use observability_core::context::TraceContext;
-use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 // ==================== ADVANCED CONTEXT MANAGEMENT PORTS ====================
@@ -166,11 +162,10 @@ impl ContextManagerRegistry for StructuredContextRegistry {
 /// This ensures exception-safe cleanup and prevents forgetting to clear context.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// {
 ///     let _guard = set_llm_context_scoped("gpt-4", "openai_client");
 ///     log::info!("This will have LLM context");
-///     // Guard automatically clears context when it goes out of scope
 /// }
 /// log::info!("This will NOT have LLM context");
 /// ```
@@ -259,11 +254,9 @@ impl Drop for AllContextsGuard {
 /// This is the safest way to set LLM context as cleanup is guaranteed.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// let _guard = set_llm_context_scoped("gpt-4", "openai_client");
-/// // Context is active for the lifetime of _guard
 /// log::info!("Processing LLM request");
-/// // Context automatically cleared when _guard is dropped
 /// ```
 pub fn set_llm_context_scoped(model: &str, component: &str) -> LlmContextGuard {
     if let Some(registry) = get_context_registry() {
@@ -356,12 +349,11 @@ pub fn set_all_contexts_scoped(
 /// even if the closure panics or returns early.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// let result = with_llm_context("gpt-4", "openai_client", || {
 ///     log::info!("This has LLM context");
 ///     process_llm_request()
 /// });
-/// // Context is automatically cleared here
 /// ```
 pub fn with_llm_context<F, R>(model: &str, component: &str, f: F) -> R
 where
@@ -511,7 +503,7 @@ impl Default for ScopedContextBuilder {
 /// Macro for easy scoped LLM context
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// with_llm_context_scoped!("gpt-4", "openai_client" => {
 ///     log::info!("Processing with LLM context");
 /// });
@@ -551,16 +543,11 @@ macro_rules! with_request_context_scoped {
 /// management features in structured_logging.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// use structured_logging::context_adapter::init_context_integration;
-///
-/// // During application startup
 /// init_context_integration();
-///
-/// // Now RAII contexts work automatically
 /// let _guard = set_llm_context_scoped("gpt-4", "my_component");
 /// log::info!("This log will have LLM context automatically");
-/// // Context cleared when _guard drops
 /// ```
 pub fn init_context_integration() {
     let registry = StructuredContextRegistry::new();

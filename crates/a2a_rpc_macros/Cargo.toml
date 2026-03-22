@@ -2,7 +2,7 @@
 name = "a2a_rpc_macros"
 version = "0.1.0"
 edition = "2021"
-description = "Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support"
+description = "[Experimental] Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support"
 
 [lib]
 proc-macro = true

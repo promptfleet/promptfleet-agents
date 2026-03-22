@@ -5,7 +5,6 @@
 //! - Standard OAuth 2.1 Bearer token authentication support
 //! - Comprehensive tool, memory, and capability definitions
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// **JSON-RPC 2.0 Request** - Standard wire format for MCP

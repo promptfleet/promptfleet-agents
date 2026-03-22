@@ -1,7 +1,7 @@
 [package]
 name = "llm_tool_macros"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars"
 
 [lib]

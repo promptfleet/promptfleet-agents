@@ -187,3 +187,321 @@ pub fn prepare_request(
     }
     Ok(req)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::profile::{ModelConfig, ModelFamily, ModelProfile};
+    use crate::types::LlmRequest;
+    use std::collections::BTreeMap;
+
+    fn gpt5_model_config(profile: ModelProfile) -> ModelConfig {
+        ModelConfig {
+            model_id: "gpt-5".to_string(),
+            family: ModelFamily::Gpt5,
+            profile,
+            capabilities: None,
+            extensions: BTreeMap::new(),
+        }
+    }
+
+    fn qwen3_model_config(profile: ModelProfile) -> ModelConfig {
+        ModelConfig {
+            model_id: "qwen3-vllm".to_string(),
+            family: ModelFamily::Qwen3,
+            profile,
+            capabilities: None,
+            extensions: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_prepare_request_happy_path_applies_mutators_and_validators() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: Some("high".into()),
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let req = LlmRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![],
+            temperature: Some(0.7),
+            max_tokens: Some(1000),
+            ..Default::default()
+        };
+        let mutators: Vec<Box<dyn RequestMutator>> = vec![Box::new(Gpt5Mutator)];
+        let validators: Vec<Box<dyn RequestValidator>> = vec![Box::new(ProfileCapabilityValidator)];
+        let out = prepare_request(
+            &cfg,
+            req,
+            mutators.as_slice(),
+            validators.as_slice(),
+            Policy::Permissive,
+        )
+        .expect("prepare_request");
+        assert!(out.temperature.is_none());
+        assert!(out.max_tokens.is_none());
+        let ext = out.extensions.as_ref().expect("extensions");
+        assert_eq!(
+            ext.get("max_completion_tokens").and_then(|v| v.as_u64()),
+            Some(1000)
+        );
+        assert_eq!(
+            ext.get("reasoning_effort").and_then(|v| v.as_str()),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn test_gpt5_mutator_strips_temperature() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let mut req = LlmRequest {
+            temperature: Some(0.7),
+            ..Default::default()
+        };
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        assert!(req.temperature.is_none());
+    }
+
+    #[test]
+    fn test_gpt5_mutator_maps_max_tokens_to_extension() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let mut req = LlmRequest {
+            max_tokens: Some(2048),
+            ..Default::default()
+        };
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        assert!(req.max_tokens.is_none());
+        let ext = req.extensions.as_ref().unwrap();
+        assert_eq!(
+            ext.get("max_completion_tokens").and_then(|v| v.as_u64()),
+            Some(2048)
+        );
+    }
+
+    #[test]
+    fn test_gpt5_mutator_injects_reasoning_effort() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: Some("minimal".into()),
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let mut req = LlmRequest::default();
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        let ext = req.extensions.as_ref().unwrap();
+        assert_eq!(
+            ext.get("reasoning_effort").and_then(|v| v.as_str()),
+            Some("minimal")
+        );
+    }
+
+    #[test]
+    fn test_gpt5_mutator_injects_text_verbosity() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: Some("medium".into()),
+            responses_reasoning_object: None,
+        });
+        let mut req = LlmRequest::default();
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        let ext = req.extensions.as_ref().unwrap();
+        let text = ext.get("text").and_then(|v| v.as_object()).unwrap();
+        assert_eq!(
+            text.get("verbosity").and_then(|v| v.as_str()),
+            Some("medium")
+        );
+    }
+
+    #[test]
+    fn test_gpt5_mutator_injects_reasoning_object() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: Some("high".into()),
+            responses_text_verbosity: None,
+            responses_reasoning_object: Some(true),
+        });
+        let mut req = LlmRequest::default();
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        let ext = req.extensions.as_ref().unwrap();
+        let reasoning = ext
+            .get("reasoning")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        assert_eq!(
+            reasoning.get("effort").and_then(|v| v.as_str()),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn test_qwen_vllm_extras_injects_all_fields() {
+        let cfg = qwen3_model_config(ModelProfile::Qwen3 {
+            enable_thinking: Some(true),
+            tool_call_parser: Some("hermes".into()),
+            reasoning_parser: Some("deepseek_r1".into()),
+            auto_tool_choice: Some(true),
+            template_kwargs: Some(serde_json::json!({ "custom": "kv" })),
+        });
+        let mut req = LlmRequest::default();
+        QwenVllmExtras.mutate(&cfg, &mut req).unwrap();
+        let ext = req.extensions.as_ref().unwrap();
+        assert_eq!(
+            ext.get("tool_call_parser").and_then(|v| v.as_str()),
+            Some("hermes")
+        );
+        assert_eq!(
+            ext.get("reasoning_parser").and_then(|v| v.as_str()),
+            Some("deepseek_r1")
+        );
+        assert_eq!(
+            ext.get("enable_auto_tool_choice").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        let kwargs = ext
+            .get("chat_template_kwargs")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        assert_eq!(
+            kwargs.get("enable_thinking").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            kwargs.get("custom").and_then(|v| v.as_str()),
+            Some("kv")
+        );
+    }
+
+    #[test]
+    fn test_qwen_vllm_extras_default_thinking_false() {
+        let cfg = qwen3_model_config(ModelProfile::Qwen3 {
+            enable_thinking: None,
+            tool_call_parser: None,
+            reasoning_parser: None,
+            auto_tool_choice: None,
+            template_kwargs: None,
+        });
+        let mut req = LlmRequest::default();
+        QwenVllmExtras.mutate(&cfg, &mut req).unwrap();
+        let ext = req.extensions.as_ref().unwrap();
+        let kwargs = ext
+            .get("chat_template_kwargs")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        assert_eq!(
+            kwargs.get("enable_thinking").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn test_profile_validator_strict_rejects_gpt5_temperature() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let req = LlmRequest {
+            temperature: Some(0.5),
+            ..Default::default()
+        };
+        let v = ProfileCapabilityValidator;
+        let err = v
+            .validate(&cfg, &req, Policy::Strict)
+            .expect_err("strict should reject temperature");
+        assert!(
+            err.to_string().contains("temperature"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_profile_validator_permissive_allows_gpt5_temperature() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let req = LlmRequest {
+            temperature: Some(0.5),
+            ..Default::default()
+        };
+        ProfileCapabilityValidator
+            .validate(&cfg, &req, Policy::Permissive)
+            .expect("permissive allows temperature");
+    }
+
+    #[test]
+    fn test_profile_validator_generic_passes_all() {
+        let cfg = ModelConfig {
+            model_id: "custom".to_string(),
+            family: ModelFamily::OpenAI,
+            profile: ModelProfile::Generic,
+            capabilities: None,
+            extensions: BTreeMap::new(),
+        };
+        let req = LlmRequest {
+            temperature: Some(1.0),
+            max_tokens: Some(99),
+            ..Default::default()
+        };
+        ProfileCapabilityValidator
+            .validate(&cfg, &req, Policy::Strict)
+            .expect("generic profile ignores temperature policy");
+    }
+
+    #[test]
+    fn test_non_matching_family_noop() {
+        let cfg = qwen3_model_config(ModelProfile::Qwen3 {
+            enable_thinking: None,
+            tool_call_parser: Some("hermes".into()),
+            reasoning_parser: None,
+            auto_tool_choice: None,
+            template_kwargs: None,
+        });
+        let mut req = LlmRequest {
+            temperature: Some(0.3),
+            max_tokens: Some(512),
+            ..Default::default()
+        };
+        Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
+        assert_eq!(req.temperature, Some(0.3));
+        assert_eq!(req.max_tokens, Some(512));
+        assert!(req.extensions.is_none());
+    }
+
+    #[test]
+    fn test_prepare_request_empty_mutators_validators() {
+        let cfg = gpt5_model_config(ModelProfile::Gpt5 {
+            reasoning_effort: None,
+            responses_text_verbosity: None,
+            responses_reasoning_object: None,
+        });
+        let req = LlmRequest {
+            model: "gpt-5".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            ..Default::default()
+        };
+        let mutators: Vec<Box<dyn RequestMutator>> = vec![];
+        let validators: Vec<Box<dyn RequestValidator>> = vec![];
+        let out = prepare_request(
+            &cfg,
+            req.clone(),
+            mutators.as_slice(),
+            validators.as_slice(),
+            Policy::Strict,
+        )
+        .unwrap();
+        assert_eq!(out.model, req.model);
+        assert_eq!(out.temperature, req.temperature);
+        assert_eq!(out.max_tokens, req.max_tokens);
+        assert_eq!(out.extensions, req.extensions);
+    }
+}

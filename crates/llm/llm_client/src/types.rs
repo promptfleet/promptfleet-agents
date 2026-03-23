@@ -1,9 +1,36 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Provider-neutral chat message supporting text, tool calls, and tool results.
+///
+/// Each provider maps this internal representation to its own wire format:
+/// - OpenAI: `tool_calls` in assistant messages, `role: "tool"` for results
+/// - Anthropic: `tool_use` content blocks, `tool_result` content blocks
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
-    pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// Tool calls requested by the assistant (present in assistant messages).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCallRequest>>,
+    /// ID of the tool call this message is responding to (present in tool-result messages).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    /// Function name for tool-result messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// A tool call as requested by the LLM in an assistant message.
+///
+/// `arguments` is normalized to `serde_json::Value` internally — OpenAI sends
+/// arguments as a JSON string, Anthropic sends `input` as a JSON object. Each
+/// provider normalizes on ingest and serializes back to its wire format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCallRequest {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

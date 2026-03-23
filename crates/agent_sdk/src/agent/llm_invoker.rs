@@ -72,6 +72,32 @@ impl IntoLlmInvoker for Arc<llm_client::providers::OpenAIClient> {
     }
 }
 
+impl IntoLlmInvoker for llm_client::providers::AnthropicClient {
+    fn into_invoker(self) -> Arc<dyn LlmInvoker> {
+        struct C(Arc<llm_client::providers::AnthropicClient>);
+        impl LlmInvoker for C {
+            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+                let inner = self.0.clone();
+                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+            }
+        }
+        Arc::new(C(Arc::new(self)))
+    }
+}
+
+impl IntoLlmInvoker for Arc<llm_client::providers::AnthropicClient> {
+    fn into_invoker(self) -> Arc<dyn LlmInvoker> {
+        struct C(Arc<llm_client::providers::AnthropicClient>);
+        impl LlmInvoker for C {
+            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+                let inner = self.0.clone();
+                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+            }
+        }
+        Arc::new(C(self))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Native-only: streaming LLM invoker
 // ---------------------------------------------------------------------------
@@ -109,9 +135,7 @@ impl IntoLlmStreamInvoker for llm_client::providers::OpenAIClient {
             fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
                 let inner = self.0.clone();
                 Box::pin(async move {
-                    // Use llm_stream_raw to bypass LlmRequest deserialization.
-                    // The orchestrator builds payloads with tool_calls, tool_call_id,
-                    // and nullable content that ChatMessage cannot represent.
+                    // Use llm_stream_raw for pre-built JSON payloads from the orchestrator.
                     inner
                         .llm_stream_raw(payload)
                         .await
@@ -135,6 +159,38 @@ impl IntoLlmStreamInvoker for Arc<llm_client::providers::OpenAIClient> {
                         .llm_stream_raw(payload)
                         .await
                         .map_err(|e| e.to_string())
+                })
+            }
+        }
+        Arc::new(S(self))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl IntoLlmStreamInvoker for llm_client::providers::AnthropicClient {
+    fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
+        struct S(Arc<llm_client::providers::AnthropicClient>);
+        impl LlmStreamInvoker for S {
+            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+                let inner = self.0.clone();
+                Box::pin(async move {
+                    inner.llm_stream_raw(payload).await.map_err(|e| e.to_string())
+                })
+            }
+        }
+        Arc::new(S(Arc::new(self)))
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl IntoLlmStreamInvoker for Arc<llm_client::providers::AnthropicClient> {
+    fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
+        struct S(Arc<llm_client::providers::AnthropicClient>);
+        impl LlmStreamInvoker for S {
+            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+                let inner = self.0.clone();
+                Box::pin(async move {
+                    inner.llm_stream_raw(payload).await.map_err(|e| e.to_string())
                 })
             }
         }

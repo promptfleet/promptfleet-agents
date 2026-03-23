@@ -138,25 +138,24 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
 
         // ── Execute pending tool calls ──────────────────────────────
         if !turn_result.tool_calls.is_empty() {
-            let tc_history: Vec<serde_json::Value> = turn_result
+            let tool_call_requests: Vec<llm_client::ToolCallRequest> = turn_result
                 .tool_calls
                 .iter()
-                .map(|tc| {
-                    serde_json::json!({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": tc.arguments_raw
-                        }
-                    })
+                .map(|tc| llm_client::ToolCallRequest {
+                    id: tc.id.clone(),
+                    name: tc.name.clone(),
+                    arguments: serde_json::from_str(&tc.arguments_raw)
+                        .unwrap_or_else(|_| serde_json::json!({"_raw": tc.arguments_raw})),
                 })
                 .collect();
-            messages.push(serde_json::json!({
-                "role": "assistant",
-                "content": serde_json::Value::Null,
-                "tool_calls": tc_history
-            }));
+            let assistant_msg = llm_client::ChatMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(tool_call_requests),
+                ..Default::default()
+            };
+            messages.push(serde_json::to_value(&assistant_msg)
+                .unwrap_or_else(|_| serde_json::json!({"role": "assistant"})));
 
             for tc in &turn_result.tool_calls {
                 let arguments: serde_json::Value = serde_json::from_str(&tc.arguments_raw)
@@ -220,11 +219,14 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             success: true,
                         });
 
-                        messages.push(serde_json::json!({
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": out_str
-                        }));
+                        let tool_result_msg = llm_client::ChatMessage {
+                            role: "tool".to_string(),
+                            content: Some(out_str),
+                            tool_call_id: Some(tc.id.clone()),
+                            ..Default::default()
+                        };
+                        messages.push(serde_json::to_value(&tool_result_msg)
+                            .unwrap_or_else(|_| serde_json::json!({"role": "tool"})));
 
                         total_tool_calls += 1;
                     }
@@ -240,11 +242,14 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             success: false,
                         });
 
-                        messages.push(serde_json::json!({
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": serde_json::json!({"error": parsed_error}).to_string()
-                        }));
+                        let error_result_msg = llm_client::ChatMessage {
+                            role: "tool".to_string(),
+                            content: Some(serde_json::json!({"error": parsed_error}).to_string()),
+                            tool_call_id: Some(tc.id.clone()),
+                            ..Default::default()
+                        };
+                        messages.push(serde_json::to_value(&error_result_msg)
+                            .unwrap_or_else(|_| serde_json::json!({"role": "tool"})));
 
                         total_tool_calls += 1;
                     }

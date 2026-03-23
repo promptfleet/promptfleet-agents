@@ -103,12 +103,19 @@ pub type LlmEventStream =
 ///
 /// Feeds raw bytes from the HTTP response body and emits complete
 /// `data:` payloads as strings. Handles line buffering across chunk
-/// boundaries and ignores non-data SSE fields.
+/// boundaries and supports both data-only and typed event consumption.
+///
+/// Use [`next_event`] for data-only payloads (OpenAI-compatible) or
+/// [`next_typed_event`] for `(event_type, data)` pairs (Anthropic-compatible).
 pub struct SseParser {
     /// Accumulated bytes not yet terminated by `\n`
     buffer: String,
-    /// Complete `data:` payloads ready for consumption
+    /// Complete `data:` payloads ready for consumption (data-only)
     events: std::collections::VecDeque<String>,
+    /// Current `event:` field value, applied to the next `data:` line
+    current_event_type: Option<String>,
+    /// Complete `(event_type, data)` pairs for providers that use `event:` lines
+    typed_events: std::collections::VecDeque<(Option<String>, String)>,
 }
 
 impl SseParser {
@@ -116,6 +123,8 @@ impl SseParser {
         Self {
             buffer: String::new(),
             events: std::collections::VecDeque::new(),
+            current_event_type: None,
+            typed_events: std::collections::VecDeque::new(),
         }
     }
 
@@ -141,16 +150,35 @@ impl SseParser {
     fn process_line(&mut self, line: &str) {
         if let Some(data) = line.strip_prefix("data: ") {
             self.events.push_back(data.to_string());
+            self.typed_events
+                .push_back((self.current_event_type.take(), data.to_string()));
         } else if let Some(data) = line.strip_prefix("data:") {
-            // Handle `data:` without trailing space (technically valid SSE)
             self.events.push_back(data.to_string());
+            self.typed_events
+                .push_back((self.current_event_type.take(), data.to_string()));
+        } else if let Some(evt) = line.strip_prefix("event: ") {
+            self.current_event_type = Some(evt.to_string());
+        } else if let Some(evt) = line.strip_prefix("event:") {
+            self.current_event_type = Some(evt.to_string());
         }
-        // Other SSE fields (event:, id:, retry:) and blank lines are ignored
     }
 
     /// Get the next complete SSE data payload, if available.
+    ///
+    /// Returns data-only strings, ignoring `event:` fields.
+    /// Use this for OpenAI-compatible streams.
     pub fn next_event(&mut self) -> Option<String> {
         self.events.pop_front()
+    }
+
+    /// Get the next `(event_type, data)` pair, if available.
+    ///
+    /// The `event_type` is `Some` when the data line was preceded by an
+    /// `event:` SSE field, `None` otherwise.
+    /// Use this for Anthropic-style streams that require the event type
+    /// to dispatch parsing.
+    pub fn next_typed_event(&mut self) -> Option<(Option<String>, String)> {
+        self.typed_events.pop_front()
     }
 }
 
@@ -356,6 +384,40 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
     }))
 }
 
+/// Convert a buffered SSE response body into a typed [`LlmEventStream`].
+///
+/// This is the WASM-compatible counterpart of [`sse_event_stream`]. Instead
+/// of reading chunks incrementally from a network stream, it parses the
+/// entire buffered body at once. All events are emitted immediately.
+///
+/// Limitations: no incremental token delivery — the caller receives all
+/// events after the full response completes. True incremental WASM streaming
+/// is deferred until WASI 0.3.
+pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
+    let mut parser = SseParser::new();
+    parser.feed(&body);
+
+    let mut all_events: Vec<Result<StreamEvent, ClientError>> = Vec::new();
+    while let Some(data) = parser.next_event() {
+        if data == "[DONE]" {
+            break;
+        }
+        match parse_chat_chunk(&data) {
+            Ok(events) => {
+                for event in events {
+                    all_events.push(Ok(event));
+                }
+            }
+            Err(e) => {
+                all_events.push(Err(e));
+                break;
+            }
+        }
+    }
+
+    Box::pin(futures::stream::iter(all_events))
+}
+
 // ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
@@ -419,6 +481,46 @@ mod tests {
         let mut p = SseParser::new();
         p.feed(b"data: [DONE]\n\n");
         assert_eq!(p.next_event(), Some("[DONE]".into()));
+    }
+
+    #[test]
+    fn parser_typed_event_basic() {
+        let mut p = SseParser::new();
+        p.feed(b"event: message_start\ndata: {\"type\":\"message_start\"}\n\n");
+
+        let (evt, data) = p.next_typed_event().unwrap();
+        assert_eq!(evt.as_deref(), Some("message_start"));
+        assert_eq!(data, "{\"type\":\"message_start\"}");
+        assert!(p.next_typed_event().is_none());
+
+        // data-only queue still has the same event (independent)
+        assert_eq!(p.next_event(), Some("{\"type\":\"message_start\"}".into()));
+    }
+
+    #[test]
+    fn parser_typed_event_none_without_event_line() {
+        let mut p = SseParser::new();
+        p.feed(b"data: plain-payload\n\n");
+
+        let (evt, data) = p.next_typed_event().unwrap();
+        assert!(evt.is_none());
+        assert_eq!(data, "plain-payload");
+    }
+
+    #[test]
+    fn parser_typed_events_multiple() {
+        let mut p = SseParser::new();
+        p.feed(b"event: content_block_delta\ndata: delta1\n\nevent: message_delta\ndata: done1\n\n");
+
+        let (e1, d1) = p.next_typed_event().unwrap();
+        assert_eq!(e1.as_deref(), Some("content_block_delta"));
+        assert_eq!(d1, "delta1");
+
+        let (e2, d2) = p.next_typed_event().unwrap();
+        assert_eq!(e2.as_deref(), Some("message_delta"));
+        assert_eq!(d2, "done1");
+
+        assert!(p.next_typed_event().is_none());
     }
 
     // ── parse_chat_chunk: content ──────────────────────────────────────
@@ -776,6 +878,48 @@ mod tests {
         assert!(
             matches!(&all_events[4], StreamEvent::Done { finish_reason, .. } if finish_reason.as_deref() == Some("stop"))
         );
+    }
+
+    #[test]
+    fn sse_event_stream_from_buffer_matches_openai_transcript() {
+        let transcript = [
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n",
+            "data: [DONE]\n\n",
+        ]
+        .join("");
+
+        let stream = sse_event_stream_from_buffer(transcript.into_bytes());
+        let collected: Vec<_> = futures::executor::block_on_stream(stream).collect();
+
+        assert_eq!(collected.len(), 4);
+        assert!(matches!(
+            &collected[0],
+            Ok(StreamEvent::StreamStart { .. })
+        ));
+        assert!(matches!(
+            &collected[1],
+            Ok(StreamEvent::ContentDelta { delta }) if delta == "Hello"
+        ));
+        assert!(matches!(
+            &collected[2],
+            Ok(StreamEvent::ContentDelta { delta }) if delta == " world"
+        ));
+        match &collected[3] {
+            Ok(StreamEvent::Done {
+                finish_reason,
+                usage,
+            }) => {
+                assert_eq!(finish_reason.as_deref(), Some("stop"));
+                let u = usage.as_ref().expect("usage");
+                assert_eq!(u.prompt_tokens, Some(5));
+                assert_eq!(u.completion_tokens, Some(2));
+                assert_eq!(u.total_tokens, Some(7));
+            }
+            other => panic!("expected Done, got {:?}", other),
+        }
     }
 
     /// Tests that SSE bytes split at arbitrary boundaries still parse correctly.

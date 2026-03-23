@@ -164,13 +164,51 @@ impl HttpModelClient {
             }
         }
     }
+
+    /// POST a JSON payload and return the raw response body bytes.
+    /// Works on both WASM and native targets via `protocol_transport_core`.
+    /// Used for buffer-then-parse SSE on WASM where incremental streaming is unavailable.
+    pub async fn post_sse_buffered(
+        &self,
+        path: &str,
+        payload: serde_json::Value,
+    ) -> ClientResult<Vec<u8>> {
+        log::debug!(
+            "HttpModelClient::post_sse_buffered path={} payload_keys={}",
+            path,
+            payload.as_object().map(|o| o.len()).unwrap_or(0)
+        );
+        let body = serde_json::to_vec(&payload)?;
+        let mut uni_req = self.build_universal_request(path, body);
+        // Override accept header for SSE
+        uni_req
+            .headers
+            .insert("accept".to_string(), "text/event-stream".to_string());
+        let transport = TransportFactory::rest_http();
+        let resp = transport.send(uni_req).await?;
+        if resp.status >= 400 {
+            let preview = String::from_utf8_lossy(&resp.body);
+            log::warn!(
+                "HttpModelClient::post_sse_buffered error status={} body={}",
+                resp.status,
+                preview
+            );
+            return Err(ClientError::Transport(TransportError::Http {
+                status: resp.status,
+                message: format!("HTTP {} error", resp.status),
+                body: Some(resp.body),
+                headers: Some(resp.headers),
+            }));
+        }
+        Ok(resp.body)
+    }
 }
 
 impl ModelClient for HttpModelClient {
     fn capabilities(&self) -> ClientCapabilities {
         ClientCapabilities {
-            // Streaming is only available on native targets (reqwest + tokio)
-            streaming: cfg!(not(target_arch = "wasm32")),
+            // Buffer-then-parse SSE on WASM; incremental SSE on native
+            streaming: true,
             tool_calling: true,
             structured_output: true,
         }
@@ -295,5 +333,114 @@ impl HttpModelClient {
     /// Get the effective streaming policy for this client.
     pub fn streaming_policy(&self) -> StreamingPolicy {
         self.config.streaming.clone().unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_headers_default_content_type() {
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: String::new(),
+            api_key: None,
+            default_headers: HashMap::new(),
+            api_mode: None,
+            streaming: None,
+        });
+        let headers = client.make_headers();
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
+    }
+
+    #[test]
+    fn test_make_headers_existing_content_type_preserved() {
+        let mut default_headers = HashMap::new();
+        default_headers.insert(
+            "content-type".to_string(),
+            "application/vnd.custom+json".to_string(),
+        );
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: String::new(),
+            api_key: None,
+            default_headers,
+            api_mode: None,
+            streaming: None,
+        });
+        let headers = client.make_headers();
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/vnd.custom+json")
+        );
+    }
+
+    #[test]
+    fn test_make_headers_api_key_bearer() {
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: String::new(),
+            api_key: Some("sk-secret".to_string()),
+            default_headers: HashMap::new(),
+            api_mode: None,
+            streaming: None,
+        });
+        let headers = client.make_headers();
+        assert_eq!(
+            headers.get("authorization").map(String::as_str),
+            Some("Bearer sk-secret")
+        );
+    }
+
+    #[test]
+    fn test_make_headers_no_api_key() {
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: String::new(),
+            api_key: None,
+            default_headers: HashMap::new(),
+            api_mode: None,
+            streaming: None,
+        });
+        let headers = client.make_headers();
+        assert!(headers.get("authorization").is_none());
+    }
+
+    #[test]
+    fn test_build_request_relative_path() {
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: "https://api.example.com".to_string(),
+            api_key: None,
+            default_headers: HashMap::new(),
+            api_mode: None,
+            streaming: None,
+        });
+        let req = client.build_universal_request("/v1/chat", vec![1, 2, 3]);
+        assert_eq!(req.uri, "https://api.example.com/v1/chat");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.body, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_build_request_absolute_url() {
+        let client = HttpModelClient::new(ClientConfig {
+            base_url: "https://api.example.com".to_string(),
+            api_key: None,
+            default_headers: HashMap::new(),
+            api_mode: None,
+            streaming: None,
+        });
+        let url = "https://other.example.com/v1/x";
+        let req = client.build_universal_request(url, vec![]);
+        assert_eq!(req.uri, url);
+    }
+
+    #[test]
+    fn test_capabilities_values() {
+        let client = HttpModelClient::new(ClientConfig::default());
+        let caps = ModelClient::capabilities(&client);
+        assert!(caps.tool_calling);
+        assert!(caps.structured_output);
+        assert!(caps.streaming);
     }
 }

@@ -116,6 +116,15 @@ string-interner = "0.17"
 env_logger = "0.11"
 
 # ── Profiles ──
+
+# Dev: fast local iteration
+[profile.dev]
+split-debuginfo = "unpacked"  # skip debuginfo in linker → much faster linking on macOS
+
+[profile.dev.package."*"]
+opt-level = 1  # optimize third-party deps → tests run 3-10x faster, one-time compile cost
+
+# Release: WASM production (fat LTO, smallest binary)
 [profile.release]
 lto = "fat"
 opt-level = "z"
@@ -126,6 +135,17 @@ overflow-checks = false
 debug-assertions = false
 incremental = false
 
+# Local release: local --release iteration (incremental, debuggable)
+[profile.local-release]
+inherits = "release"
+lto = "thin"
+opt-level = 2
+codegen-units = 8
+split-debuginfo = "unpacked"
+incremental = true
+debug = "line-tables-only"
+
+# WASM-specific optimization profile
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

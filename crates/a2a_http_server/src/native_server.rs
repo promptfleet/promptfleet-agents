@@ -411,6 +411,7 @@ impl A2AHttpServer {
                                     let id =
                                         root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                                     let response_future = app.handle_send_message_async(params);
+                                    #[cfg(feature = "observability")]
                                     let response_result =
                                         if let Some(current_context) = get_current_context() {
                                             with_context_future(current_context, response_future)
@@ -418,6 +419,8 @@ impl A2AHttpServer {
                                         } else {
                                             response_future.await
                                         };
+                                    #[cfg(not(feature = "observability"))]
+                                    let response_result = response_future.await;
                                     match response_result {
                                         Ok(result) => {
                                             let result_value =
@@ -835,11 +838,14 @@ impl A2AHttpServer {
                             })?;
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         let response_future = app.handle_send_message_async(params);
+                        #[cfg(feature = "observability")]
                         let response_result = if let Some(current_context) = get_current_context() {
                             with_context_future(current_context, response_future).await
                         } else {
                             response_future.await
                         };
+                        #[cfg(not(feature = "observability"))]
+                        let response_result = response_future.await;
                         match response_result {
                             Ok(result) => {
                                 let result_value =

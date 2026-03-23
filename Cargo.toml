@@ -92,7 +92,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "v5", "js"] }
-ulid = "1.1"
 indexmap = "2.0"
 web-time = "1.0"
 log = "0.4"

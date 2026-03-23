@@ -202,10 +202,9 @@ pub(crate) fn build_default_runtime_task_store(
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(all(target_arch = "wasm32", feature = "a2a-server")))]
     {
-        #[cfg(not(feature = "redis-storage"))]
         let _ = storage_prefix;
-        return Ok(Arc::new(InMemoryRuntimeTaskStore::new()));
+        Ok(Arc::new(InMemoryRuntimeTaskStore::new()))
     }
 }

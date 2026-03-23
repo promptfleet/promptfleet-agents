@@ -10,6 +10,7 @@ use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION}
 use serde_json::json;
 use spin_sdk::http::{Method, Request as SpinRequest, Response as SpinResponse};
 use std::sync::Arc;
+#[cfg(feature = "observability")]
 use web_time::Instant;
 
 #[cfg(feature = "observability")]
@@ -265,11 +266,14 @@ impl A2AHttpServer {
                             .cloned()
                             .unwrap_or(serde_json::Value::Null);
                         let response_future = app.handle_send_message_async(params);
+                        #[cfg(feature = "observability")]
                         let response_result = if let Some(current_context) = get_current_context() {
                             with_context_future(current_context, response_future).await
                         } else {
                             response_future.await
                         };
+                        #[cfg(not(feature = "observability"))]
+                        let response_result = response_future.await;
                         let response = match response_result {
                             Ok(result) => {
                                 let result_value =

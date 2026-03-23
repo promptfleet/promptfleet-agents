@@ -447,13 +447,13 @@ impl Otel {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Avoid panicking if called outside a Tokio runtime.
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            match tokio::runtime::Handle::try_current() { Ok(handle) => {
                 handle.spawn(async move {
                     let _ = this.flush_all_buffers().await;
                 });
-            } else {
+            } _ => {
                 // Best-effort: no runtime available. Keep buffering.
-            }
+            }}
         }
 
         #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
@@ -924,9 +924,12 @@ mod tests {
     #[test]
     fn test_config_from_env() {
         // Set environment variables
-        std::env::set_var("OTEL_SERVICE_NAME", "env-test-service");
-        std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector:4317");
-        std::env::set_var("OTEL_RESOURCE_ATTRIBUTES", "env=test,version=1.0");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_SERVICE_NAME", "env-test-service") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector:4317") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_RESOURCE_ATTRIBUTES", "env=test,version=1.0") };
 
         let config = OtelConfig::from_env();
 
@@ -942,9 +945,12 @@ mod tests {
         );
 
         // Clean up
-        std::env::remove_var("OTEL_SERVICE_NAME");
-        std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT");
-        std::env::remove_var("OTEL_RESOURCE_ATTRIBUTES");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_SERVICE_NAME") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_RESOURCE_ATTRIBUTES") };
     }
 
     #[test]

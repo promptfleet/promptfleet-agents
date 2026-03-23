@@ -283,10 +283,12 @@ mod tests {
 
     #[test]
     fn resolve_env_vars_basic() {
-        std::env::set_var("TEST_MCP_KEY", "resolved-value");
+        // SAFETY: test runs single-threaded via cargo test default.
+        unsafe { std::env::set_var("TEST_MCP_KEY", "resolved-value") };
         let result = resolve_env_vars("prefix-${TEST_MCP_KEY}-suffix");
         assert_eq!(result, "prefix-resolved-value-suffix");
-        std::env::remove_var("TEST_MCP_KEY");
+        // SAFETY: test runs single-threaded via cargo test default.
+        unsafe { std::env::remove_var("TEST_MCP_KEY") };
     }
 
     #[test]

@@ -1,7 +1,7 @@
 [package]
 name = "agent_sdk"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters"
 readme = "README.md"
 repository = "https://github.com/promptfleet/promptfleet-agents.git"

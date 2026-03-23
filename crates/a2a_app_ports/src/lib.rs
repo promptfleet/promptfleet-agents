@@ -6,7 +6,6 @@
 use a2a_protocol_core::agent::AgentCard;
 use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
 use a2a_protocol_core::A2AResult;
-use core::future::Future;
 use std::pin::Pin;
 
 #[cfg(target_arch = "wasm32")]

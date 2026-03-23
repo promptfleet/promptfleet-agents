@@ -1,7 +1,7 @@
 [package]
 name = "llm_client"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Simplified, provider-agnostic LLM client built on protocol_transport_core"
 
 [dependencies]

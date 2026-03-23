@@ -20,7 +20,7 @@ impl<E: Clone + Send + 'static> StreamBroadcast<E> {
         self.tx.subscribe()
     }
 
-    pub fn to_stream(&self) -> impl futures::Stream<Item = E> {
+    pub fn to_stream(&self) -> impl futures::Stream<Item = E> + use<E> {
         BroadcastStream::new(self.tx.subscribe()).filter_map(|result| result.ok())
     }
 }

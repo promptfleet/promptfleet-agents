@@ -370,15 +370,15 @@ impl PanicHandler {
 
     /// Reset panic statistics
     pub fn reset_stats(&self) -> Result<()> {
-        if let Ok(mut stats) = self.stats.lock() {
+        match self.stats.lock() { Ok(mut stats) => {
             *stats = PanicStats::default();
             log::info!("📊 Panic statistics reset");
             Ok(())
-        } else {
+        } _ => {
             Err(StructuredLoggingError::enhanced_config(
                 "Failed to acquire stats lock",
             ))
-        }
+        }}
     }
 }
 
@@ -411,7 +411,7 @@ pub fn reset_panic_stats() -> Result<()> {
 /// Macro for supervised execution with panic capturing
 #[macro_export]
 macro_rules! supervised {
-    ($body:expr) => {{
+    ($body:expr_2021) => {{
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)).map_err(|_| {
             crate::StructuredLoggingError::enhanced_config("Supervised operation panicked")
         })

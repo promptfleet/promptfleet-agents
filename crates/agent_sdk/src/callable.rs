@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::pin::Pin;
 
 use serde_json::Value;

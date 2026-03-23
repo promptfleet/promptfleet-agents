@@ -604,7 +604,7 @@ mod tests {
         let config = BatchingConfig {
             max_batch_size: 5,
             min_batch_size: 10, // Set high to avoid auto-flush
-            flush_interval: Duration::from_secs(3600), // Set very high to avoid time-based flush
+            flush_interval: Duration::from_hours(1), // Set very high to avoid time-based flush
             ..Default::default()
         };
 

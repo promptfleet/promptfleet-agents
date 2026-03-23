@@ -510,7 +510,7 @@ impl Default for ScopedContextBuilder {
 /// ```
 #[macro_export]
 macro_rules! with_llm_context_scoped {
-    ($model:expr, $component:expr => $block:block) => {
+    ($model:expr_2021, $component:expr_2021 => $block:block) => {
         $crate::context_adapter::with_llm_context($model, $component, || $block)
     };
 }
@@ -518,7 +518,7 @@ macro_rules! with_llm_context_scoped {
 /// Macro for easy scoped A2A context
 #[macro_export]
 macro_rules! with_a2a_context_scoped {
-    ($message_type:expr, $from_agent:expr, $to_agent:expr, $component:expr => $block:block) => {
+    ($message_type:expr_2021, $from_agent:expr_2021, $to_agent:expr_2021, $component:expr_2021 => $block:block) => {
         $crate::context_adapter::with_a2a_context(
             $message_type,
             $from_agent,
@@ -532,7 +532,7 @@ macro_rules! with_a2a_context_scoped {
 /// Macro for easy scoped request context
 #[macro_export]
 macro_rules! with_request_context_scoped {
-    ($request_id:expr, $user_id:expr, $session_id:expr => $block:block) => {
+    ($request_id:expr_2021, $user_id:expr_2021, $session_id:expr_2021 => $block:block) => {
         $crate::context_adapter::with_request_context($request_id, $user_id, $session_id, || $block)
     };
 }

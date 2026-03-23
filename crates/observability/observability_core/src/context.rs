@@ -6,7 +6,6 @@
 use crate::error::{ObservabilityError, ObservabilityResult};
 use std::collections::HashMap;
 use std::fmt;
-use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use uuid::Uuid;

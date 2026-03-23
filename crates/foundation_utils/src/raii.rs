@@ -251,7 +251,7 @@ where
         };
 
         // Set the context immediately
-        if let (Some(ref context), Some(setter)) = (&guard.context, guard.setter.take()) {
+        if let (Some(context), Some(setter)) = (&guard.context, guard.setter.take()) {
             setter(context);
             guard.was_set = true;
         }
@@ -321,7 +321,7 @@ impl Drop for NoOpGuard {
 /// ```
 #[macro_export]
 macro_rules! raii_guard {
-    ($resource:expr, $cleanup:expr) => {
+    ($resource:expr_2021, $cleanup:expr_2021) => {
         $crate::raii::Guard::new($resource, $cleanup)
     };
 }
@@ -343,7 +343,7 @@ macro_rules! raii_guard {
 /// ```
 #[macro_export]
 macro_rules! context_guard {
-    ($context:expr, $setter:expr, $clearer:expr) => {
+    ($context:expr_2021, $setter:expr_2021, $clearer:expr_2021) => {
         $crate::raii::ContextGuard::new($context, $setter, $clearer)
     };
 }

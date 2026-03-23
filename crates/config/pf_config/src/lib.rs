@@ -197,7 +197,8 @@ mod tests {
     #[test]
     fn env_overrides_json() {
         let _guard = ENV_LOCK.lock().unwrap();
-        std::env::set_var("PFPIPE_ENVOJ_PORT", "7777");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("PFPIPE_ENVOJ_PORT", "7777") };
 
         let json_val = json!({"port": 3000, "host": "json_host"});
         let f = write_json_tmp(&json_val);
@@ -215,7 +216,8 @@ mod tests {
         assert_eq!(result["port"], json!(7777), "env overrides json");
         assert_eq!(result["host"], json!("json_host"), "json key preserved");
 
-        std::env::remove_var("PFPIPE_ENVOJ_PORT");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("PFPIPE_ENVOJ_PORT") };
     }
 
     #[test]

@@ -172,7 +172,7 @@ impl Agent {
     }
 
     /// Create a skill builder for fluent registration.
-    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<F, Fut>
+    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<'_, F, Fut>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<Value, String>> + Send + 'static,

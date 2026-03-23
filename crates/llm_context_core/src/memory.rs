@@ -8,7 +8,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::future::Future;
 use std::pin::Pin;
 
 /// Type of memory entry — helps with filtering and relevance scoring.

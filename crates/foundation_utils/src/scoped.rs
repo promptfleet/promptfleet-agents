@@ -268,9 +268,9 @@ where
 #[macro_export]
 macro_rules! scoped_operation {
     (
-        setup => $setup:expr,
-        work => $work:expr,
-        cleanup => $cleanup:expr
+        setup => $setup:expr_2021,
+        work => $work:expr_2021,
+        cleanup => $cleanup:expr_2021
     ) => {
         $crate::scoped::with_setup_cleanup($setup, $work, $cleanup)
     };
@@ -289,7 +289,7 @@ macro_rules! scoped_operation {
 /// ```
 #[macro_export]
 macro_rules! with_scoped_context {
-    ($context:expr, $work:expr) => {
+    ($context:expr_2021, $work:expr_2021) => {
         $crate::scoped::with_context($context, $work)
     };
 }

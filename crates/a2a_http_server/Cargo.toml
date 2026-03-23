@@ -1,7 +1,7 @@
 [package]
 name = "a2a_http_server"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "A2A HTTP server - WASM default, native testing support"
 
 [dependencies]

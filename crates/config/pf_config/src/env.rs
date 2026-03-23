@@ -110,11 +110,13 @@ mod tests {
     {
         let _guard = ENV_LOCK.lock().unwrap();
         for (k, v) in vars {
-            std::env::set_var(k, v);
+            // TODO: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(k, v) };
         }
         let result = f();
         for (k, _) in vars {
-            std::env::remove_var(k);
+            // TODO: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::remove_var(k) };
         }
         result
     }

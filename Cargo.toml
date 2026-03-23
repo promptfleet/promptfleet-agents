@@ -55,7 +55,7 @@ exclude = [
 ]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 version = "0.1.0"
 repository = "https://github.com/promptfleet/promptfleet-agents"
 license = "Apache-2.0"

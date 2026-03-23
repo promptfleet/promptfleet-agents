@@ -1,7 +1,7 @@
 [package]
 name = "a2a_app_ports"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Application layer ports for A2A servers (clean architecture)"
 
 [dependencies]

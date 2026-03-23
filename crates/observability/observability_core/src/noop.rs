@@ -271,7 +271,7 @@ pub fn create_shared_noop_plugin() -> Arc<dyn ObservabilityPlugin> {
 /// Macro to conditionally create observability plugin based on features
 #[macro_export]
 macro_rules! observability_plugin {
-    ($plugin_expr:expr) => {
+    ($plugin_expr:expr_2021) => {
         #[cfg(feature = "observability")]
         {
             $plugin_expr
@@ -286,7 +286,7 @@ macro_rules! observability_plugin {
 /// Macro to conditionally create shared observability plugin based on features
 #[macro_export]
 macro_rules! shared_observability_plugin {
-    ($plugin_expr:expr) => {
+    ($plugin_expr:expr_2021) => {
         #[cfg(feature = "observability")]
         {
             $plugin_expr
@@ -301,7 +301,7 @@ macro_rules! shared_observability_plugin {
 /// Conditional span creation macro
 #[macro_export]
 macro_rules! observability_span {
-    ($plugin:expr, $name:expr, $($attr_key:expr => $attr_val:expr),*) => {
+    ($plugin:expr_2021, $name:expr_2021, $($attr_key:expr_2021 => $attr_val:expr_2021),*) => {
         {
             #[cfg(feature = "observability")]
             {
@@ -313,7 +313,7 @@ macro_rules! observability_span {
             }
         }
     };
-    ($plugin:expr, $name:expr) => {
+    ($plugin:expr_2021, $name:expr_2021) => {
         {
             #[cfg(feature = "observability")]
             {
@@ -330,7 +330,7 @@ macro_rules! observability_span {
 /// Conditional metric recording macro
 #[macro_export]
 macro_rules! observability_metric {
-    ($plugin:expr, $name:expr, $value:expr, $($label_key:expr => $label_val:expr),*) => {
+    ($plugin:expr_2021, $name:expr_2021, $value:expr_2021, $($label_key:expr_2021 => $label_val:expr_2021),*) => {
         #[cfg(feature = "observability")]
         {
             $plugin.record_metric($name, $value, &[$(($label_key, $label_val)),*]);
@@ -340,7 +340,7 @@ macro_rules! observability_metric {
             // Compile to nothing
         }
     };
-    ($plugin:expr, $name:expr, $value:expr) => {
+    ($plugin:expr_2021, $name:expr_2021, $value:expr_2021) => {
         #[cfg(feature = "observability")]
         {
             $plugin.record_metric($name, $value, &[]);
@@ -355,7 +355,7 @@ macro_rules! observability_metric {
 /// Conditional logging macro
 #[macro_export]
 macro_rules! observability_log {
-    ($plugin:expr, $level:expr, $message:expr) => {
+    ($plugin:expr_2021, $level:expr_2021, $message:expr_2021) => {
         #[cfg(feature = "observability")]
         {
             $plugin.log($level, $message);

@@ -53,12 +53,12 @@ impl<T> ResourceGuard<T> {
 
     /// Manually return the resource (consumes the guard)
     pub fn return_resource(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let (Some(resource), Some(return_fn)) = (self.resource.take(), self.return_fn.take()) {
+        match (self.resource.take(), self.return_fn.take()) { (Some(resource), Some(return_fn)) => {
             return_fn(resource);
             Ok(())
-        } else {
+        } _ => {
             Err("Resource already returned".into())
-        }
+        }}
     }
 
     /// Take ownership of the resource without returning it to the pool
@@ -101,8 +101,8 @@ impl Default for PoolConfig {
             max_size: 10,
             min_size: 1,
             acquire_timeout: Duration::from_secs(30),
-            max_idle_time: Duration::from_secs(600), // 10 minutes
-            health_check_interval: Duration::from_secs(60), // 1 minute
+            max_idle_time: Duration::from_mins(10), // 10 minutes
+            health_check_interval: Duration::from_mins(1), // 1 minute
         }
     }
 }

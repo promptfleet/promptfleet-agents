@@ -21,7 +21,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
             Meta::NameValue(MetaNameValue { path, value, .. }) => {
                 if path.is_ident("name") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(ref s),
+                        lit: Lit::Str(s),
                         ..
                     }) = value
                     {
@@ -30,7 +30,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 if path.is_ident("description") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(ref s),
+                        lit: Lit::Str(s),
                         ..
                     }) = value
                     {
@@ -139,7 +139,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let gen = quote! {
+    let r#gen = quote! {
         #func
 
         #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
@@ -176,5 +176,5 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
             serde_json::to_value(out).unwrap_or(serde_json::json!({"result":"<non-serializable>"}))
         }
     };
-    gen.into()
+    r#gen.into()
 }

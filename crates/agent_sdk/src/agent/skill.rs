@@ -14,7 +14,6 @@ use crate::error::{SdkError, SdkResult};
 use log::{debug, error, info, trace};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -421,7 +420,7 @@ impl SkillRegistry {
     // -- Builder entry point --
 
     /// Create a skill builder for fluent registration.
-    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<F, Fut>
+    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<'_, F, Fut>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<Value, String>> + Send + 'static,

@@ -59,10 +59,10 @@ pub struct RequestContext {
 /// Set LLM context for subsequent standard log calls
 #[macro_export]
 macro_rules! llm_context {
-    ($model:expr) => {
+    ($model:expr_2021) => {
         $crate::convenience::set_llm_context($model, "openai_client_wasm");
     };
-    ($model:expr, component: $component:expr) => {
+    ($model:expr_2021, component: $component:expr_2021) => {
         $crate::convenience::set_llm_context($model, $component);
     };
 }
@@ -70,10 +70,10 @@ macro_rules! llm_context {
 /// Set template context for subsequent standard log calls
 #[macro_export]
 macro_rules! template_context {
-    ($engine:expr, $template:expr) => {
+    ($engine:expr_2021, $template:expr_2021) => {
         $crate::convenience::set_template_context($engine, $template, "template_engines");
     };
-    ($engine:expr, $template:expr, component: $component:expr) => {
+    ($engine:expr_2021, $template:expr_2021, component: $component:expr_2021) => {
         $crate::convenience::set_template_context($engine, $template, $component);
     };
 }
@@ -81,10 +81,10 @@ macro_rules! template_context {
 /// Set A2A context for subsequent standard log calls
 #[macro_export]
 macro_rules! a2a_context {
-    ($message_type:expr, from: $from:expr, to: $to:expr) => {
+    ($message_type:expr_2021, from: $from:expr_2021, to: $to:expr_2021) => {
         $crate::convenience::set_a2a_context($message_type, $from, $to, "a2a_jsonrpc_server");
     };
-    ($message_type:expr, from: $from:expr, to: $to:expr, component: $component:expr) => {
+    ($message_type:expr_2021, from: $from:expr_2021, to: $to:expr_2021, component: $component:expr_2021) => {
         $crate::convenience::set_a2a_context($message_type, $from, $to, $component);
     };
 }
@@ -460,27 +460,27 @@ pub fn clear_metrics_port() {
 /// Emit an LLM request duration metric with context
 pub fn emit_llm_request_duration(model: &str, duration_ms: u64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let metric_name = "llm_request_duration_ms";
             let _ = metrics_port
                 .emit_histogram_simple(metric_name, duration_ms as f64)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit {}: {}", metric_name, e));
-        } else {
+        } _ => {
             // Fallback to stdout if no MetricsPort is available
             LLM_CONTEXT.with(|ctx| {
-                if let Some(ref context) = *ctx.borrow() {
+                match *ctx.borrow() { Some(ref context) => {
                     println!(
                         "[METRIC] llm_request_duration_ms {} model={} component={}",
                         duration_ms, model, context.component
                     );
-                } else {
+                } _ => {
                     println!(
                         "[METRIC] llm_request_duration_ms {} model={}",
                         duration_ms, model
                     );
-                }
+                }}
             });
-        }
+        }}
     });
     Ok(())
 }
@@ -488,24 +488,24 @@ pub fn emit_llm_request_duration(model: &str, duration_ms: u64) -> Result<()> {
 /// Emit an LLM token usage metric with context
 pub fn emit_llm_tokens_used(model: &str, tokens: u32) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let metric_name = "llm_tokens_used";
             let _ = metrics_port
                 .emit_counter_simple(metric_name, tokens as f64)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit {}: {}", metric_name, e));
-        } else {
+        } _ => {
             // Fallback to stdout if no MetricsPort is available
             LLM_CONTEXT.with(|ctx| {
-                if let Some(ref context) = *ctx.borrow() {
+                match *ctx.borrow() { Some(ref context) => {
                     println!(
                         "[METRIC] llm_tokens_used {} model={} component={}",
                         tokens, model, context.component
                     );
-                } else {
+                } _ => {
                     println!("[METRIC] llm_tokens_used {} model={}", tokens, model);
-                }
+                }}
             });
-        }
+        }}
     });
     Ok(())
 }
@@ -513,24 +513,24 @@ pub fn emit_llm_tokens_used(model: &str, tokens: u32) -> Result<()> {
 /// Emit an A2A message latency metric with context
 pub fn emit_a2a_message_latency(latency_ms: u64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let metric_name = "a2a_message_latency_ms";
             let _ = metrics_port
                 .emit_histogram_simple(metric_name, latency_ms as f64)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit {}: {}", metric_name, e));
-        } else {
+        } _ => {
             // Fallback to stdout if no MetricsPort is available
             A2A_CONTEXT.with(|ctx| {
-                if let Some(ref context) = *ctx.borrow() {
+                match *ctx.borrow() { Some(ref context) => {
                     println!(
                         "[METRIC] a2a_message_latency_ms {} from={} to={} type={}",
                         latency_ms, context.from_agent, context.to_agent, context.message_type
                     );
-                } else {
+                } _ => {
                     println!("[METRIC] a2a_message_latency_ms {}", latency_ms);
-                }
+                }}
             });
-        }
+        }}
     });
     Ok(())
 }
@@ -538,21 +538,21 @@ pub fn emit_a2a_message_latency(latency_ms: u64) -> Result<()> {
 /// Emit a template render duration metric with context  
 pub fn emit_template_render_duration(template: &str, duration_ms: u64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let metric_name = "template_render_duration_ms";
             let _ = metrics_port.emit_histogram_simple(metric_name, duration_ms as f64)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit {}: {}", metric_name, e));
-        } else {
+        } _ => {
             // Fallback to stdout if no MetricsPort is available
             TEMPLATE_CONTEXT.with(|ctx| {
-                if let Some(ref context) = *ctx.borrow() {
+                match *ctx.borrow() { Some(ref context) => {
                     println!("[METRIC] template_render_duration_ms {} engine={} template={} component={}", 
                              duration_ms, context.engine, template, context.component);
-                } else {
+                } _ => {
                     println!("[METRIC] template_render_duration_ms {} template={}", duration_ms, template);
-                }
+                }}
             });
-        }
+        }}
     });
     Ok(())
 }
@@ -560,15 +560,15 @@ pub fn emit_template_render_duration(template: &str, duration_ms: u64) -> Result
 /// Emit request processing duration metric with context
 pub fn emit_request_duration(duration_ms: u64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let metric_name = "request_duration_ms";
             let _ = metrics_port
                 .emit_histogram_simple(metric_name, duration_ms as f64)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit {}: {}", metric_name, e));
-        } else {
+        } _ => {
             // Fallback to stdout if no MetricsPort is available
             REQUEST_CONTEXT.with(|ctx| {
-                if let Some(ref context) = *ctx.borrow() {
+                match *ctx.borrow() { Some(ref context) => {
                     let mut metric = format!(
                         "[METRIC] request_duration_ms {} request_id={}",
                         duration_ms, context.request_id
@@ -580,11 +580,11 @@ pub fn emit_request_duration(duration_ms: u64) -> Result<()> {
                         metric.push_str(&format!(" session_id={}", session_id));
                     }
                     println!("{}", metric);
-                } else {
+                } _ => {
                     println!("[METRIC] request_duration_ms {}", duration_ms);
-                }
+                }}
             });
-        }
+        }}
     });
     Ok(())
 }
@@ -592,11 +592,11 @@ pub fn emit_request_duration(duration_ms: u64) -> Result<()> {
 /// Generic counter metric with automatic context detection
 pub fn emit_counter(name: &str, value: f64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let _ = metrics_port
                 .emit_counter_simple(name, value)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit counter {}: {}", name, e));
-        } else {
+        } _ => {
             // Fallback to stdout with context detection
             let mut labels = Vec::new();
 
@@ -637,7 +637,7 @@ pub fn emit_counter(name: &str, value: f64) -> Result<()> {
             };
 
             println!("[METRIC] {} counter {}{}", name, value, labels_str);
-        }
+        }}
     });
     Ok(())
 }
@@ -645,11 +645,11 @@ pub fn emit_counter(name: &str, value: f64) -> Result<()> {
 /// Generic histogram metric with automatic context detection
 pub fn emit_histogram(name: &str, value: f64) -> Result<()> {
     METRICS_PORT.with(|port| {
-        if let Some(ref metrics_port) = *port.borrow() {
+        match *port.borrow() { Some(ref metrics_port) => {
             let _ = metrics_port
                 .emit_histogram_simple(name, value)
                 .map_err(|e| println!("[METRICS_ERROR] Failed to emit histogram {}: {}", name, e));
-        } else {
+        } _ => {
             // Fallback to stdout with context detection
             let mut labels = Vec::new();
 
@@ -674,7 +674,7 @@ pub fn emit_histogram(name: &str, value: f64) -> Result<()> {
             };
 
             println!("[METRIC] {} histogram {}{}", name, value, labels_str);
-        }
+        }}
     });
     Ok(())
 }
@@ -790,21 +790,21 @@ pub fn log_a2a_message(
 /// Convenience macros for structured logging
 #[macro_export]
 macro_rules! llm_log {
-    ($model:expr, $duration:expr, $tokens:expr, $status:expr) => {
+    ($model:expr_2021, $duration:expr_2021, $tokens:expr_2021, $status:expr_2021) => {
         $crate::convenience::log_llm_request($model, $duration, $tokens, $status)
     };
 }
 
 #[macro_export]
 macro_rules! template_log {
-    ($engine:expr, $template:expr, $duration:expr, $size:expr, $status:expr) => {
+    ($engine:expr_2021, $template:expr_2021, $duration:expr_2021, $size:expr_2021, $status:expr_2021) => {
         $crate::convenience::log_template_render($engine, $template, $duration, $size, $status)
     };
 }
 
 #[macro_export]
 macro_rules! a2a_log {
-    ($message_type:expr, $from:expr, $to:expr, $status:expr) => {
+    ($message_type:expr_2021, $from:expr_2021, $to:expr_2021, $status:expr_2021) => {
         $crate::convenience::log_a2a_message($message_type, $from, $to, None, $status)
     };
 }

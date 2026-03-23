@@ -1,7 +1,7 @@
 [package]
 name = "a2a_protocol_core"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Pure A2A (Agent-to-Agent) protocol domain logic - WASM optimized"
 
 [lib]

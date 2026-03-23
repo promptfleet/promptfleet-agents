@@ -1,7 +1,7 @@
 [package]
 name = "a2a-echo-native"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 description = "Minimal A2A v1.0 echo agent — native (tokio + Axum), no LLM key needed"
 publish = false
 

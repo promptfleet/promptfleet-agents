@@ -1,7 +1,7 @@
 [package]
 name = "pf-types"
 version = "0.2.0"
-edition = "2021"
+edition.workspace = true
 description = "Lightweight naming and validation primitives for the PromptFleet agent ecosystem (AgentSlug, normalize_name)."
 license = "MIT OR Apache-2.0"
 

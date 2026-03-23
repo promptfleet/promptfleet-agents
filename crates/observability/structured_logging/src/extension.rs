@@ -312,17 +312,11 @@ impl PerformanceExtension {
             }
         }
 
-        // Initialize panic handler if configured
+        // Install panic handler if configured (idempotent — silently succeeds if already installed)
         if self.config.panic_handler.enable_structured_logging {
-            crate::panic_handler::install_panic_handler_with_config(
+            let _ = crate::panic_handler::install_panic_handler_with_config(
                 self.config.panic_handler.clone(),
-            )
-            .map_err(|e| {
-                StructuredLoggingError::enhanced_config(format!(
-                    "Failed to install panic handler: {}",
-                    e
-                ))
-            })?;
+            );
         }
 
         Ok(())

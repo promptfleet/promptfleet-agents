@@ -22,9 +22,9 @@ template-logging = []
 a2a-logging = []
 string-interner = ["string-interner-crate"]
 buffer-pool = []
-fast-paths = ["performance-optimized"]
+fast-paths = []
 baggage-support = ["uuid"]
-scoped-context = ["correlation-enhanced"]
+scoped-context = []
 
 # Integration features
 wasm-optimized = ["performance-optimized"]

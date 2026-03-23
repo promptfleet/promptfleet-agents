@@ -160,3 +160,148 @@ pub mod value {
     // RPC systems (bounded).
     pub const RPC_SYSTEM_JSONRPC: &str = "jsonrpc";
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- Allowlist filtering ---
+
+    #[test]
+    fn test_filter_keeps_only_allowed_labels() {
+        let labels = vec![
+            ("component", "sdk"),
+            ("secret_key", "hunter2"),
+            ("status", "ok"),
+            ("random", "noise"),
+            ("model", "gpt-4"),
+        ];
+
+        let filtered = filter_metric_labels(&labels);
+
+        let keys: Vec<&str> = filtered.iter().map(|(k, _)| *k).collect();
+        assert!(keys.contains(&"component"));
+        assert!(keys.contains(&"status"));
+        assert!(keys.contains(&"model"));
+        assert!(!keys.contains(&"secret_key"));
+        assert!(!keys.contains(&"random"));
+    }
+
+    #[test]
+    fn test_filter_preserves_input_order() {
+        let labels = vec![
+            ("status", "ok"),
+            ("component", "sdk"),
+            ("model", "gpt-4"),
+            ("operation", "chat"),
+        ];
+
+        let filtered = filter_metric_labels(&labels);
+        let keys: Vec<&str> = filtered.iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys, vec!["status", "component", "model", "operation"]);
+    }
+
+    #[test]
+    fn test_filter_drops_all_when_none_allowed() {
+        let labels = vec![("secret", "val"), ("internal_id", "123")];
+        let filtered = filter_metric_labels(&labels);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_empty_input() {
+        let filtered = filter_metric_labels(&[]);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_filter_keeps_values_intact() {
+        let labels = vec![("component", "a2a_server"), ("status", "error")];
+        let filtered = filter_metric_labels(&labels);
+        assert_eq!(filtered[0], ("component", "a2a_server"));
+        assert_eq!(filtered[1], ("status", "error"));
+    }
+
+    // --- Allowlist contents ---
+
+    #[test]
+    fn test_allowlist_contains_expected_keys() {
+        for key in &[
+            "app",
+            "version",
+            "namespace",
+            "component",
+            "operation",
+            "status",
+            "provider",
+            "model",
+            "direction",
+        ] {
+            assert!(
+                METRIC_LABEL_ALLOWLIST.contains(key),
+                "Missing expected key: {}",
+                key
+            );
+        }
+    }
+
+    #[test]
+    fn test_allowlist_does_not_contain_high_cardinality() {
+        for key in &["trace_id", "span_id", "request_id", "user_id", "ip"] {
+            assert!(
+                !METRIC_LABEL_ALLOWLIST.contains(key),
+                "Allowlist should not contain high-cardinality key: {}",
+                key
+            );
+        }
+    }
+
+    // --- Constant stability ---
+
+    #[test]
+    fn test_span_constants_are_stable() {
+        assert_eq!(span::A2A_SERVER, "a2a.server");
+        assert_eq!(span::A2A_CLIENT, "a2a.client");
+        assert_eq!(span::LLM_REQUEST, "llm.request");
+    }
+
+    #[test]
+    fn test_attr_constants_are_stable() {
+        assert_eq!(attr::COMPONENT, "component");
+        assert_eq!(attr::OPERATION, "operation");
+        assert_eq!(attr::STATUS, "status");
+        assert_eq!(attr::PEER_SERVICE, "peer.service");
+        assert_eq!(attr::LLM_PROVIDER, "llm.provider");
+        assert_eq!(attr::LLM_MODEL, "llm.model");
+        assert_eq!(attr::PF_SOURCE_WORKLOAD, "pf.source.workload");
+        assert_eq!(attr::PF_TARGET_WORKLOAD, "pf.target.workload");
+        assert_eq!(attr::PF_OUTCOME, "pf.outcome");
+        assert_eq!(attr::PF_KIND, "pf.kind");
+        assert_eq!(attr::RPC_SYSTEM, "rpc.system");
+        assert_eq!(attr::RPC_METHOD, "rpc.method");
+    }
+
+    #[test]
+    fn test_metric_constants_are_stable() {
+        assert_eq!(metric::A2A_REQUESTS_TOTAL, "a2a_requests_total");
+        assert_eq!(metric::A2A_LATENCY_MS, "a2a_latency_ms");
+        assert_eq!(metric::LLM_REQUESTS_TOTAL, "llm_requests_total");
+        assert_eq!(metric::LLM_LATENCY_MS, "llm_latency_ms");
+        assert_eq!(metric::LLM_TOKENS_TOTAL, "llm_tokens_total");
+    }
+
+    #[test]
+    fn test_value_constants_are_stable() {
+        assert_eq!(value::STATUS_OK, "ok");
+        assert_eq!(value::STATUS_ERROR, "error");
+        assert_eq!(value::DIRECTION_INPUT, "input");
+        assert_eq!(value::DIRECTION_OUTPUT, "output");
+        assert_eq!(value::OUTCOME_OK, "ok");
+        assert_eq!(value::OUTCOME_TIMEOUT, "timeout");
+        assert_eq!(value::OUTCOME_CANCELLED, "cancelled");
+        assert_eq!(value::OUTCOME_INVALID, "invalid");
+        assert_eq!(value::KIND_A2A, "a2a");
+        assert_eq!(value::KIND_EXTERNAL, "external");
+        assert_eq!(value::RPC_SYSTEM_JSONRPC, "jsonrpc");
+    }
+}

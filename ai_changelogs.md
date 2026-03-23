@@ -1,5 +1,42 @@
 # 📋 AI Changelogs
 
+## 2026-03-24 — Observability stack test stabilization and API hardening
+
+### Changes
+- **Fixed `structured_logging` string interning bug**: `intern_string()` called `.to_string()` on the symbol index (returning `"0"`) instead of resolving the actual string via `interner.resolve(sym)`. Also fixed hit/miss stats race condition with double-checked locking under write lock.
+- **Fixed circular feature flags** in `structured_logging/Cargo.toml`: `fast-paths → performance-optimized → fast-paths` and `scoped-context → correlation-enhanced → scoped-context` cycles removed.
+- **Fixed panic handler idempotency**: `PerformanceExtension::new()` now silently succeeds if the panic handler is already installed (OnceLock), making it test-safe across multiple instances.
+- **Fixed fast-path buffer cloning**: `log_llm_request_fast` and `log_a2a_message_fast` now clone the result before returning the buffer to the pool, instead of cloning the buffer for the pool and returning the original (wasted allocation).
+- **Hardened `ResourceAttributeManager`**: Custom attributes can no longer overwrite reserved `service.*` keys. Reserved keys are filtered at construction, `add_attribute()`, and `remove_attribute()`.
+- **Added tests for `observability_core/src/error.rs`**: All 10 error variants, constructors, Display, Clone, Debug, From<serde_json::Error>, Result type alias.
+- **Added tests for `observability_core/src/ports.rs`**: TransportPort batch default, MetricsPort batch routing, ContextPort CRUD, FormatterPort JSON output, BatchingPort lifecycle, StandardLoggingPort init/enabled.
+- **Added tests for `observability/src/semconv.rs`**: Allowlist filtering (keep, drop, order preservation, empty input), allowlist content assertions (expected keys present, high-cardinality keys absent), stability tests for all span/attr/metric/value constants.
+- **Added tests for `otel/src/resource_attributes.rs`**: Standard attributes always present, custom merge, reserved key protection at construction and mutation, accessor correctness, empty custom attributes.
+- **Added tests for `structured_logging/src/performance.rs`**: Zero-denominator stats ratios, buffer pool exhaustion, A2A fast-path (with and without duration), string interning hit/miss stats, process_entry field interning, PerformanceManager stats aggregation and reset.
+
+### Files modified
+- `crates/observability/structured_logging/src/performance.rs` — Fixed interning bug, buffer cloning, added 7 new tests
+- `crates/observability/structured_logging/Cargo.toml` — Removed circular feature cycles
+- `crates/observability/structured_logging/src/extension.rs` — Made panic handler install idempotent
+- `crates/observability/observability_core/src/error.rs` — Added 5 tests
+- `crates/observability/observability_core/src/ports.rs` — Added 8 tests for all port traits
+- `crates/observability/observability/src/semconv.rs` — Added 11 tests for allowlist and constant stability
+- `crates/observability/otel/src/resource_attributes.rs` — Fixed reserved key overwrite, added 8 tests
+
+### Tests
+- `cargo test -p observability_core --all-features`: **50 passed** (was 37, +13 new)
+- `cargo test -p structured_logging --all-features`: **37 passed** (was 28 pass + 2 fail, +7 new, 2 bugs fixed)
+- `cargo test -p prometheus@0.1.0 --all-features`: **25 passed** (unchanged, already well-covered)
+- `cargo test -p observability --no-default-features --features serde,config,logging`: **30 passed**
+- `cargo test -p observability --all-features`: **32 passed** (was 21, +11 new)
+- `cargo test -p otel --features otel-2025,auto-instrumentation,structured-logging,grpc-tonic`: **34 passed** (was 26, +8 new)
+
+### Notes
+- Total new tests added: **47** across 5 crates
+- Total bugs fixed: **4** (string interning, circular features, panic idempotency, buffer cloning)
+- Total API hardening: **1** (ResourceAttributeManager reserved key protection)
+- Prometheus crate already had strong coverage (25 tests); no additional tests needed per plan guidance ("stop once high-risk public behavior is locked")
+
 ## 2026-03-23 — `llm_client` pre-OSS hardening (all workstreams A-E)
 
 ### Summary

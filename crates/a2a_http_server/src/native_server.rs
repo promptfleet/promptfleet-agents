@@ -1263,7 +1263,7 @@ mod tests {
         let server = A2AHttpServer::new_with_a2a_methods(agent_card);
 
         let headers = HeaderMap::new();
-        let body = r#"{"jsonrpc":"2.0","id":"test","method":"pf.agent.ping","params":null}"#
+        let body = r#"{"jsonrpc":"2.0","id":"test","method":"Ping","params":null}"#
             .as_bytes()
             .to_vec();
 

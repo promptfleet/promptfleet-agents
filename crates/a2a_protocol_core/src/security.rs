@@ -140,4 +140,83 @@ mod tests {
         assert_eq!(json["type"], "apiKey");
         assert_eq!(json["name"], "X-API-Key");
     }
+
+    #[test]
+    fn test_oauth2_authorization_code_roundtrip() {
+        let scheme = SecurityScheme::OAuth2(OAuth2SecurityScheme {
+            description: Some("OAuth2 with PKCE".to_string()),
+            flows: OAuthFlows {
+                authorization_code: Some(AuthorizationCodeOAuthFlow {
+                    authorization_url: "https://auth.example.com/authorize".to_string(),
+                    token_url: "https://auth.example.com/token".to_string(),
+                    refresh_url: None,
+                    scopes: Some([("read".to_string(), "Read access".to_string())].into()),
+                    pkce_required: Some(true),
+                }),
+                client_credentials: None,
+                device_code: None,
+            },
+            oauth2_metadata_url: None,
+        });
+        let json = serde_json::to_value(&scheme).unwrap();
+        assert_eq!(json["type"], "oauth2");
+        assert_eq!(json["flows"]["authorizationCode"]["pkceRequired"], true);
+        let deser: SecurityScheme = serde_json::from_value(json).unwrap();
+        assert!(matches!(deser, SecurityScheme::OAuth2(_)));
+    }
+
+    #[test]
+    fn test_oauth2_client_credentials_roundtrip() {
+        let scheme = SecurityScheme::OAuth2(OAuth2SecurityScheme {
+            description: None,
+            flows: OAuthFlows {
+                authorization_code: None,
+                client_credentials: Some(ClientCredentialsOAuthFlow {
+                    token_url: "https://auth.example.com/token".to_string(),
+                    refresh_url: None,
+                    scopes: None,
+                }),
+                device_code: None,
+            },
+            oauth2_metadata_url: None,
+        });
+        let json = serde_json::to_value(&scheme).unwrap();
+        assert_eq!(json["type"], "oauth2");
+        assert!(json["flows"]["clientCredentials"].is_object());
+    }
+
+    #[test]
+    fn test_openid_connect_roundtrip() {
+        let scheme = SecurityScheme::OpenIdConnect(OpenIdConnectSecurityScheme {
+            description: None,
+            open_id_connect_url: "https://auth.example.com/.well-known/openid-configuration".to_string(),
+        });
+        let json = serde_json::to_value(&scheme).unwrap();
+        assert_eq!(json["type"], "openIdConnect");
+        assert!(json["openIdConnectUrl"].as_str().unwrap().contains("openid-configuration"));
+        let deser: SecurityScheme = serde_json::from_value(json).unwrap();
+        assert!(matches!(deser, SecurityScheme::OpenIdConnect(_)));
+    }
+
+    #[test]
+    fn test_mutual_tls_roundtrip() {
+        let scheme = SecurityScheme::MutualTls(MutualTlsSecurityScheme { description: None });
+        let json = serde_json::to_value(&scheme).unwrap();
+        assert_eq!(json["type"], "mutualTLS");
+        let deser: SecurityScheme = serde_json::from_value(json).unwrap();
+        assert!(matches!(deser, SecurityScheme::MutualTls(_)));
+    }
+
+    #[test]
+    fn test_security_requirement_with_scopes() {
+        use std::collections::HashMap;
+        let mut schemes = HashMap::new();
+        schemes.insert("oauth2".to_string(), vec!["read".to_string(), "write".to_string()]);
+        let req = SecurityRequirement { schemes };
+        let json = serde_json::to_value(&req).unwrap();
+        let scopes = json["oauth2"].as_array().unwrap();
+        assert_eq!(scopes.len(), 2);
+        let deser: SecurityRequirement = serde_json::from_value(json).unwrap();
+        assert_eq!(deser.schemes["oauth2"], vec!["read", "write"]);
+    }
 }

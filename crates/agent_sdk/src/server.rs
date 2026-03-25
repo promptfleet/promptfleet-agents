@@ -393,7 +393,7 @@ mod tests {
         let server = A2aServer::with_a2a_methods(agent).unwrap();
 
         let headers = axum::http::HeaderMap::new();
-        let body = r#"{"jsonrpc":"2.0","id":"test","method":"ping","params":null}"#
+        let body = r#"{"jsonrpc":"2.0","id":"test","method":"Ping","params":null}"#
             .as_bytes()
             .to_vec();
 

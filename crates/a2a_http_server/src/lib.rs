@@ -12,6 +12,7 @@ use log::{debug, info};
 
 /// A2A v1.0 JSON-RPC method names.
 pub mod method {
+    pub const PING: &str = "Ping";
     pub const SEND_MESSAGE: &str = "SendMessage";
     pub const SEND_STREAMING_MESSAGE: &str = "SendStreamingMessage";
     pub const GET_AGENT_CARD: &str = "GetAgentCard";

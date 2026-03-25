@@ -120,4 +120,38 @@ mod tests {
         a.set_metadata("priority".to_string(), json!("high"));
         assert_eq!(a.metadata.as_ref().unwrap()["priority"], "high");
     }
+
+    #[test]
+    fn test_with_description_builder() {
+        let a = Artifact::text("result").with_description("The final output");
+        assert_eq!(a.description.as_deref(), Some("The final output"));
+    }
+
+    #[test]
+    fn test_with_id_builder() {
+        let a = Artifact::text("content").with_id("art-fixed-id");
+        assert_eq!(a.artifact_id, "art-fixed-id");
+    }
+
+    #[test]
+    fn test_get_text_content_absent_when_no_text_parts() {
+        let a = Artifact::data(json!({"key": "val"}));
+        assert!(a.get_text_content().is_none());
+    }
+
+    #[test]
+    fn test_get_data_content_absent_when_no_data_parts() {
+        let a = Artifact::text("hello");
+        assert!(a.get_data_content().is_none());
+    }
+
+    #[test]
+    fn test_multiple_parts_roundtrip() {
+        let a = Artifact::new(vec![Part::text("first"), Part::data(json!({"n": 1}))]);
+        let json = serde_json::to_string(&a).unwrap();
+        let deser: Artifact = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.parts.len(), 2);
+        assert!(deser.parts[0].is_text());
+        assert!(deser.parts[1].is_data());
+    }
 }

@@ -295,7 +295,7 @@ impl Client {
     // ========================================================================
 
     pub async fn ping(&self) -> Result<Value, RpcError> {
-        self.call("pf.agent.ping", Value::Null).await
+        self.call("Ping", Value::Null).await
     }
 
     pub async fn get_agent_card(&self) -> Result<Value, RpcError> {

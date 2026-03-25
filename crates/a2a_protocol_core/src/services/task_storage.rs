@@ -42,11 +42,11 @@ impl ConversationContext {
     }
 
     fn current_timestamp() -> String {
-        #[cfg(feature = "timestamps")]
+        #[cfg(feature = "time-stamps")]
         {
             chrono::Utc::now().to_rfc3339()
         }
-        #[cfg(not(feature = "timestamps"))]
+        #[cfg(not(feature = "time-stamps"))]
         {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

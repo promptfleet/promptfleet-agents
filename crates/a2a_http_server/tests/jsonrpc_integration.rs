@@ -20,7 +20,7 @@ async fn test_agent_ping_returns_pong() {
     let router = build_server();
     let capture = call_jsonrpc(
         router,
-        jsonrpc_body(json!("ping-1"), "pf.agent.ping", json!({})),
+        jsonrpc_body(json!("ping-1"), "Ping", json!({})),
     )
     .await
     .expect("ping request should complete");

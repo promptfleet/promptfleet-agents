@@ -109,10 +109,11 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn test_native_client_basic_functionality() {
-        let client = Client::external("http://httpbin.org/post");
-        let result = client.call("pf.agent.ping", json!({})).await;
-        assert!(result.is_err());
+    #[test]
+    fn test_native_client_basic_functionality() {
+        let client = Client::external("http://localhost:8080/jsonrpc");
+        assert_eq!(client.url(), "http://localhost:8080/jsonrpc");
+        assert!(client.has_header("a2a-version"));
+        assert!(client.has_header("content-type"));
     }
 }

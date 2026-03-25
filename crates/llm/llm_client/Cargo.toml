@@ -26,6 +26,8 @@ tokio = { workspace = true, features = ["sync", "rt"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 futures = { workspace = true }
 axum = { version = "0.7" }
+http = { workspace = true }
+bytes = { workspace = true }
 
 [lib]
 name = "llm_client"

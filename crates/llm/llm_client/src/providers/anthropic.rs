@@ -1,54 +1,32 @@
 use crate::{
-    model_client::{
-        ClientCapabilities, ClientConfig, ClientError, ClientFuture, HttpModelClient, ModelClient,
-    },
+    auth::AuthProvider,
+    error::LlmError,
+    model_client::{ClientCapabilities, HttpModelClient},
+    provider::LlmProvider,
     types::{
         ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall, ToolCallRequest, Usage,
     },
 };
+use protocol_transport_core::StreamingPolicy;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct AnthropicClient {
+pub(crate) struct AnthropicClient {
     inner: HttpModelClient,
 }
 
 impl AnthropicClient {
-    pub fn new(config: ClientConfig) -> Self {
-        log::debug!("AnthropicClient::new api_key_via_header={}", config.default_headers.contains_key("x-api-key"));
+    pub(crate) fn new(
+        base_url: String,
+        default_headers: HashMap<String, String>,
+        streaming: Option<StreamingPolicy>,
+        auth: Arc<dyn AuthProvider>,
+    ) -> Self {
+        log::debug!("AnthropicClient::new");
         Self {
-            inner: HttpModelClient::new(config),
+            inner: HttpModelClient::new(base_url, default_headers, streaming, auth),
         }
-    }
-
-    /// Convenience constructor that sets up Anthropic-specific headers.
-    ///
-    /// Sets `x-api-key` and `anthropic-version` in default headers and
-    /// leaves `api_key` as `None` so `HttpModelClient` does not inject a
-    /// Bearer authorization header.
-    pub fn from_api_key(base_url: &str, api_key: &str) -> Self {
-        let mut headers = HashMap::new();
-        headers.insert("x-api-key".to_string(), api_key.to_string());
-        headers.insert(
-            "anthropic-version".to_string(),
-            "2023-06-01".to_string(),
-        );
-        Self::new(ClientConfig {
-            base_url: base_url.to_string(),
-            api_key: None,
-            default_headers: headers,
-            ..ClientConfig::default()
-        })
-    }
-}
-
-impl ModelClient for AnthropicClient {
-    fn capabilities(&self) -> ClientCapabilities {
-        self.inner.capabilities()
-    }
-
-    fn llm_request(&self, request: serde_json::Value) -> ClientFuture<'_> {
-        Box::pin(async move { self.inner.post_json("/v1/messages", request).await })
     }
 }
 
@@ -222,7 +200,10 @@ impl AnthropicClient {
         }
 
         if let Some(choice) = &req.tool_choice {
-            obj.insert("tool_choice".to_string(), choice.clone());
+            obj.insert(
+                "tool_choice".to_string(),
+                choice.to_anthropic_value(),
+            );
         }
 
         if let Some(ext) = &req.extensions {
@@ -246,7 +227,7 @@ impl AnthropicClient {
     /// `usage` fields to the provider-neutral representation.
     pub fn normalize_messages_json(
         raw: serde_json::Value,
-    ) -> Result<LlmResponse, ClientError> {
+    ) -> Result<LlmResponse, LlmError> {
         let id = raw
             .get("id")
             .and_then(|v| v.as_str())
@@ -380,7 +361,7 @@ impl AnthropicClient {
     pub async fn llm(
         &self,
         req: LlmRequest,
-    ) -> Result<LlmResponse, ClientError> {
+    ) -> Result<LlmResponse, LlmError> {
         let payload = Self::to_messages_payload(&req);
         log::info!("AnthropicClient::llm endpoint=/v1/messages");
         let raw = self.inner.post_json("/v1/messages", payload).await?;
@@ -402,27 +383,13 @@ impl AnthropicClient {
     pub async fn llm_stream(
         &self,
         req: LlmRequest,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mut payload = Self::to_messages_payload(&req);
         if let Some(obj) = payload.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
         }
 
         log::info!("AnthropicClient::llm_stream endpoint=/v1/messages");
-        let response = self.inner.post_sse("/v1/messages", payload).await?;
-        Ok(sse_event_stream_anthropic(response))
-    }
-
-    /// Stream from a pre-built JSON payload, bypassing `LlmRequest` mapping.
-    pub async fn llm_stream_raw(
-        &self,
-        mut payload: serde_json::Value,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("stream".to_string(), serde_json::Value::Bool(true));
-        }
-
-        log::info!("AnthropicClient::llm_stream_raw endpoint=/v1/messages");
         let response = self.inner.post_sse("/v1/messages", payload).await?;
         Ok(sse_event_stream_anthropic(response))
     }
@@ -433,7 +400,7 @@ impl AnthropicClient {
     pub async fn llm_stream(
         &self,
         req: LlmRequest,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mut payload = Self::to_messages_payload(&req);
         if let Some(obj) = payload.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
@@ -445,25 +412,11 @@ impl AnthropicClient {
         Ok(Self::stream_from_buffer(body))
     }
 
-    pub async fn llm_stream_raw(
-        &self,
-        mut payload: serde_json::Value,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("stream".to_string(), serde_json::Value::Bool(true));
-        }
-
-        log::info!("AnthropicClient::llm_stream_raw (wasm) endpoint=/v1/messages");
-
-        let body = self.inner.post_sse_buffered("/v1/messages", payload).await?;
-        Ok(Self::stream_from_buffer(body))
-    }
-
     fn stream_from_buffer(body: Vec<u8>) -> crate::stream::LlmEventStream {
         let mut parser = crate::stream::SseParser::new();
         parser.feed(&body);
 
-        let mut all_events: Vec<Result<crate::stream::StreamEvent, ClientError>> = Vec::new();
+        let mut all_events: Vec<Result<crate::stream::StreamEvent, LlmError>> = Vec::new();
         while let Some((event_type, data)) = parser.next_typed_event() {
             let ev_type = event_type.as_deref().unwrap_or("");
             if ev_type == "message_stop" {
@@ -516,10 +469,10 @@ fn map_stop_reason(reason: &str) -> String {
 /// - `message_delta` → [`StreamEvent::Done`]
 /// - Other events (`content_block_start` text, `content_block_stop`,
 ///   `message_stop`, `ping`) are ignored.
-pub fn parse_anthropic_chunk(
+pub(crate) fn parse_anthropic_chunk(
     event_type: &str,
     data: &str,
-) -> Result<Vec<crate::stream::StreamEvent>, ClientError> {
+) -> Result<Vec<crate::stream::StreamEvent>, LlmError> {
     use crate::stream::StreamEvent;
 
     let json: serde_json::Value = serde_json::from_str(data)?;
@@ -643,14 +596,14 @@ pub fn parse_anthropic_chunk(
 /// [`SseParser::next_typed_event`] to capture `event:` lines and
 /// dispatches via [`parse_anthropic_chunk`].
 #[cfg(not(target_arch = "wasm32"))]
-pub fn sse_event_stream_anthropic(
+pub(crate) fn sse_event_stream_anthropic(
     response: reqwest::Response,
 ) -> crate::stream::LlmEventStream {
     use crate::stream::SseParser;
     use futures::StreamExt;
 
     let (tx, rx) =
-        tokio::sync::mpsc::channel::<Result<crate::stream::StreamEvent, ClientError>>(64);
+        tokio::sync::mpsc::channel::<Result<crate::stream::StreamEvent, LlmError>>(64);
 
     tokio::spawn(async move {
         let mut parser = SseParser::new();
@@ -700,7 +653,7 @@ pub fn sse_event_stream_anthropic(
                         "sse_event_stream_anthropic: byte stream error: {}",
                         e
                     );
-                    let err = ClientError::Transport(
+                    let err = LlmError::Transport(
                         protocol_transport_core::TransportError::Network(
                             e.to_string(),
                         ),
@@ -720,6 +673,22 @@ pub fn sse_event_stream_anthropic(
             None => None,
         }
     }))
+}
+
+impl LlmProvider for AnthropicClient {
+    fn capabilities(&self) -> ClientCapabilities {
+        self.inner.capabilities()
+    }
+
+    fn chat<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm(req).await })
+    }
+
+    fn chat_stream<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatStreamFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm_stream(req).await })
+    }
 }
 
 // ---------------------------------------------------------------------------

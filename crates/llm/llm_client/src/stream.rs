@@ -15,7 +15,7 @@
 //! **Reasoning models (Qwen3, DeepSeek R1):**
 //! `StreamStart -> ReasoningDelta* -> ContentDelta* -> Done`
 
-use crate::model_client::ClientError;
+use crate::error::LlmError;
 use crate::types::Usage;
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 /// Events are emitted in real-time as the provider generates tokens.
 /// Variants cover content deltas, native reasoning/CoT deltas (never
 /// fabricated), incremental tool-call fragments, and lifecycle signals.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamEvent {
     /// Stream started. Emitted once from the first chunk that contains a role.
@@ -93,7 +93,7 @@ pub enum StreamEvent {
 ///
 /// This is the canonical return type for all streaming LLM methods.
 pub type LlmEventStream =
-    std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, ClientError>> + Send>>;
+    std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, LlmError>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // SSE parser
@@ -193,7 +193,7 @@ impl SseParser {
 /// may produce both a [`StreamEvent::ToolCallStart`] and a
 /// [`StreamEvent::ToolCallDelta`] if arguments are included in the same
 /// chunk. Returns an empty vec for chunks with no actionable delta.
-pub fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, ClientError> {
+pub(crate) fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, LlmError> {
     let json: serde_json::Value = serde_json::from_str(data)?;
 
     let id = json
@@ -310,6 +310,26 @@ pub fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, ClientError> {
     Ok(events)
 }
 
+/// Some OpenAI-compatible gateways repeat `delta.role` on every SSE chunk. We emit at most one
+/// [`StreamEvent::StreamStart`] per HTTP response so the sequence matches the documented
+/// `StreamStart → … → Done` shape.
+fn dedupe_stream_starts(
+    events: Vec<StreamEvent>,
+    stream_start_sent: &mut bool,
+) -> Vec<StreamEvent> {
+    let mut out = Vec::with_capacity(events.len());
+    for event in events {
+        if matches!(&event, StreamEvent::StreamStart { .. }) {
+            if *stream_start_sent {
+                continue;
+            }
+            *stream_start_sent = true;
+        }
+        out.push(event);
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Native-only: SSE byte stream → StreamEvent stream
 // ---------------------------------------------------------------------------
@@ -321,17 +341,21 @@ pub fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, ClientError> {
 /// [`SseParser`], parses each data line via [`parse_chat_chunk`], and
 /// sends the resulting [`StreamEvent`]s through a bounded channel.
 ///
+/// Repeated [`StreamEvent::StreamStart`] (e.g. when every chunk carries `delta.role`) is
+/// collapsed to a single start event per response.
+///
 /// The returned stream completes when the upstream sends `data: [DONE]`,
 /// the connection closes, or an error occurs.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
     use futures::StreamExt;
 
-    let (tx, rx) = tokio::sync::mpsc::channel::<Result<StreamEvent, ClientError>>(64);
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<StreamEvent, LlmError>>(64);
 
     tokio::spawn(async move {
         let mut parser = SseParser::new();
         let mut byte_stream = response.bytes_stream();
+        let mut stream_start_sent = false;
 
         while let Some(result) = byte_stream.next().await {
             match result {
@@ -346,7 +370,7 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
 
                         match parse_chat_chunk(&data) {
                             Ok(events) => {
-                                for event in events {
+                                for event in dedupe_stream_starts(events, &mut stream_start_sent) {
                                     if tx.send(Ok(event)).await.is_err() {
                                         log::debug!("sse_event_stream: receiver dropped, stopping");
                                         return;
@@ -363,7 +387,7 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
                 }
                 Err(e) => {
                     log::warn!("sse_event_stream: byte stream error: {}", e);
-                    let err = ClientError::Transport(
+                    let err = LlmError::Transport(
                         protocol_transport_core::TransportError::Network(e.to_string()),
                     );
                     let _ = tx.send(Err(err)).await;
@@ -393,18 +417,21 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
 /// Limitations: no incremental token delivery — the caller receives all
 /// events after the full response completes. True incremental WASM streaming
 /// is deferred until WASI 0.3.
+///
+/// Like [`sse_event_stream`], repeated [`StreamEvent::StreamStart`] is deduped per response.
 pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
     let mut parser = SseParser::new();
     parser.feed(&body);
 
-    let mut all_events: Vec<Result<StreamEvent, ClientError>> = Vec::new();
+    let mut all_events: Vec<Result<StreamEvent, LlmError>> = Vec::new();
+    let mut stream_start_sent = false;
     while let Some(data) = parser.next_event() {
         if data == "[DONE]" {
             break;
         }
         match parse_chat_chunk(&data) {
             Ok(events) => {
-                for event in events {
+                for event in dedupe_stream_starts(events, &mut stream_start_sent) {
                     all_events.push(Ok(event));
                 }
             }
@@ -419,11 +446,81 @@ pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
 }
 
 // ---------------------------------------------------------------------------
+// Shared SSE transcripts for parser / buffer parity tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+pub(crate) mod test_fixtures {
+    use super::{parse_chat_chunk, SseParser, StreamEvent};
+
+    /// OpenAI-style SSE transcript: start + 2 content chunks + usage + `[DONE]`.
+    pub fn openai_full_chat() -> &'static str {
+        const S: &str = concat!(
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n",
+            "data: [DONE]\n\n",
+        );
+        S
+    }
+
+    pub fn openai_tool_transcript() -> &'static str {
+        const S: &str = concat!(
+            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_123\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\"\"}}]},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\":\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        S
+    }
+
+    pub fn openai_reasoning_transcript() -> &'static str {
+        const S: &str = concat!(
+            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Let me analyze this.\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" The answer is clear.\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"42\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        S
+    }
+
+    /// Two content chunks; each repeats `delta.role` (some OpenAI-compatible proxies do this).
+    pub fn openai_repeat_role_each_chunk() -> &'static str {
+        const S: &str = concat!(
+            "data: {\"id\":\"chatcmpl-dup\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-dup\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"!\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"id\":\"chatcmpl-dup\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        S
+    }
+
+    pub fn collect_openai_transcript_events(transcript: &str) -> Vec<StreamEvent> {
+        let mut parser = SseParser::new();
+        parser.feed(transcript.as_bytes());
+        let mut all = Vec::new();
+        while let Some(data) = parser.next_event() {
+            if data == "[DONE]" {
+                break;
+            }
+            let events = parse_chat_chunk(&data).expect("fixture chunk must parse");
+            all.extend(events);
+        }
+        all
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
+    use super::test_fixtures;
     use super::*;
 
     // ── SseParser ──────────────────────────────────────────────────────
@@ -723,34 +820,11 @@ mod tests {
 
     // ── End-to-end SSE stream wiring ──────────────────────────────────
 
-    /// Simulates a full SSE transcript and verifies the sse_event_stream
-    /// pipeline produces the correct sequence of StreamEvents.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn sse_event_stream_full_transcript() {
-        // Build a realistic SSE transcript (3 chunks + [DONE])
-        let transcript = [
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n",
-            "data: [DONE]\n\n",
-        ]
-        .join("");
-
-        // Feed the transcript through our parser machinery directly
-        // (bypassing reqwest, since we test the parsing pipeline)
-        let mut parser = SseParser::new();
-        parser.feed(transcript.as_bytes());
-
-        let mut all_events = Vec::new();
-        while let Some(data) = parser.next_event() {
-            if data == "[DONE]" {
-                break;
-            }
-            let events = parse_chat_chunk(&data).unwrap();
-            all_events.extend(events);
-        }
+    /// Full SSE transcript → same events as reference collector.
+    #[test]
+    fn sse_event_stream_full_transcript() {
+        let transcript = test_fixtures::openai_full_chat();
+        let all_events = test_fixtures::collect_openai_transcript_events(transcript);
 
         // Verify the event sequence
         assert_eq!(
@@ -780,31 +854,10 @@ mod tests {
         }
     }
 
-    /// Simulates SSE transcript with tool calls and verifies the correct
-    /// sequence of ToolCallStart, ToolCallDelta, and Done events.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn sse_event_stream_tool_call_transcript() {
-        let transcript = [
-            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_123\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\"\"}}]},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\":\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-tc\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
-            "data: [DONE]\n\n",
-        ]
-        .join("");
-
-        let mut parser = SseParser::new();
-        parser.feed(transcript.as_bytes());
-
-        let mut all_events = Vec::new();
-        while let Some(data) = parser.next_event() {
-            if data == "[DONE]" {
-                break;
-            }
-            let events = parse_chat_chunk(&data).unwrap();
-            all_events.extend(events);
-        }
+    #[test]
+    fn sse_event_stream_tool_call_transcript() {
+        let transcript = test_fixtures::openai_tool_transcript();
+        let all_events = test_fixtures::collect_openai_transcript_events(transcript);
 
         // Expected: StreamStart, ToolCallStart, ToolCallDelta, ToolCallDelta, Done
         assert_eq!(all_events.len(), 5, "events: {:?}", all_events);
@@ -838,31 +891,10 @@ mod tests {
         }
     }
 
-    /// Simulates SSE transcript with reasoning deltas (Qwen3-style).
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn sse_event_stream_reasoning_transcript() {
-        let transcript = [
-            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Let me analyze this.\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" The answer is clear.\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"42\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-r\",\"model\":\"qwen3-235b\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
-            "data: [DONE]\n\n",
-        ]
-        .join("");
-
-        let mut parser = SseParser::new();
-        parser.feed(transcript.as_bytes());
-
-        let mut all_events = Vec::new();
-        while let Some(data) = parser.next_event() {
-            if data == "[DONE]" {
-                break;
-            }
-            let events = parse_chat_chunk(&data).unwrap();
-            all_events.extend(events);
-        }
+    #[test]
+    fn sse_event_stream_reasoning_transcript() {
+        let transcript = test_fixtures::openai_reasoning_transcript();
+        let all_events = test_fixtures::collect_openai_transcript_events(transcript);
 
         // Expected: StreamStart, ReasoningDelta x2, ContentDelta, Done
         assert_eq!(all_events.len(), 5, "events: {:?}", all_events);
@@ -880,18 +912,44 @@ mod tests {
         );
     }
 
+    /// Buffered stream emits the same `StreamEvent`s as incremental manual parsing.
+    #[test]
+    fn buffer_vs_manual_parser_parity() {
+        let t = test_fixtures::openai_full_chat();
+        let expected = test_fixtures::collect_openai_transcript_events(t);
+        let stream = sse_event_stream_from_buffer(t.as_bytes().to_vec());
+        let got: Vec<_> = futures::executor::block_on_stream(stream)
+            .map(|r| r.expect("fixture should not error"))
+            .collect();
+        assert_eq!(got, expected);
+    }
+
+    /// Raw parse emits two `StreamStart`s; SSE drivers collapse to one.
+    #[test]
+    fn sse_dedupes_stream_start_when_role_repeated_per_chunk() {
+        let transcript = test_fixtures::openai_repeat_role_each_chunk();
+        let raw = test_fixtures::collect_openai_transcript_events(transcript);
+        assert_eq!(
+            raw.iter().filter(|e| matches!(e, StreamEvent::StreamStart { .. })).count(),
+            2,
+            "fixture must repeat role per chunk"
+        );
+
+        let stream = sse_event_stream_from_buffer(transcript.as_bytes().to_vec());
+        let got: Vec<_> = futures::executor::block_on_stream(stream)
+            .map(|r| r.expect("ok"))
+            .collect();
+        assert_eq!(got.len(), 4, "events: {:?}", got);
+        assert!(matches!(&got[0], StreamEvent::StreamStart { .. }));
+        assert!(matches!(&got[1], StreamEvent::ContentDelta { delta } if delta == "Hi"));
+        assert!(matches!(&got[2], StreamEvent::ContentDelta { delta } if delta == "!"));
+        assert!(matches!(&got[3], StreamEvent::Done { .. }));
+    }
+
     #[test]
     fn sse_event_stream_from_buffer_matches_openai_transcript() {
-        let transcript = [
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n",
-            "data: {\"id\":\"chatcmpl-test\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n",
-            "data: [DONE]\n\n",
-        ]
-        .join("");
-
-        let stream = sse_event_stream_from_buffer(transcript.into_bytes());
+        let transcript = test_fixtures::openai_full_chat();
+        let stream = sse_event_stream_from_buffer(transcript.as_bytes().to_vec());
         let collected: Vec<_> = futures::executor::block_on_stream(stream).collect();
 
         assert_eq!(collected.len(), 4);
@@ -922,6 +980,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sse_invalid_chunk_mid_stream_returns_transport_error() {
+        let transcript = concat!(
+            "data: {\"id\":\"x\",\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"},\"finish_reason\":null}]}\n\n",
+            "data: {{{not-json\n\n",
+        );
+        let stream = sse_event_stream_from_buffer(transcript.as_bytes().to_vec());
+        let collected: Vec<_> = futures::executor::block_on_stream(stream).collect();
+        assert_eq!(collected.len(), 2);
+        assert!(matches!(&collected[0], Ok(StreamEvent::ContentDelta { delta }) if delta == "hi"));
+        assert!(collected[1].is_err());
+    }
+
     /// Tests that SSE bytes split at arbitrary boundaries still parse correctly.
     #[test]
     fn parser_byte_level_splitting() {
@@ -937,5 +1008,77 @@ mod tests {
         assert_eq!(parser.next_event(), Some("{\"b\":2}".into()));
         assert_eq!(parser.next_event(), Some("[DONE]".into()));
         assert_eq!(parser.next_event(), None);
+    }
+}
+
+/// [`sse_event_stream`] (incremental native) vs [`sse_event_stream_from_buffer`] on the same bytes.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod native_sse_parity_tests {
+    use super::sse_event_stream;
+    use super::sse_event_stream_from_buffer;
+    use super::test_fixtures;
+    use super::{LlmError, StreamEvent};
+    use bytes::Bytes;
+    use futures::StreamExt;
+    use std::convert::Infallible;
+
+    fn openai_sse_response_chunked(body: &[u8], chunk: usize) -> reqwest::Response {
+        let chunks: Vec<Bytes> = body
+            .chunks(chunk.max(1))
+            .map(Bytes::copy_from_slice)
+            .collect();
+        let st = futures::stream::iter(chunks.into_iter().map(Ok::<_, Infallible>));
+        let wrapped = reqwest::Body::wrap_stream(st);
+        let http = http::Response::builder()
+            .status(200)
+            .body(wrapped)
+            .expect("fixture response");
+        reqwest::Response::from(http)
+    }
+
+    #[tokio::test]
+    async fn buffer_vs_native_sse_event_parity() {
+        let transcript = test_fixtures::openai_full_chat();
+        let expected = test_fixtures::collect_openai_transcript_events(transcript);
+
+        let buffer_out: Vec<Result<StreamEvent, LlmError>> =
+            sse_event_stream_from_buffer(transcript.as_bytes().to_vec())
+                .collect()
+                .await;
+        let buffer_events: Vec<StreamEvent> = buffer_out.into_iter().map(|r| r.unwrap()).collect();
+        assert_eq!(buffer_events, expected);
+
+        for chunk_size in [1_usize, 7, 64, transcript.len()] {
+            let resp = openai_sse_response_chunked(transcript.as_bytes(), chunk_size);
+            let native_out: Vec<Result<StreamEvent, LlmError>> =
+                sse_event_stream(resp).collect().await;
+            let native_events: Vec<StreamEvent> =
+                native_out.into_iter().map(|r| r.unwrap()).collect();
+            assert_eq!(
+                native_events, expected,
+                "parity failed for chunk_size={chunk_size}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn buffer_vs_native_sse_parity_repeat_role_chunks() {
+        let transcript = test_fixtures::openai_repeat_role_each_chunk();
+        let buffer_events: Vec<StreamEvent> = sse_event_stream_from_buffer(
+            transcript.as_bytes().to_vec(),
+        )
+        .map(|r| r.unwrap())
+        .collect()
+        .await;
+
+        for chunk_size in [1_usize, 5, 99, transcript.len()] {
+            let resp = openai_sse_response_chunked(transcript.as_bytes(), chunk_size);
+            let native_events: Vec<StreamEvent> =
+                sse_event_stream(resp).map(|r| r.unwrap()).collect().await;
+            assert_eq!(
+                native_events, buffer_events,
+                "parity failed for chunk_size={chunk_size}"
+            );
+        }
     }
 }

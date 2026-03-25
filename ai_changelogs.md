@@ -1,5 +1,51 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — `llm_client` dedupe `StreamStart` in OpenAI SSE drivers
+
+### Changes
+- Added [`dedupe_stream_starts`](crates/llm/llm_client/src/stream.rs): at most one [`StreamEvent::StreamStart`](crates/llm/llm_client/src/stream.rs) per HTTP streaming response when aggregating SSE lines (fixes gateways that repeat `delta.role` every chunk, e.g. some OpenRouter-style streams).
+- Applied in [`sse_event_stream`](crates/llm/llm_client/src/stream.rs) and [`sse_event_stream_from_buffer`](crates/llm/llm_client/src/stream.rs); [`parse_chat_chunk`](crates/llm/llm_client/src/stream.rs) unchanged (still stateless per line).
+- New fixture [`openai_repeat_role_each_chunk`](crates/llm/llm_client/src/stream.rs) and tests `sse_dedupes_stream_start_when_role_repeated_per_chunk`, `buffer_vs_native_sse_parity_repeat_role_chunks`.
+- README streaming section notes the guarantee.
+
+### Files modified
+- `crates/llm/llm_client/src/stream.rs` — dedupe helper, driver wiring, tests
+- `crates/llm/llm_client/README.md` — one bullet on `StreamStart`
+
+### Tests
+- `cargo test -p llm_client`: **105 passed** (was 103, +2)
+
+### Notes
+- Anthropic path uses `sse_event_stream_anthropic` in `providers/anthropic.rs`; unchanged (separate event model).
+
+## 2026-03-25 — `llm_client` OSS hardening follow-up (parity, WASM Send, docs)
+
+### Changes
+- Added native **`buffer_vs_native_sse_event_parity`** test: chunked `reqwest::Response` through [`sse_event_stream`](crates/llm/llm_client/src/stream.rs) matches [`sse_event_stream_from_buffer`](crates/llm/llm_client/src/stream.rs) and the shared OpenAI SSE fixtures.
+- Added **`test_post_sse_anthropic_shaped_error_maps_transport`**: HTTP 502 with Anthropic-style error JSON on the SSE (`post_sse`) path maps to `LlmError::Transport` with body preserved (mirrors JSON path coverage).
+- **`LlmProvider::chat`**: introduced [`ChatFuture`](crates/llm/llm_client/src/provider.rs) alias — **`Send` only on native**, fixing **`wasm32-wasip1` build** (`Spin`/outgoing body is not `Send`).
+- Moved **`HttpModelClient::post_sse_buffered`** to **`#[cfg(target_arch = "wasm32")]`** only (native uses `post_sse`); restored error **`headers: Some(resp.headers)`** on WASM buffered SSE errors for parity with JSON errors.
+- Removed unused **`AnthropicClient::from_api_key`**; dropped unused imports.
+- New **[`crates/llm/llm_client/README.md`](crates/llm/llm_client/README.md)** (quick start, wire formats, native vs WASM streaming).
+- **`HttpModelClient`**: `#[cfg_attr(wasm32, allow(dead_code))]` on `streaming` (native-only knob).
+- **`Cargo.toml`**: dev-deps `http`, `bytes` for parity test body construction.
+
+### Files modified
+- `crates/llm/llm_client/src/stream.rs` — `native_sse_parity_tests` module
+- `crates/llm/llm_client/src/model_client.rs` — WASM-only `post_sse_buffered`, transport tests fix + Anthropic SSE error test
+- `crates/llm/llm_client/src/provider.rs` — `ChatFuture` alias
+- `crates/llm/llm_client/src/providers/openai.rs`, `anthropic.rs` — `ChatFuture` return type, import cleanup
+- `crates/llm/llm_client/Cargo.toml` — dev-dependencies
+- `crates/llm/llm_client/README.md` — **new**
+
+### Tests
+- `cargo test -p llm_client`: **103 lib + 6 ignored smoke + 2 doctests, all pass**
+- `cargo check --target wasm32-wasip1 -p llm_client`: **pass**
+- `cargo test -p agent_sdk --features llm-engine --no-run`: **pass** (compile)
+
+### Notes
+- Cloud consumers already compile against the typed `LlmClient` surface; no cloud repo changes in this entry.
+
 ## 2026-03-24 — Observability stack test stabilization and API hardening
 
 ### Changes

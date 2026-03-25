@@ -1773,7 +1773,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "bytes",
  "futures",
+ "http 1.4.0",
  "indexmap 2.13.0",
  "log",
  "protocol_transport_core",

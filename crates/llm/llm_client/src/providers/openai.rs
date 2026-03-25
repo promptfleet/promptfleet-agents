@@ -1,38 +1,115 @@
 use crate::{
-    model_client::{
-        ApiMode, ClientCapabilities, ClientConfig, ClientError, ClientFuture, HttpModelClient,
-        ModelClient,
-    },
+    auth::AuthProvider,
+    error::LlmError,
+    model_client::{ApiMode, ClientCapabilities, HttpModelClient},
+    provider::LlmProvider,
     types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
 };
+use protocol_transport_core::StreamingPolicy;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct OpenAIClient {
+pub(crate) struct OpenAIClient {
     inner: HttpModelClient,
+    api_mode: Option<ApiMode>,
+    chat_path: String,
+    responses_path: String,
 }
 
 impl OpenAIClient {
-    pub fn new(config: ClientConfig) -> Self {
-        log::debug!("OpenAIClient::new api_mode={:?}", config.api_mode);
+    pub(crate) fn new(
+        base_url: String,
+        default_headers: HashMap<String, String>,
+        streaming: Option<StreamingPolicy>,
+        auth: Arc<dyn AuthProvider>,
+        api_mode: Option<ApiMode>,
+        chat_path: String,
+        responses_path: String,
+    ) -> Self {
+        log::debug!("OpenAIClient::new api_mode={:?}", api_mode);
         Self {
-            inner: HttpModelClient::new(config),
+            inner: HttpModelClient::new(base_url, default_headers, streaming, auth),
+            api_mode,
+            chat_path,
+            responses_path,
         }
+    }
+
+    fn map_openai_chat_message(m: &ChatMessage) -> serde_json::Value {
+        if m.role == "tool" {
+            return serde_json::json!({
+                "role": "tool",
+                "tool_call_id": m.tool_call_id,
+                "content": m.content,
+            });
+        }
+        if m.role == "assistant"
+            && m
+                .tool_calls
+                .as_ref()
+                .map(|t| !t.is_empty())
+                .unwrap_or(false)
+        {
+            let tool_calls: Vec<serde_json::Value> = m
+                .tool_calls
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|tc| {
+                    let args_str = match &tc.arguments {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    serde_json::json!({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": args_str
+                        }
+                    })
+                })
+                .collect();
+            let mut obj = serde_json::Map::new();
+            obj.insert("role".to_string(), serde_json::Value::String("assistant".into()));
+            if let Some(c) = &m.content {
+                if !c.is_empty() {
+                    obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+                }
+            }
+            obj.insert("tool_calls".to_string(), serde_json::Value::Array(tool_calls));
+            return serde_json::Value::Object(obj);
+        }
+        let mut obj = serde_json::Map::new();
+        obj.insert("role".to_string(), serde_json::Value::String(m.role.clone()));
+        if let Some(c) = &m.content {
+            obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+        }
+        serde_json::Value::Object(obj)
+    }
+
+    fn map_messages_openai_chat(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
+        messages.iter().map(Self::map_openai_chat_message).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::ApiKeyAuth;
     use crate::types::{LlmRequest, ToolSchema};
 
     fn mk_client(api_mode: ApiMode) -> OpenAIClient {
-        OpenAIClient::new(ClientConfig {
-            base_url: "http://localhost:1234".to_string(),
-            api_key: None,
-            default_headers: Default::default(),
-            api_mode: Some(api_mode),
-            ..ClientConfig::default()
-        })
+        OpenAIClient::new(
+            "http://localhost:1234".to_string(),
+            Default::default(),
+            None,
+            Arc::new(ApiKeyAuth::new("")),
+            Some(api_mode),
+            "/v1/chat/completions".to_string(),
+            "/v1/responses".to_string(),
+        )
     }
 
     #[test]
@@ -415,19 +492,9 @@ mod tests {
     }
 }
 
-impl ModelClient for OpenAIClient {
-    fn capabilities(&self) -> ClientCapabilities {
-        self.inner.capabilities()
-    }
-
-    fn llm_request(&self, request: serde_json::Value) -> ClientFuture<'_> {
-        Box::pin(async move { self.inner.llm_request(request).await })
-    }
-}
-
 impl OpenAIClient {
     fn decide_mode(&self, model: &str) -> ApiMode {
-        let decided = match self.inner.config().api_mode.unwrap_or(ApiMode::Chat) {
+        let decided = match self.api_mode.unwrap_or(ApiMode::Chat) {
             ApiMode::Chat => ApiMode::Chat,
             ApiMode::Responses => ApiMode::Responses,
             ApiMode::Auto => {
@@ -477,13 +544,13 @@ impl OpenAIClient {
         );
         obj.insert(
             "messages".to_string(),
-            serde_json::to_value(&req.messages).unwrap_or(serde_json::Value::Null),
+            serde_json::Value::Array(Self::map_messages_openai_chat(&req.messages)),
         );
         if let Some(tools) = Self::map_tools_for_chat(&req.tools) {
             obj.insert("tools".to_string(), tools);
         }
         if let Some(choice) = &req.tool_choice {
-            obj.insert("tool_choice".to_string(), choice.clone());
+            obj.insert("tool_choice".to_string(), choice.to_openai_value());
         }
         if let Some(temp) = req.temperature {
             obj.insert("temperature".to_string(), serde_json::Value::from(temp));
@@ -581,13 +648,13 @@ impl OpenAIClient {
         }
         obj.insert(
             "input".to_string(),
-            serde_json::to_value(inputs).unwrap_or(serde_json::Value::Null),
+            serde_json::Value::Array(Self::map_messages_openai_chat(&inputs)),
         );
         if let Some(t) = tools {
             obj.insert("tools".to_string(), t);
         }
         if let Some(choice) = &req.tool_choice {
-            obj.insert("tool_choice".to_string(), choice.clone());
+            obj.insert("tool_choice".to_string(), choice.to_openai_value());
         }
         if let Some(temp) = req.temperature {
             obj.insert("temperature".to_string(), serde_json::Value::from(temp));
@@ -783,7 +850,7 @@ impl OpenAIClient {
         }
     }
 
-    fn normalize_responses_json(raw: serde_json::Value) -> Result<LlmResponse, ClientError> {
+    fn normalize_responses_json(raw: serde_json::Value) -> Result<LlmResponse, LlmError> {
         let output_text = raw
             .get("output_text")
             .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -842,7 +909,7 @@ impl OpenAIClient {
         })
     }
 
-    fn normalize_chat_json(raw: serde_json::Value) -> Result<LlmResponse, ClientError> {
+    fn normalize_chat_json(raw: serde_json::Value) -> Result<LlmResponse, LlmError> {
         let content = raw
             .get("choices")
             .and_then(|v| v.as_array())
@@ -917,16 +984,15 @@ impl OpenAIClient {
     ///
     /// ```rust,no_run
     /// use futures::StreamExt;
-    /// use llm_client::providers::OpenAIClient;
+    /// use llm_client::auth::ApiKeyAuth;
+    /// use llm_client::client::{LlmClient, WireFormat};
     /// use llm_client::{LlmRequest, ChatMessage, StreamEvent};
-    /// use llm_client::model_client::ClientConfig;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = OpenAIClient::new(ClientConfig {
-    ///     base_url: "https://api.openai.com".into(),
-    ///     api_key: Some("sk-...".into()),
-    ///     ..Default::default()
-    /// });
+    /// let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    ///     .base_url("https://api.openai.com")
+    ///     .auth(ApiKeyAuth::new("sk-..."))
+    ///     .build()?;
     ///
     /// let req = LlmRequest {
     ///     model: "gpt-4".into(),
@@ -934,7 +1000,7 @@ impl OpenAIClient {
     ///     ..Default::default()
     /// };
     ///
-    /// let mut stream = client.llm_stream(req).await?;
+    /// let mut stream = client.chat_stream(req).await?;
     /// while let Some(event) = stream.next().await {
     ///     match event? {
     ///         StreamEvent::ContentDelta { delta } => print!("{}", delta),
@@ -948,13 +1014,17 @@ impl OpenAIClient {
     pub async fn llm_stream(
         &self,
         req: LlmRequest,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
         let (path, mut payload) = match mode {
-            ApiMode::Chat => ("/v1/chat/completions", Self::to_chat_payload(&req)),
-            ApiMode::Responses | ApiMode::Auto => {
-                ("/v1/responses", Self::to_responses_payload(&req))
-            }
+            ApiMode::Chat => (
+                self.chat_path.as_str(),
+                Self::to_chat_payload(&req),
+            ),
+            ApiMode::Responses | ApiMode::Auto => (
+                self.responses_path.as_str(),
+                Self::to_responses_payload(&req),
+            ),
         };
 
         // Inject streaming flags
@@ -973,34 +1043,6 @@ impl OpenAIClient {
 
         Ok(crate::stream::sse_event_stream(response))
     }
-
-    /// Stream from a pre-built JSON payload, bypassing `LlmRequest` deserialization.
-    ///
-    /// Use this when the caller already has a fully-formed OpenAI-compatible
-    /// request body (e.g. from the tool-calling orchestrator where messages
-    /// contain `tool_calls`, `tool_call_id`, and nullable `content` fields
-    /// that `ChatMessage` cannot represent).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub async fn llm_stream_raw(
-        &self,
-        mut payload: serde_json::Value,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
-        // Inject streaming flags
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("stream".to_string(), serde_json::Value::Bool(true));
-            obj.insert(
-                "stream_options".to_string(),
-                serde_json::json!({ "include_usage": true }),
-            );
-        }
-
-        let path = "/v1/chat/completions";
-        log::info!("OpenAIClient::llm_stream_raw endpoint={}", path);
-
-        let response = self.inner.post_sse(path, payload).await?;
-
-        Ok(crate::stream::sse_event_stream(response))
-    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1012,13 +1054,17 @@ impl OpenAIClient {
     pub async fn llm_stream(
         &self,
         req: LlmRequest,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
         let (path, mut payload) = match mode {
-            ApiMode::Chat => ("/v1/chat/completions", Self::to_chat_payload(&req)),
-            ApiMode::Responses | ApiMode::Auto => {
-                ("/v1/responses", Self::to_responses_payload(&req))
-            }
+            ApiMode::Chat => (
+                self.chat_path.as_str(),
+                Self::to_chat_payload(&req),
+            ),
+            ApiMode::Responses | ApiMode::Auto => (
+                self.responses_path.as_str(),
+                Self::to_responses_payload(&req),
+            ),
         };
 
         if let Some(obj) = payload.as_object_mut() {
@@ -1038,36 +1084,17 @@ impl OpenAIClient {
         let body = self.inner.post_sse_buffered(path, payload).await?;
         Ok(crate::stream::sse_event_stream_from_buffer(body))
     }
-
-    /// WASM buffer-then-parse streaming from a pre-built JSON payload.
-    pub async fn llm_stream_raw(
-        &self,
-        mut payload: serde_json::Value,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("stream".to_string(), serde_json::Value::Bool(true));
-            obj.insert(
-                "stream_options".to_string(),
-                serde_json::json!({ "include_usage": true }),
-            );
-        }
-
-        let path = "/v1/chat/completions";
-        log::info!("OpenAIClient::llm_stream_raw (wasm) endpoint={}", path);
-
-        let body = self.inner.post_sse_buffered(path, payload).await?;
-        Ok(crate::stream::sse_event_stream_from_buffer(body))
-    }
 }
 
 impl OpenAIClient {
-    pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, ClientError> {
+    pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         let mode = self.decide_mode(&req.model);
         match mode {
             ApiMode::Chat => {
+                let path = self.chat_path.clone();
                 let value = Self::to_chat_payload(&req);
-                log::info!("OpenAIClient::llm mode=chat endpoint=/v1/chat/completions");
-                let raw = self.inner.post_json("/v1/chat/completions", value).await?;
+                log::info!("OpenAIClient::llm mode=chat endpoint={}", path);
+                let raw = self.inner.post_json(&path, value).await?;
                 // Normalize chat response to handle null content when tool_calls are present
                 let mut parsed = Self::normalize_chat_json(raw.clone())?;
                 // Enrich with tool calls if present (already included by normalize, but keep to ensure)
@@ -1075,12 +1102,29 @@ impl OpenAIClient {
                 Ok(parsed)
             }
             ApiMode::Responses | ApiMode::Auto => {
+                let path = self.responses_path.clone();
                 let value = Self::to_responses_payload(&req);
-                log::info!("OpenAIClient::llm mode=responses endpoint=/v1/responses");
-                let raw = self.inner.post_json("/v1/responses", value).await?;
+                log::info!("OpenAIClient::llm mode=responses endpoint={}", path);
+                let raw = self.inner.post_json(&path, value).await?;
                 let normalized = Self::normalize_responses_json(raw)?;
                 Ok(normalized)
             }
         }
+    }
+}
+
+impl LlmProvider for OpenAIClient {
+    fn capabilities(&self) -> ClientCapabilities {
+        self.inner.capabilities()
+    }
+
+    fn chat<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm(req).await })
+    }
+
+    fn chat_stream<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatStreamFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm_stream(req).await })
     }
 }

@@ -9,6 +9,7 @@
 
 use super::types::{EngineError, LlmTurnInvoker, ToolCallInfo, TurnFuture, TurnResult};
 use crate::agent::llm_invoker::LlmInvoker;
+use llm_client::{LlmRequest, LlmResponse};
 use std::sync::Arc;
 #[cfg(feature = "agent-observability")]
 use std::sync::OnceLock;
@@ -53,14 +54,14 @@ impl RequestResponseTurnInvoker {
 }
 
 impl LlmTurnInvoker for RequestResponseTurnInvoker {
-    fn invoke_turn(&self, payload: serde_json::Value) -> TurnFuture {
+    fn invoke_turn(&self, request: LlmRequest) -> TurnFuture {
         let inner = self.inner.clone();
         #[cfg(feature = "agent-observability")]
         let obs = self.obs.clone();
         Box::pin(async move {
-            let model = extract_model_name(&payload);
+            let model = extract_model_name(&request);
             let provider = infer_provider(&model);
-            let operation = infer_operation(&payload);
+            let operation = infer_operation(&request);
             let started = Instant::now();
 
             #[cfg(feature = "agent-observability")]
@@ -77,7 +78,7 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
             });
 
             let result = inner
-                .request(payload)
+                .request(request)
                 .await
                 .map_err(|e| EngineError::LlmFailed(format!("LLM request failed: {}", e)));
 
@@ -102,77 +103,10 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
             }
 
             let raw = result?;
-
-            let maybe_msg = raw
-                .get("choices")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|ch| ch.get("message"));
-
-            let content = maybe_msg
-                .and_then(|m| m.get("content"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-
-            let tool_calls_raw = maybe_msg
-                .and_then(|m| m.get("tool_calls"))
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-
-            let tool_calls: Vec<ToolCallInfo> = tool_calls_raw
-                .iter()
-                .enumerate()
-                .map(|(i, tc)| ToolCallInfo {
-                    index: tc.get("index").and_then(|v| v.as_u64()).unwrap_or(i as u64) as u32,
-                    id: tc
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    name: tc
-                        .get("function")
-                        .and_then(|f| f.get("name"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    arguments_raw: tc
-                        .get("function")
-                        .and_then(|f| f.get("arguments"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("{}")
-                        .to_string(),
-                })
-                .collect();
-
-            let finish_reason = raw
-                .get("choices")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|ch| ch.get("finish_reason"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-
-            let usage = raw.get("usage").and_then(|u| {
-                Some(llm_client::Usage {
-                    prompt_tokens: u
-                        .get("prompt_tokens")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as u32),
-                    completion_tokens: u
-                        .get("completion_tokens")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as u32),
-                    total_tokens: u
-                        .get("total_tokens")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as u32),
-                })
-            });
+            let turn = llm_response_to_turn_result(raw);
 
             #[cfg(feature = "agent-observability")]
-            if let (Some(o), Some(u)) = (&obs, &usage) {
+            if let (Some(o), Some(u)) = (&obs, &turn.usage) {
                 if let Some(in_tokens) = u.prompt_tokens {
                     o.metric(
                         metric::LLM_TOKENS_TOTAL,
@@ -197,13 +131,38 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
                 }
             }
 
-            Ok(TurnResult {
-                content,
-                tool_calls,
-                finish_reason,
-                usage,
-            })
+            Ok(turn)
         })
+    }
+}
+
+fn llm_response_to_turn_result(raw: LlmResponse) -> TurnResult {
+    let choice0 = raw.choices.first();
+    let content = choice0
+        .and_then(|c| c.message.content.as_deref())
+        .unwrap_or("")
+        .to_string();
+
+    let tool_calls: Vec<ToolCallInfo> = choice0
+        .and_then(|c| c.message.tool_calls.as_ref())
+        .into_iter()
+        .flat_map(|tcs| tcs.iter().enumerate())
+        .map(|(i, tc)| ToolCallInfo {
+            index: i as u32,
+            id: tc.id.clone(),
+            name: tc.name.clone(),
+            arguments_raw: serde_json::to_string(&tc.arguments).unwrap_or_else(|_| "{}".into()),
+        })
+        .collect();
+
+    let finish_reason = choice0.and_then(|c| c.finish_reason.clone());
+    let usage = raw.usage.clone();
+
+    TurnResult {
+        content,
+        tool_calls,
+        finish_reason,
+        usage,
     }
 }
 
@@ -260,7 +219,7 @@ impl StreamingTurnInvoker {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl LlmTurnInvoker for StreamingTurnInvoker {
-    fn invoke_turn(&self, payload: serde_json::Value) -> TurnFuture {
+    fn invoke_turn(&self, request: LlmRequest) -> TurnFuture {
         use futures::StreamExt;
 
         let inner = self.inner.clone();
@@ -269,9 +228,9 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
         let obs = self.obs.clone();
 
         Box::pin(async move {
-            let model = extract_model_name(&payload);
+            let model = extract_model_name(&request);
             let provider = infer_provider(&model);
-            let operation = infer_operation(&payload);
+            let operation = infer_operation(&request);
             let started = Instant::now();
 
             #[cfg(feature = "agent-observability")]
@@ -287,7 +246,7 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                 )
             });
 
-            let mut event_stream = match inner.request_stream(payload).await {
+            let mut event_stream = match inner.request_stream(request).await {
                 Ok(stream) => stream,
                 Err(e) => {
                     let err =
@@ -523,16 +482,20 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
     }
 }
 
-fn extract_model_name(payload: &serde_json::Value) -> String {
-    payload
-        .get("model")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string()
+fn extract_model_name(req: &LlmRequest) -> String {
+    if req.model.is_empty() {
+        "unknown".to_string()
+    } else {
+        req.model.clone()
+    }
 }
 
-fn infer_operation(payload: &serde_json::Value) -> String {
-    if payload.get("tools").and_then(|v| v.as_array()).is_some() {
+fn infer_operation(req: &LlmRequest) -> String {
+    if req
+        .tools
+        .as_ref()
+        .is_some_and(|t| !t.is_empty())
+    {
         "chat_completions_tools".to_string()
     } else {
         "chat_completions".to_string()

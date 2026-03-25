@@ -1,5 +1,6 @@
 use crate::agent::tools::ToolRegistry;
 use crate::agent::trace::AgentTraceEvent;
+use llm_client::ChatMessage;
 
 use super::{core_loop, EngineConfig, EngineError, EngineResult, LlmTurnInvoker};
 
@@ -12,7 +13,7 @@ pub async fn execute_messages_with_turn_invoker<F: Fn(AgentTraceEvent)>(
     model: &str,
     tools: &ToolRegistry,
     config: &EngineConfig,
-    messages: &mut Vec<serde_json::Value>,
+    messages: &mut Vec<ChatMessage>,
     on_event: &F,
 ) -> Result<EngineResult, EngineError> {
     core_loop::execute(

@@ -507,14 +507,14 @@ impl Default for SkillRegistry {
 }
 
 // ---------------------------------------------------------------------------
-// inject_skill_context — protocol-free LLM message enrichment
+// inject_skill_context — LLM message enrichment (requires `llm-engine`)
 // ---------------------------------------------------------------------------
 
-/// Enrich raw LLM messages with resolved skill context.
+/// Enrich LLM messages with resolved skill context.
 ///
 /// Appends instructions and/or handler output to the system message.
-/// This function has **zero protocol imports** — operates on raw JSON messages.
-pub fn inject_skill_context(messages: &mut Vec<Value>, ctx: &SkillContext) {
+#[cfg(feature = "llm-engine")]
+pub fn inject_skill_context(messages: &mut Vec<llm_client::ChatMessage>, ctx: &SkillContext) {
     let mut supplement = format!("\n\n## Active Skill: {}", ctx.skill_id);
     if let Some(ref instr) = ctx.instructions {
         supplement.push_str(&format!("\n\n### Instructions\n{}", instr));
@@ -524,22 +524,20 @@ pub fn inject_skill_context(messages: &mut Vec<Value>, ctx: &SkillContext) {
     }
 
     if let Some(first) = messages.first_mut() {
-        if first.get("role").and_then(|r| r.as_str()) == Some("system") {
-            if let Some(content) = first.get("content").and_then(|c| c.as_str()) {
-                *first = serde_json::json!({
-                    "role": "system",
-                    "content": format!("{}{}", content, supplement)
-                });
+        if first.role == "system" {
+            if let Some(ref content) = first.content {
+                first.content = Some(format!("{}{}", content, supplement));
                 return;
             }
         }
     }
     messages.insert(
         0,
-        serde_json::json!({
-            "role": "system",
-            "content": supplement.trim_start()
-        }),
+        llm_client::ChatMessage {
+            role: "system".into(),
+            content: Some(supplement.trim_start().to_string()),
+            ..Default::default()
+        },
     );
 }
 
@@ -974,11 +972,20 @@ mod tests {
         assert!(ctx.is_none());
     }
 
+    #[cfg(feature = "llm-engine")]
     #[test]
     fn test_inject_skill_context_appends_to_system() {
         let mut messages = vec![
-            json!({"role": "system", "content": "You are a helpful assistant."}),
-            json!({"role": "user", "content": "Hello"}),
+            llm_client::ChatMessage {
+                role: "system".into(),
+                content: Some("You are a helpful assistant.".into()),
+                ..Default::default()
+            },
+            llm_client::ChatMessage {
+                role: "user".into(),
+                content: Some("Hello".into()),
+                ..Default::default()
+            },
         ];
         let ctx = SkillContext {
             skill_id: "research".to_string(),
@@ -988,16 +995,21 @@ mod tests {
 
         inject_skill_context(&mut messages, &ctx);
 
-        let sys = messages[0]["content"].as_str().unwrap();
+        let sys = messages[0].content.as_deref().unwrap();
         assert!(sys.starts_with("You are a helpful assistant."));
         assert!(sys.contains("## Active Skill: research"));
         assert!(sys.contains("### Instructions\nSummarize findings."));
         assert!(sys.contains("### Pre-fetched Context\nFound 3 papers."));
     }
 
+    #[cfg(feature = "llm-engine")]
     #[test]
     fn test_inject_skill_context_creates_system_if_missing() {
-        let mut messages = vec![json!({"role": "user", "content": "Hello"})];
+        let mut messages = vec![llm_client::ChatMessage {
+            role: "user".into(),
+            content: Some("Hello".into()),
+            ..Default::default()
+        }];
         let ctx = SkillContext {
             skill_id: "test".to_string(),
             handler_output: None,
@@ -1007,8 +1019,8 @@ mod tests {
         inject_skill_context(&mut messages, &ctx);
 
         assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0]["role"], "system");
-        let sys = messages[0]["content"].as_str().unwrap();
+        assert_eq!(messages[0].role, "system");
+        let sys = messages[0].content.as_deref().unwrap();
         assert!(sys.contains("## Active Skill: test"));
         assert!(sys.contains("Do the thing."));
     }

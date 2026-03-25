@@ -13,24 +13,27 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use futures::StreamExt;
-use llm_client::{
-    providers::{AnthropicClient, OpenAIClient},
-    ClientConfig, LlmRequest, ChatMessage, StreamEvent,
-};
+use llm_client::auth::{AnthropicApiKeyAuth, ApiKeyAuth};
+use llm_client::client::{LlmClient, WireFormat};
+use llm_client::{ChatMessage, LlmRequest, StreamEvent};
 use std::env;
 
-fn openrouter_client() -> OpenAIClient {
+fn openrouter_client() -> LlmClient {
     let api_key = env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY must be set");
-    OpenAIClient::new(ClientConfig {
-        base_url: "https://openrouter.ai/api".to_string(),
-        api_key: Some(api_key),
-        ..ClientConfig::default()
-    })
+    LlmClient::builder(WireFormat::OpenAiCompat)
+        .base_url("https://openrouter.ai/api")
+        .auth(ApiKeyAuth::new(api_key))
+        .build()
+        .expect("openrouter LlmClient")
 }
 
-fn anthropic_client() -> AnthropicClient {
+fn anthropic_client() -> LlmClient {
     let api_key = env::var("CLAUDE_API_KEY").expect("CLAUDE_API_KEY must be set");
-    AnthropicClient::from_api_key("https://api.anthropic.com", &api_key)
+    LlmClient::builder(WireFormat::AnthropicMessages)
+        .base_url("https://api.anthropic.com")
+        .auth(AnthropicApiKeyAuth::new(api_key))
+        .build()
+        .expect("anthropic LlmClient")
 }
 
 fn hello_request(model: &str) -> LlmRequest {
@@ -56,7 +59,7 @@ async fn smoke_openrouter_chat_non_streaming() {
     let client = openrouter_client();
     let req = hello_request("openai/gpt-4o-mini");
 
-    let resp = client.llm(req).await.expect("OpenRouter chat request failed");
+    let resp = client.chat(req).await.expect("OpenRouter chat request failed");
 
     eprintln!("[openrouter/non-stream] response: {resp:#?}");
 
@@ -80,7 +83,10 @@ async fn smoke_openrouter_chat_streaming() {
     let client = openrouter_client();
     let req = hello_request("openai/gpt-4o-mini");
 
-    let mut stream = client.llm_stream(req).await.expect("OpenRouter stream failed");
+    let mut stream = client
+        .chat_stream(req)
+        .await
+        .expect("OpenRouter stream failed");
 
     let mut got_start = false;
     let mut got_content = false;
@@ -117,7 +123,7 @@ async fn smoke_anthropic_non_streaming() {
     let client = anthropic_client();
     let req = hello_request("claude-sonnet-4-20250514");
 
-    let resp = client.llm(req).await.expect("Anthropic chat request failed");
+    let resp = client.chat(req).await.expect("Anthropic chat request failed");
 
     eprintln!("[anthropic/non-stream] response: {resp:#?}");
 
@@ -141,7 +147,10 @@ async fn smoke_anthropic_streaming() {
     let client = anthropic_client();
     let req = hello_request("claude-sonnet-4-20250514");
 
-    let mut stream = client.llm_stream(req).await.expect("Anthropic stream failed");
+    let mut stream = client
+        .chat_stream(req)
+        .await
+        .expect("Anthropic stream failed");
 
     let mut got_content = false;
     let mut got_done = false;
@@ -198,7 +207,10 @@ async fn smoke_anthropic_tool_call() {
         ..Default::default()
     };
 
-    let resp = client.llm(req).await.expect("Anthropic tool-call request failed");
+    let resp = client
+        .chat(req)
+        .await
+        .expect("Anthropic tool-call request failed");
 
     eprintln!("[anthropic/tool-call] response: {resp:#?}");
 
@@ -249,7 +261,10 @@ async fn smoke_openrouter_tool_call() {
         ..Default::default()
     };
 
-    let resp = client.llm(req).await.expect("OpenRouter tool-call request failed");
+    let resp = client
+        .chat(req)
+        .await
+        .expect("OpenRouter tool-call request failed");
 
     eprintln!("[openrouter/tool-call] response: {resp:#?}");
 

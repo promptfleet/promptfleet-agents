@@ -14,6 +14,7 @@ use agent_sdk::agent::{MessageContext, TaskContext, ToolContext};
 use agent_sdk::agent_core::{AgentMessage, ContentPart, Role};
 use agent_sdk::agui::{agent_io_sse_stream, map_trace_to_agent_io, AgentIoEvent, IoEventContext};
 use axum::response::IntoResponse;
+use llm_client::ChatMessage;
 use serde_json::{json, Value};
 
 use crate::pipeline::InvokerMode;
@@ -206,8 +207,12 @@ pub fn default_skill_execution_context() -> SkillExecutionContext {
     SkillExecutionContext::new(message_ctx, Some(task_ctx))
 }
 
-fn default_engine_messages() -> Vec<Value> {
-    vec![json!({"role": "user", "content": "benchmark"})]
+fn default_engine_messages() -> Vec<ChatMessage> {
+    vec![ChatMessage {
+        role: "user".into(),
+        content: Some("benchmark".into()),
+        ..Default::default()
+    }]
 }
 
 #[derive(Clone, Default)]

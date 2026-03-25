@@ -9,6 +9,7 @@ use agent_sdk::agent::tools::ToolRegistry;
 use agent_sdk::agent::trace::AgentTraceEvent;
 use agent_sdk::agui::{agent_io_sse_stream, map_trace_to_agent_io, AgentIoEvent, IoEventContext};
 use axum::response::IntoResponse;
+use llm_client::ChatMessage;
 use serde_json::Value;
 
 use crate::scenario::LlmScenario;
@@ -33,7 +34,7 @@ pub struct TestPipeline {
     mapper: MapperKind,
     invoker_mode: InvokerMode,
     model: String,
-    messages: Vec<serde_json::Value>,
+    messages: Vec<ChatMessage>,
     io_ctx: IoEventContext,
     a2a_ctx: A2aSseContext,
     sse_timeout: Duration,
@@ -142,7 +143,7 @@ pub struct TestPipelineBuilder {
     mapper: MapperKind,
     invoker_mode: InvokerMode,
     model: String,
-    messages: Vec<serde_json::Value>,
+    messages: Vec<ChatMessage>,
     io_ctx: IoEventContext,
     a2a_ctx: A2aSseContext,
     sse_timeout: Duration,
@@ -156,7 +157,11 @@ impl Default for TestPipelineBuilder {
             mapper: MapperKind::AgentIo,
             invoker_mode: InvokerMode::Streaming,
             model: "test-model".to_string(),
-            messages: vec![serde_json::json!({"role": "user", "content": "test"})],
+            messages: vec![ChatMessage {
+                role: "user".into(),
+                content: Some("test".into()),
+                ..Default::default()
+            }],
             io_ctx: IoEventContext {
                 thread_id: "thread-test".to_string(),
                 run_id: "run-test".to_string(),
@@ -198,7 +203,7 @@ impl TestPipelineBuilder {
         self
     }
 
-    pub fn with_messages(mut self, messages: Vec<serde_json::Value>) -> Self {
+    pub fn with_messages(mut self, messages: Vec<ChatMessage>) -> Self {
         self.messages = messages;
         self
     }

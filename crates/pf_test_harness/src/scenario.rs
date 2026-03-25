@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use agent_sdk::agent::llm_orchestrator::{LlmInvoker, LlmStreamFuture, LlmStreamInvoker};
-use llm_client::{stream::StreamEvent, Usage};
+use llm_client::{stream::StreamEvent, ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCallRequest, Usage};
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone, Default)]
@@ -230,7 +230,7 @@ impl ScenarioStreamInvoker {
 }
 
 impl LlmStreamInvoker for ScenarioStreamInvoker {
-    fn request_stream(&self, _payload: Value) -> LlmStreamFuture {
+    fn request_stream(&self, _req: LlmRequest) -> LlmStreamFuture {
         let events = self
             .turns
             .lock()
@@ -260,19 +260,20 @@ impl ScenarioRequestInvoker {
 impl LlmInvoker for ScenarioRequestInvoker {
     fn request(
         &self,
-        _payload: Value,
-    ) -> std::pin::Pin<Box<dyn core::future::Future<Output = Result<Value, String>> + Send>> {
+        _req: LlmRequest,
+    ) -> std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>>
+    {
         let turn = self
             .turns
             .lock()
             .expect("request invoker lock poisoned")
             .pop_front()
             .unwrap_or_default();
-        Box::pin(async move { turn_to_request_response(&turn) })
+        Box::pin(async move { turn_to_llm_response(&turn) })
     }
 }
 
-fn turn_to_request_response(turn: &[StreamEvent]) -> Result<Value, String> {
+fn turn_to_llm_response(turn: &[StreamEvent]) -> Result<LlmResponse, String> {
     #[derive(Debug)]
     struct ToolCallAcc {
         id: String,
@@ -318,37 +319,46 @@ fn turn_to_request_response(turn: &[StreamEvent]) -> Result<Value, String> {
         }
     }
 
-    let tool_calls: Option<Vec<Value>> = if tools.is_empty() {
+    let tool_calls: Option<Vec<ToolCallRequest>> = if tools.is_empty() {
         None
     } else {
         Some(
             tools
                 .into_iter()
-                .map(|(index, tc)| {
-                    json!({
-                        "index": index,
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": tc.args,
-                        }
-                    })
+                .map(|(_index, tc)| {
+                    let arguments = serde_json::from_str(&tc.args)
+                        .unwrap_or_else(|_| json!({ "_raw": tc.args }));
+                    ToolCallRequest {
+                        id: tc.id,
+                        name: tc.name,
+                        arguments,
+                    }
                 })
                 .collect(),
         )
     };
 
-    Ok(json!({
-        "choices": [{
-            "message": {
-                "content": content,
-                "tool_calls": tool_calls,
+    Ok(LlmResponse {
+        id: None,
+        created: None,
+        model: None,
+        choices: vec![LlmChoice {
+            index: 0,
+            message: ChatMessage {
+                role: "assistant".into(),
+                content: if content.is_empty() {
+                    None
+                } else {
+                    Some(content)
+                },
+                tool_calls,
+                ..Default::default()
             },
-            "finish_reason": finish_reason,
+            finish_reason,
         }],
-        "usage": usage,
-    }))
+        usage,
+        tool_calls: None,
+    })
 }
 
 #[cfg(test)]
@@ -378,20 +388,31 @@ mod tests {
         let invoker = scenario.into_request_response_invoker();
 
         let first = invoker
-            .request(json!({}))
+            .request(LlmRequest::default())
             .await
             .expect("first turn response");
         let second = invoker
-            .request(json!({}))
+            .request(LlmRequest::default())
             .await
             .expect("second turn response");
 
-        assert_eq!(first["choices"][0]["finish_reason"], "tool_calls");
         assert_eq!(
-            first["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
-            "echo"
+            first.choices.first().and_then(|c| c.finish_reason.as_deref()),
+            Some("tool_calls")
         );
-        assert_eq!(second["choices"][0]["message"]["content"], "done");
+        let tc0 = first
+            .choices
+            .first()
+            .and_then(|c| c.message.tool_calls.as_ref())
+            .and_then(|t| t.first());
+        assert_eq!(tc0.map(|t| t.name.as_str()), Some("echo"));
+        assert_eq!(
+            second
+                .choices
+                .first()
+                .and_then(|c| c.message.content.as_deref()),
+            Some("done")
+        );
     }
 
     #[tokio::test]

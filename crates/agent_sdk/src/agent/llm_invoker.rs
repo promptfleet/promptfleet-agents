@@ -9,7 +9,7 @@
 //! remain unchanged.
 
 use crate::runtime_vars::CheckpointMode;
-use llm_client::model_client::ModelClient;
+use llm_client::{LlmClient, LlmRequest, LlmResponse};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -18,10 +18,11 @@ use std::sync::Arc;
 
 #[cfg(target_arch = "wasm32")]
 type LlmFuture =
-    std::pin::Pin<Box<dyn core::future::Future<Output = Result<serde_json::Value, String>>>>;
+    std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>>>>;
 #[cfg(not(target_arch = "wasm32"))]
-type LlmFuture =
-    std::pin::Pin<Box<dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send>>;
+type LlmFuture = std::pin::Pin<
+    Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>,
+>;
 
 // ---------------------------------------------------------------------------
 // Request-response invoker (WASM + native)
@@ -29,7 +30,7 @@ type LlmFuture =
 
 /// Object-safe invoker to call provider-agnostic LLMs
 pub trait LlmInvoker: Send + Sync {
-    fn request(&self, payload: serde_json::Value) -> LlmFuture;
+    fn request(&self, req: LlmRequest) -> LlmFuture;
 }
 
 /// Conversion trait: let users pass concrete clients directly
@@ -46,52 +47,26 @@ where
     }
 }
 
-impl IntoLlmInvoker for llm_client::providers::OpenAIClient {
+impl IntoLlmInvoker for LlmClient {
     fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::OpenAIClient>);
+        struct C(LlmClient);
         impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+            fn request(&self, req: LlmRequest) -> LlmFuture {
                 let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
-            }
-        }
-        Arc::new(C(Arc::new(self)))
-    }
-}
-
-impl IntoLlmInvoker for Arc<llm_client::providers::OpenAIClient> {
-    fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::OpenAIClient>);
-        impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
-                let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+                Box::pin(async move { inner.chat(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(C(self))
     }
 }
 
-impl IntoLlmInvoker for llm_client::providers::AnthropicClient {
+impl IntoLlmInvoker for Arc<LlmClient> {
     fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::AnthropicClient>);
+        struct C(Arc<LlmClient>);
         impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+            fn request(&self, req: LlmRequest) -> LlmFuture {
                 let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
-            }
-        }
-        Arc::new(C(Arc::new(self)))
-    }
-}
-
-impl IntoLlmInvoker for Arc<llm_client::providers::AnthropicClient> {
-    fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::AnthropicClient>);
-        impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
-                let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+                Box::pin(async move { inner.chat(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(C(self))
@@ -112,13 +87,9 @@ pub type LlmStreamFuture = std::pin::Pin<
 >;
 
 /// Object-safe invoker that returns a streaming event stream.
-///
-/// This is the streaming counterpart of [`LlmInvoker`]. Implementations
-/// must convert a raw JSON payload into an `LlmRequest` and call the
-/// provider's streaming endpoint.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait LlmStreamInvoker: Send + Sync {
-    fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture;
+    fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture;
 }
 
 /// Conversion trait: let users pass concrete clients directly.
@@ -128,38 +99,13 @@ pub trait IntoLlmStreamInvoker {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for llm_client::providers::OpenAIClient {
+impl IntoLlmStreamInvoker for LlmClient {
     fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::OpenAIClient>);
+        struct S(LlmClient);
         impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+            fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
-                    // Use llm_stream_raw for pre-built JSON payloads from the orchestrator.
-                    inner
-                        .llm_stream_raw(payload)
-                        .await
-                        .map_err(|e| e.to_string())
-                })
-            }
-        }
-        Arc::new(S(Arc::new(self)))
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for Arc<llm_client::providers::OpenAIClient> {
-    fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::OpenAIClient>);
-        impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
-                let inner = self.0.clone();
-                Box::pin(async move {
-                    inner
-                        .llm_stream_raw(payload)
-                        .await
-                        .map_err(|e| e.to_string())
-                })
+                Box::pin(async move { inner.chat_stream(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(S(self))
@@ -167,31 +113,13 @@ impl IntoLlmStreamInvoker for Arc<llm_client::providers::OpenAIClient> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for llm_client::providers::AnthropicClient {
+impl IntoLlmStreamInvoker for Arc<LlmClient> {
     fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::AnthropicClient>);
+        struct S(Arc<LlmClient>);
         impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+            fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
-                    inner.llm_stream_raw(payload).await.map_err(|e| e.to_string())
-                })
-            }
-        }
-        Arc::new(S(Arc::new(self)))
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for Arc<llm_client::providers::AnthropicClient> {
-    fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::AnthropicClient>);
-        impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
-                let inner = self.0.clone();
-                Box::pin(async move {
-                    inner.llm_stream_raw(payload).await.map_err(|e| e.to_string())
-                })
+                Box::pin(async move { inner.chat_stream(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(S(self))

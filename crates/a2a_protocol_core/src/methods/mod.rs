@@ -11,13 +11,20 @@ pub mod params;
 
 pub mod discovery;
 
-#[cfg(feature = "protocol-core")]
-pub use messaging::*;
+// Handler functions (messaging::handle_*, tasks::handle_*) are accessible
+// via their sub-modules but are intentionally not re-exported here.
 
 #[cfg(feature = "protocol-core")]
-pub use tasks::*;
+pub use params::{
+    CancelTaskRequest, CreateTaskPushNotificationConfigRequest,
+    DeleteTaskPushNotificationConfigRequest, GetTaskPushNotificationConfigRequest,
+    GetTaskRequest, ListTaskPushNotificationConfigsRequest, ListTasksRequest, ListTasksResponse,
+    MessageSendParams, MessageSendResponse, SendMessageConfiguration, SendMessageRequest,
+    SendMessageResponse, SubscribeToTaskRequest, TaskCancelParams, TaskGetParams, TaskListParams,
+    TaskListResult,
+};
 
-#[cfg(feature = "protocol-core")]
-pub use params::*;
-
-pub use discovery::*;
+pub use discovery::{
+    AgentDiscovery, AuthenticatedExtendedCardParams, AuthenticatedExtendedCardResult,
+    DefaultAgentDiscovery,
+};

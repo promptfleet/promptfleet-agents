@@ -10,5 +10,7 @@ pub mod perf;
 pub mod pipeline;
 #[cfg(feature = "scenario")]
 pub mod scenario;
+#[cfg(feature = "scenario")]
+pub mod scenario_openai_http;
 #[cfg(feature = "sse")]
 pub mod sse;

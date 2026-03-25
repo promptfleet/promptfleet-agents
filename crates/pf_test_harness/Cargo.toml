@@ -30,7 +30,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 
 [features]
 default = []
-scenario = ["dep:agent_sdk"]
+scenario = ["dep:agent_sdk", "dep:axum"]
 sse = []
 agent-sdk = ["scenario", "sse", "dep:agent_sdk", "dep:a2a_protocol_core", "dep:axum"]
 a2a-http = ["sse", "dep:a2a_http_server", "dep:a2a_protocol_core", "dep:axum", "dep:tower"]

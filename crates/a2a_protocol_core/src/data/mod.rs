@@ -12,12 +12,12 @@ pub mod artifact;
 pub mod notification;
 
 #[cfg(feature = "protocol-core")]
-pub use task::*;
+pub use task::{Task, TaskState, TaskStatus};
 
 #[cfg(feature = "protocol-core")]
-pub use message::*;
+pub use message::{Message, MessageRole, Part};
 
 #[cfg(feature = "protocol-core")]
-pub use artifact::*;
+pub use artifact::Artifact;
 
-pub use notification::*;
+pub use notification::{AuthenticationInfo, TaskPushNotificationConfig};

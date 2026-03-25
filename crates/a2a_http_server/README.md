@@ -1,222 +1,85 @@
-# A2A HTTP Server - Logging Strategy
+# a2a_http_server
 
-## 🎯 Overview
+A2A Protocol v1.0 HTTP server. Targets WASM (Fermyon Spin SDK) and native (Axum) with an identical API surface.
 
-The A2A HTTP Server implements comprehensive logging throughout critical operation paths to enable observability and debugging without external dependencies. This foundation is designed to integrate with the PromptFleet **`observability`** facade (happy path) for structured logs, traces, and metrics.
+## Quick start
 
-## 📋 Logging Architecture
-
-### **Core Principles**
-- **Agent-Centric**: All logs include agent ID for multi-agent environments
-- **Target-Aware**: Distinguishes between WASM and Native implementations
-- **Request Lifecycle**: Complete request tracing from entry to response
-- **Error Context**: Rich error information with recovery hints
-- **Performance Monitoring**: Size tracking and timing markers
-
-### **Log Levels Strategy**
-
-| Level | Usage | Examples |
-|-------|--------|----------|
-| **ERROR** | Protocol failures, system errors, request rejection | Failed JSON parsing, A2A protocol errors, serialization failures |
-| **WARN** | Malformed requests, deprecated features, fallbacks | Invalid HTTP methods, unknown paths, configuration warnings |
-| **INFO** | Request completion, agent lifecycle events | Agent creation, server startup, successful request completion |
-| **DEBUG** | Request entry/exit, protocol delegation, validation steps | Request routing, protocol method calls, response generation |
-| **TRACE** | Detailed payload inspection (development only) | Request/response bodies, headers, detailed execution flow |
-
-## 🔍 Critical Logging Points
-
-### **1. Request Lifecycle Logging**
+### Standalone (protocol-only, no application layer)
 
 ```rust
-// Entry Point - All Requests
-debug!("Incoming request: {} {} for agent: {}", method, path, agent_id);
-trace!("Request headers: {:?}", req.headers());
+use a2a_http_server::A2AHttpServer;
+use a2a_protocol_core::AgentCard;
 
-// Exit Point - All Requests  
-info!("Request completed: {} {} -> {} for agent: {}", method, path, status, agent_id);
-error!("Request failed: {} {} -> {} for agent: {}", method, path, error, agent_id);
+let card = AgentCard::new("my-agent")
+    .with_capability("SendMessage", "Process user messages");
+
+let server = A2AHttpServer::new_with_a2a_methods(card);
 ```
 
-### **2. JSON-RPC Processing**
+### With application port (recommended for production)
 
 ```rust
-// JSON-RPC Request Parsing
-debug!("Parsing JSON-RPC request for agent: {} (size: {} bytes)", agent_id, size);
-debug!("Successfully parsed JSON-RPC: method={} id={:?} for agent: {}", method, id, agent_id);
-error!("Failed to parse JSON-RPC request for agent: {} - {}", agent_id, error);
+use a2a_http_server::A2AHttpServer;
+use a2a_app_ports::A2AAppPortAsync;
+use std::sync::Arc;
 
-// Protocol Delegation
-debug!("Delegating to A2A protocol instance for agent: {} method: {}", agent_id, method);
-debug!("A2A protocol returned response for agent: {} id: {:?}", agent_id, response_id);
-error!("A2A protocol error for agent: {} - {}", agent_id, error);
+let server = A2AHttpServer::with_app_port_async(Arc::new(MyAgent));
 ```
 
-### **3. Agent Creation & Initialization**
+See [`a2a_app_ports`](../a2a_app_ports/README.md) for implementing `A2AAppPort` / `A2AAppPortAsync`.
+
+## Endpoints
+
+| Path | Method | Description |
+|------|--------|-------------|
+| `/jsonrpc` | `POST` | JSON-RPC 2.0 dispatch for all A2A methods |
+| `/.well-known/agent-card.json` | `GET` | Agent card (A2A discovery) |
+| `/v1/agent/card:get` | `GET` | Agent card (alternate path) |
+| `/health` | `GET` | Liveness probe — returns `{"status":"healthy","agent":"<id>"}` |
+
+## A2A method names
 
 ```rust
-// Server Creation
-debug!("Creating A2A HTTP server with agent_id: {}", agent_id);
-info!("Registered A2A standard methods for agent: {}", agent_id);
+use a2a_http_server::method;
 
-// Target-Specific Information
-info!("Created A2A HTTP Server (WASM/Spin) for agent: {}", agent_id);
-info!("Created A2A HTTP Server (Native/Axum) for agent: {}", agent_id);
+method::PING                     // "Ping"
+method::SEND_MESSAGE             // "SendMessage"
+method::SEND_STREAMING_MESSAGE   // "SendStreamingMessage"
+method::GET_AGENT_CARD           // "GetAgentCard"
+method::GET_EXTENDED_AGENT_CARD  // "GetExtendedAgentCard"
+method::GET_TASK                 // "GetTask"
+method::CANCEL_TASK              // "CancelTask"
+method::LIST_TASKS               // "ListTasks"
 ```
 
-### **4. Response Generation**
+## Feature flags
+
+| Flag | Enables |
+|------|---------|
+| `core` | Standard A2A methods via `a2a_protocol_core/core` (default) |
+| `event-stream` / `streaming` | `SendStreamingMessage` + SSE streaming support |
+| `observability` | OTEL spans, W3C trace-context propagation |
+| `discovery` | Extended agent card discovery |
+| `files` | File upload/download support |
+| `push` | Push notification configuration endpoints |
+| `schema` | JSON schema generation via `schemars` |
+| `all` | All of the above |
+
+## Target dispatch
+
+| Target | Backend |
+|--------|---------|
+| `wasm32` | Fermyon Spin SDK HTTP handler |
+| native | `axum` 0.7 with `tower-http` CORS |
+
+Both targets expose the same `A2AHttpServer` type and `serve_request` method.
+
+## Logging
+
+The server logs at `debug` level for request lifecycle and `info` for agent events. Wire in any `log`-compatible backend (env_logger, the `observability` facade, etc.):
 
 ```rust
-// Response Serialization
-debug!("Serialized response for agent: {} (size: {} bytes)", agent_id, size);
-trace!("Response body: {}", response_body);
-error!("Failed to serialize response for agent: {} - {}", agent_id, error);
-
-// HTTP Response
-debug!("Returning HTTP 200 response for agent: {}", agent_id);
-```
-
-### **5. Health & Discovery Endpoints**
-
-```rust
-// Health Checks
-debug!("Serving health check for agent: {}", agent_id);
-debug!("Health check completed for agent: {}", agent_id);
-
-// Agent Card Discovery
-debug!("Serving agent card for agent: {}", agent_id);
-info!("Agent card served for agent: {}", agent_id);
-```
-
-## 🏗️ Implementation Details
-
-### **WASM Server (Spin SDK)**
-- **Entry Point**: `serve_request()` - Main Spin HTTP handler
-- **Routing**: Path-based routing with comprehensive logging
-- **Context**: Agent ID extracted and included in all log messages
-- **Performance**: Request/response size tracking
-
-### **Native Server (Axum)**
-- **Entry Point**: `serve_request()` - Test compatibility simulation
-- **Axum Handlers**: Separate logging for production Axum routes
-- **Context**: Consistent agent ID context across all handlers
-- **Testing**: Enhanced logging for integration test scenarios
-
-### **Unified Patterns**
-
-Both implementations follow identical logging patterns:
-
-```rust
-// Pattern: Agent-Context Logging
-let agent_id = self.agent_id();
-debug!("Operation for agent: {}", agent_id);
-
-// Pattern: Size-Aware Logging  
-debug!("Processing data for agent: {} (size: {} bytes)", agent_id, data.len());
-
-// Pattern: Method Extraction from JsonRpcIncoming
-let (method, id) = match &incoming {
-    JsonRpcIncoming::Request(req) => (req.method.clone(), Some(&req.id)),
-    JsonRpcIncoming::Notification(notif) => (notif.method.clone(), None),
-    #[cfg(feature = "batch")]
-    JsonRpcIncoming::Batch(_) => ("batch".to_string(), None),
-};
-```
-
-## 🔧 Integration Points
-
-### **Observability Facade Integration**
-
-The logging foundation is designed for seamless integration with the `observability` facade:
-
-```rust
-// Initialize global observability once (recommended happy path)
-use observability::{Obs, ObservabilityConfig};
-
-// In main application
-let _obs = Obs::init(ObservabilityConfig::default().with_service("my-agent", "0.1.0", "default"))?;
-let server = A2AHttpServer::new_with_a2a_methods(agent_card);
-
-// All server logs will flow through the global logger configured by `Obs::init(...)`
-```
-
-### **Observability Context**
-
-When integrated with the observability system:
-
-```rust
-// Context will be automatically applied
-log::info!("Request processed"); 
-// Becomes: {"level":"INFO","message":"Request processed","trace_id":"abc","agent_id":"my-agent"}
-```
-
-## 📊 Log Output Examples
-
-### **Successful Request Flow**
-```
-DEBUG [my-agent] Incoming request: POST /jsonrpc for agent: my-agent
-DEBUG [my-agent] Parsing JSON-RPC request for agent: my-agent (size: 156 bytes)  
-DEBUG [my-agent] Successfully parsed JSON-RPC: method=agent/ping id="req-123" for agent: my-agent
-DEBUG [my-agent] Delegating to A2A protocol instance for agent: my-agent method: agent/ping
-DEBUG [my-agent] A2A protocol returned response for agent: my-agent id: "req-123"
-DEBUG [my-agent] Serialized response for agent: my-agent (size: 89 bytes)
-DEBUG [my-agent] Returning HTTP 200 response for agent: my-agent
-INFO  [my-agent] Request completed: POST /jsonrpc -> 200 for agent: my-agent
-```
-
-### **Error Scenario**
-```
-DEBUG [my-agent] Incoming request: POST /jsonrpc for agent: my-agent
-DEBUG [my-agent] Parsing JSON-RPC request for agent: my-agent (size: 64 bytes)
-ERROR [my-agent] Failed to parse JSON-RPC request for agent: my-agent - expected value at line 1 column 1
-ERROR [my-agent] Request failed: POST /jsonrpc -> invalid JSON for agent: my-agent
-```
-
-### **Agent Discovery**
-```
-DEBUG [my-agent] Creating A2A HTTP server with standard methods for agent: my-agent
-DEBUG [my-agent] Initialized in-memory task storage for agent: my-agent
-INFO  [my-agent] Registered A2A standard methods for agent: my-agent
-INFO  [my-agent] Created A2A HTTP Server (WASM/Spin) for agent: my-agent
-```
-
-## 🚀 Usage Recommendations
-
-### **Development**
-```rust
-// Enable debug logging for development
-RUST_LOG=debug cargo run
-
-// Or use the convenience function
 a2a_http_server::init_logging("my-agent");
 ```
 
-### **Production**
-```rust
-// JSON logging for production containers (configured via ObservabilityConfig.logging.format)
-RUST_LOG=info cargo run
-
-// With the observability facade
-use observability::{Obs, ObservabilityConfig};
-let _obs = Obs::init(ObservabilityConfig::default().with_service("my-agent", "0.1.0", "default"))?;
-```
-
-### **Testing**
-```rust
-// Capture logs in tests
-use log::LevelFilter;
-env_logger::Builder::from_default_env()
-    .filter_level(LevelFilter::Debug)
-    .init();
-```
-
-## 🔮 Future Enhancements
-
-The current logging foundation enables:
-
-1. **Metrics Integration**: Request duration, throughput, error rates
-2. **Tracing Integration**: Distributed tracing across agent networks  
-3. **Structured Fields**: Rich context beyond agent ID
-4. **Performance Analytics**: Hot path optimization based on logs
-5. **Security Monitoring**: Request pattern analysis
-
-This logging strategy provides a solid foundation for comprehensive observability while maintaining clean architecture principles and preparing for future integration with the full observability stack.
+For structured JSON logs with trace context, use the `observability` feature and the `observability` crate's `Obs::init(...)`.

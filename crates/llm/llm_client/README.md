@@ -59,4 +59,6 @@ Authentication is separate: implement [`AuthProvider`](./src/auth.rs) for API ke
 cargo test -p llm_client
 ```
 
+`tests/client_scenario_facade.rs` runs [`LlmClient`](./src/client.rs) against [`pf_test_harness`](../../pf_test_harness) [`LlmScenario`](../../pf_test_harness/src/scenario.rs) turns via a local OpenAI-compatible mock (`scenario_openai_http`).
+
 Live HTTP smoke tests (optional env keys) live in `tests/smoke_live.rs`.

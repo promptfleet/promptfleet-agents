@@ -269,11 +269,14 @@ impl LlmInvoker for ScenarioRequestInvoker {
             .expect("request invoker lock poisoned")
             .pop_front()
             .unwrap_or_default();
-        Box::pin(async move { turn_to_llm_response(&turn) })
+        Box::pin(async move { fold_stream_events_to_llm_response(&turn) })
     }
 }
 
-fn turn_to_llm_response(turn: &[StreamEvent]) -> Result<LlmResponse, String> {
+/// Fold scenario [`StreamEvent`]s into an [`LlmResponse`] (same semantics as the scenario
+/// request/response invoker). Used by [`scenario_openai_http`](crate::scenario_openai_http)
+/// to synthesize OpenAI Chat Completions JSON fixtures.
+pub fn fold_stream_events_to_llm_response(turn: &[StreamEvent]) -> Result<LlmResponse, String> {
     #[derive(Debug)]
     struct ToolCallAcc {
         id: String,

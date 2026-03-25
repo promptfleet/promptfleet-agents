@@ -1778,6 +1778,7 @@ dependencies = [
  "http 1.4.0",
  "indexmap 2.13.0",
  "log",
+ "pf_test_harness",
  "protocol_transport_core",
  "reqwest",
  "serde",

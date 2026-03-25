@@ -1,5 +1,40 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — `a2a_app_ports` README: server delegation vs protocol layer
+
+### Changes
+- Clarified that **`GetAgentCard`** is delegated via **`build_agent_card`** (not only **`SendMessage`**), and that task / extended-card RPCs use the protocol stack without per-method port hooks.
+- Design note distinguishes **inbound** server seam from **`a2a_http_client`** when calling other agents.
+
+### Files modified
+- `crates/a2a_app_ports/README.md`
+
+### Tests
+- `cargo check -p a2a_app_ports`: **ok**
+
+### Notes
+- Aligns docs with `a2a_http_server` routing (`native_server.rs` / `wasm_server.rs`).
+
+## 2026-03-26 — `pf_test_harness` OpenAI mock + `LlmClient` scenario integration tests
+
+### Changes
+- **`pf_test_harness`**: new [`scenario_openai_http`](crates/pf_test_harness/src/scenario_openai_http.rs) — encodes scenario turns as OpenAI Chat Completions **JSON** or **SSE**, and **`OpenAiScenarioMock`** (`/v1/chat/completions`) for local HTTP.
+- **`scenario` feature** now also enables **`axum`** (mock server).
+- **`fold_stream_events_to_llm_response`**: public API (was private `turn_to_llm_response`) for reuse by the wire encoder.
+- **`llm_client`**: dev-dependency on **`pf_test_harness`** with `scenario`; integration tests [`tests/client_scenario_facade.rs`](crates/llm/llm_client/tests/client_scenario_facade.rs) cover **`LlmClient::chat`** and **`chat_stream`** against the mock.
+- **`llm_client` README**: documents the facade + harness test.
+
+### Files modified
+- `crates/pf_test_harness/Cargo.toml`, `src/lib.rs`, `src/scenario.rs`, `src/scenario_openai_http.rs` (new)
+- `crates/llm/llm_client/Cargo.toml`, `tests/client_scenario_facade.rs` (new), `README.md`
+
+### Tests
+- `cargo test -p pf_test_harness --features scenario`: **5 passed**
+- `cargo test -p llm_client`: **105 lib + 2 client_scenario_facade + 6 ignored smoke + 2 doctests, all pass**
+
+### Notes
+- Mock is **OpenAI Chat Completions only** (`WireFormat::OpenAiCompat`, `ApiMode::Chat`); Anthropic / Responses API not covered here.
+
 ## 2026-03-26 — `llm_client` dedupe `StreamStart` in OpenAI SSE drivers
 
 ### Changes

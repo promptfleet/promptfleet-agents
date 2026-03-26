@@ -1,0 +1,16 @@
+---
+title: Architecture
+description: High-level map of the promptfleet-agents workspace (observability area).
+---
+
+Workspace layout matches the root `Cargo.toml` `[workspace] members` list. The **observability** area lives under `crates/observability/`:
+
+| Crate | Path | Role |
+|-------|------|------|
+| `observability` | `crates/observability/observability` | Facade: single entrypoint, `Obs` / `ObservabilityConfig`, optional OTEL and Prometheus deps |
+| `observability_core` | `crates/observability/observability_core` | Core traits, context, adapters, `ObservabilityManager` |
+| `structured_logging` | `crates/observability/structured_logging` | Extensions on top of `observability_core` (convenience, optional performance/correlation) |
+| `otel` | `crates/observability/otel` | OpenTelemetry helpers (OTLP, sampling, resource attributes) |
+| `prometheus` | `crates/observability/prometheus` | Prometheus metrics (feature-gated federation, push gateway, etc.) |
+
+Other workspace members (A2A, LLM, `agent_sdk`, …) are not covered in this Starlight scaffold; see each crate’s `Cargo.toml` and `lib.rs` for scope.

@@ -1,0 +1,37 @@
+---
+title: observability_core
+description: Core traits, W3C trace context, adapters, and ObservabilityManager.
+---
+
+**Crate:** `observability_core` · **Path:** `crates/observability/observability_core`
+
+## Role
+
+From `src/lib.rs`: traits and foundations for structured logging and observability with conditional compilation via features.
+
+## Feature flags
+
+From `crates/observability/observability_core/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `structured-logging` |
+| `structured-logging` | `serde`, `serde_json`, `chrono`, `log`, `tracing`, `rand` |
+| `otel-2025` | `opentelemetry`, `opentelemetry-semantic-conventions` |
+| `auto-instrumentation` | `otel-2025` + semantic conventions |
+| `prometheus-federation` | `prometheus` crate |
+| `observability` | `otel-2025`, `structured-logging`, `prometheus-federation` |
+
+## Modules (from `lib.rs`)
+
+`batching`, `context`, `error`, `noop`, `traits`, `adapters`, `domain`, `extension`, `ports`.
+
+## Key public types
+
+Re-exports include **`ObservabilityManager`**, **`ObservabilityConfig`**, **`TraceContext`**, **`W3CTraceContext`**, context helpers (`with_context`, `with_context_future`, …), **`ObservabilityPlugin`**, **`SpanGuard`**, **`StructuredLogger`**, adapters (**`StandardLogAdapter`**, **`WasmStdoutAdapter`**, …), domain types (**`LogEntry`**, **`ProcessorChain`**, …), and ports (**`MetricsPort`**, **`TransportPort`**, …).
+
+Constants: **`VERSION`**, **`DEFAULT_BATCH_SIZE`**, **`DEFAULT_FLUSH_INTERVAL_SECS`**.
+
+There is also a longer **`README.md`** in the crate directory with usage examples; verify behavior against the current `Cargo.toml` and `lib.rs` if anything disagrees.
+
+**Full API reference:** `cargo doc -p observability_core --no-deps --all-features` (as needed).

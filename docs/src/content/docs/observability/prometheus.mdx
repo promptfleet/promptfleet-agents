@@ -1,0 +1,34 @@
+---
+title: prometheus
+description: Prometheus metrics — registry-oriented plugin, optional federation, push gateway, cardinality, recording rules.
+---
+
+**Crate:** `prometheus` (workspace package name) · **Path:** `crates/observability/prometheus`
+
+## Feature flags
+
+From `crates/observability/prometheus/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `structured-logging` |
+| `prometheus-federation` | `prometheus` crate, `reqwest`, `uuid`, `serde_json` |
+| `pushgateway-client` | `prometheus-federation` |
+| `cardinality-reduction` | `prometheus-federation`, `url` |
+| `recording-rules` | `prometheus-federation`, `serde_yaml` |
+| `structured-logging` | `serde_json`, `observability_core/structured-logging` |
+
+## Public API (from `src/lib.rs`)
+
+Items below are **`#[cfg(feature = "prometheus-federation")]`** (or other gates) as indicated in `lib.rs`:
+
+- **`Prometheus`**, **`PrometheusConfig`**, **`PrometheusExtensionConfig`**, **`PrometheusManager`**
+- **`create_prometheus_manager`**, **`create_prometheus_manager_from_config`**
+- With **`cardinality-reduction`**: **`CardinalityReducer`**, **`CardinalityStats`**, **`MetricStats`**
+- With **`prometheus-federation`**: **`FederationConfig`**, **`HierarchicalFederation`**
+- With **`recording-rules`**: recording rule types and **`RecordingRulesManager`**
+- With **`pushgateway-client`**: **`PushGatewayClient`**, **`BatchPushClient`**
+
+Constants: **`VERSION`**, **`DEFAULT_PUSHGATEWAY_ENDPOINT`**, **`DEFAULT_METRICS_PORT`**, **`DEFAULT_PUSH_INTERVAL_SECS`**.
+
+**Full API reference:** `cargo doc -p prometheus --no-deps --features prometheus-federation` (enable other features as needed).

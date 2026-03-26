@@ -1,0 +1,36 @@
+---
+title: structured_logging
+description: Enhanced structured logging on top of observability_core — convenience, optional performance and correlation.
+---
+
+**Crate:** `structured_logging` · **Path:** `crates/observability/structured_logging`  
+**Description** (`Cargo.toml`): *Enhanced structured logging with performance optimizations and convenience APIs for SpinKube agents.*
+
+## Feature flags
+
+From `crates/observability/structured_logging/Cargo.toml` (authoritative):
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `convenience` |
+| `convenience` | `llm-logging`, `template-logging`, `a2a-logging` |
+| `performance-optimized` | `string-interner`, `buffer-pool`, `fast-paths` |
+| `correlation-enhanced` | `baggage-support`, `scoped-context` |
+| `wasm-optimized` | `performance-optimized` |
+
+Sub-features (`llm-logging`, `template-logging`, `a2a-logging`, etc.) are declared in the same file.
+
+## Modules
+
+From `src/lib.rs`: `panic_handler`, `extension` always; `performance` / `correlation` / `convenience` / `context_adapter` are gated behind the features above.
+
+## Key APIs
+
+- Re-exports many **`observability_core`** types (`ObservabilityManager`, `ObservabilityConfig`, formatters, ports, …).
+- **`create_logger`**, **`create_logger_from_config`**, and (with `performance-optimized`) performance helpers.
+- With **`convenience`**: domain helpers such as **`set_llm_context`**, **`log_llm_request`**, **`with_llm_context`**, etc. (see `lib.rs` re-exports).
+- **`panic_handler`**: **`install_panic_handler`**, **`PanicHandlerConfig`**, stats helpers.
+
+Crate **`README.md`** describes the layered architecture; confirm feature names and dependencies against **`Cargo.toml`** before copying examples.
+
+**Full API reference:** `cargo doc -p structured_logging --no-deps`.

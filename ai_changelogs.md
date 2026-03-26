@@ -1,5 +1,95 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — Docs: document `alias yarn='yarn --non-interactive'` as Yarn 4 breaker
+
+### Changes
+- **`getting-started.mdx` / `docs/README.md`:** troubleshooting now calls out the common zsh alias that expands every `yarn` to `yarn --non-interactive`; fix with `unalias yarn`, dotfile edit, or **`command yarn …`**.
+
+### Files modified
+- `docs/README.md`, `docs/src/content/docs/getting-started.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+## 2026-03-26 — Docs: Yarn 4 + `--non-interactive` prefix (Clipanion) troubleshooting
+
+### Changes
+- **Root cause (reproduced):** `yarn --non-interactive -v` and `yarn --non-interactive install` fail on Yarn 4.13.x; error traces show `While running --non-interactive …`. Some environments prepend global `--non-interactive` before the subcommand.
+- **`docs/src/content/docs/getting-started.mdx`:** new Troubleshooting section — `type yarn`, `command yarn …`, external terminal, `node -p "require('./package.json').packageManager"`.
+- **`docs/README.md`:** pointer to that section; removed incorrect “only use `-v` not `--version`” explanation.
+- **`README.md`:** short pointer to the MDX troubleshooting section.
+
+### Files modified
+- `README.md`, `docs/README.md`, `docs/src/content/docs/getting-started.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Prior note blaming `yarn --version` alone was wrong; the failure mode matches **global `--non-interactive` before subcommands**.
+
+## 2026-03-26 — Docs: Yarn 4 uses `yarn -v`, not `yarn --version`
+
+### Changes
+- **`docs/README.md`**, **`docs/src/content/docs/getting-started.mdx`:** note that Yarn Berry reports errors for `yarn --version`; use **`yarn -v`** to print the version.
+
+### Files modified
+- `README.md`, `docs/README.md`, `docs/src/content/docs/getting-started.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+## 2026-03-26 — Docs: run Yarn only from `docs/`; ignore stray root `yarn.lock`
+
+### Changes
+- **Root `.gitignore`:** `node_modules` and `/yarn.lock` so accidental Yarn 1 runs at the repo root do not get committed.
+- **`README.md`:** short “Documentation site (Starlight)” note — `cd docs`, Corepack, why root `yarn` is wrong.
+- **`docs/README.md`**, **`getting-started.mdx`:** stress that only `docs/` has `package.json`.
+
+### Files modified
+- `.gitignore`, `README.md`, `docs/README.md`, `docs/src/content/docs/getting-started.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Removed stray root **`yarn.lock`** and **`node_modules`** created by Yarn 1 at repo root (not applicable if the user’s tree was clean).
+
+## 2026-03-26 — Docs: Corepack + local `yarn install` (fix Ambiguous Syntax with Yarn 1)
+
+### Changes
+- **`docs/README.md`** and **`docs/src/content/docs/getting-started.mdx`:** document `corepack enable` before `yarn`, use plain `yarn install` locally, reserve `yarn install --immutable` for CI; explain Yarn 1 vs Yarn 4 “Ambiguous Syntax” failure mode.
+
+### Files modified
+- `docs/README.md`
+- `docs/src/content/docs/getting-started.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Root cause: global **Yarn 1** misparses Berry-only flags; **`corepack enable`** selects Yarn **4.13.0** from `packageManager`.
+
+## 2026-03-26 — Starlight docs scaffold (`docs/`) + GitHub Pages workflow
+
+### Changes
+- **Starlight site** under `docs/`: Astro 6 + `@astrojs/starlight`, `site` + `base` for `https://promptfleet.github.io/promptfleet-agents`, sidebar for Getting Started, Architecture, and six observability pages.
+- **Content:** nine MDX pages (landing, getting-started, architecture, observability overview + five crates). Crate docs are grounded in each crate’s `Cargo.toml` and `src/lib.rs` (feature tables and public API summaries), not marketing README claims.
+- **CI:** `.github/workflows/deploy-docs.yml` — push to `main` with `docs/**` or workflow path → `yarn install --immutable`, `yarn build`, `upload-pages-artifact` + `deploy-pages@v4`.
+- **Tooling:** Yarn 4 with `nodeLinker: node-modules` in `docs/.yarnrc.yml`; `docs/.gitignore` extended with `dist` and `.astro`.
+
+### Files modified
+- `docs/package.json`, `docs/yarn.lock`, `docs/.yarnrc.yml`, `docs/astro.config.mjs`, `docs/tsconfig.json`, `docs/.gitignore`, `docs/README.md`
+- `docs/src/content.config.ts`, `docs/src/content/docs/**/*.mdx`
+- `.github/workflows/deploy-docs.yml`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+- `cargo check -p observability -p observability_core -p structured_logging -p otel -p prometheus`: **passed**
+
+### Notes
+- Enable **GitHub Pages** with **GitHub Actions** as the source for deploy to succeed. Workflow branch is **`main`** (per plan); adjust if the default branch differs.
+
 ## 2026-03-26 — `agent_sdk` plan follow-up: remaining docs + A2A router tests + plan status
 
 ### Changes

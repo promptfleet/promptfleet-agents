@@ -19,6 +19,19 @@ Rust workspace for building [A2A Protocol v1.0](https://google.github.io/A2A/) a
 | `llm` | LLM client abstraction (OpenAI-compatible) | native |
 | `mcp_protocol` | MCP (Model Context Protocol) types and client | native |
 
+### Documentation site (Starlight)
+
+The docs website lives in **`docs/`**. Run Yarn **from `docs/`** (the repo root has no `package.json`; Yarn at the root is usually **v1** and may litter the tree with a stray `yarn.lock` / `node_modules`).
+
+```bash
+cd docs
+corepack enable
+yarn install
+yarn dev
+```
+
+If Yarn prints **Clipanion** errors mentioning **`While running --non-interactive`**, see **`docs/src/content/docs/getting-started.mdx`** (Troubleshooting section).
+
 ---
 
 ## Architecture

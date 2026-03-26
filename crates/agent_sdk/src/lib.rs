@@ -31,6 +31,16 @@
 //! - Adding context trimming or token budgeting: `context-window`
 //! - Adding observability, storage, or sub-agents: compose the matching primitive features on top
 //!
+//! ## Feature matrix (surfaces)
+//!
+//! | Surface | Native | WASM |
+//! | --- | --- | --- |
+//! | [`AgentBuilder`] | yes | yes |
+//! | [`crate::a2a::A2aApp`] | yes | yes |
+//! | [`crate::a2a::A2aClient`] | yes | target-gated |
+//! | [`AgentHostBuilder`] + A2A | yes | yes |
+//! | [`AgentHostBuilder`] + AG-UI | yes | no |
+//!
 //! ## Quick Start
 //!
 //! ### Core Agent
@@ -53,6 +63,31 @@
 //!
 //!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
 //!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### LLM runtime (`llm-engine`)
+//!
+//! On **native** with `llm-engine`, call [`crate::Agent::configure_llm_runtime`] after
+//! [`AgentBuilder::build`] with an OpenAI-compatible [`llm_client::LlmClient`] (or another type
+//! that implements the invoker traits) and a [`crate::agent::tools::ToolRegistry`]:
+//!
+//! ```rust,ignore
+//! use agent_sdk::{AgentBuilder, SdkResult};
+//! use agent_sdk::agent::tools::ToolRegistry;
+//! use llm_client::{LlmClient, WireFormat};
+//! use llm_client::auth::ApiKeyAuth;
+//!
+//! fn wire_llm() -> SdkResult<()> {
+//!     let mut agent = AgentBuilder::new("my-agent")?.build()?;
+//!     let client = LlmClient::builder(WireFormat::OpenAiCompat)
+//!         .base_url("https://api.openai.com/v1")
+//!         .auth(ApiKeyAuth::new("sk-..."))
+//!         .build()
+//!         .map_err(|e| agent_sdk::SdkError::configuration(e.to_string()))?;
+//!     let tools = ToolRegistry::new();
+//!     agent.configure_llm_runtime(client, "gpt-4o-mini", tools, None, None, None)?;
 //!     Ok(())
 //! }
 //! ```

@@ -1,4 +1,17 @@
 //! AG-UI adapter surface for composing user-facing streaming around [`crate::Agent`].
+//!
+//! ## Platform
+//!
+//! - **Native only** (`not(target_arch = "wasm32")`): HTTP routes and SSE streaming require Tokio
+//!   and Axum. Enable the **`event-stream`** feature (and typically **`llm-engine`** on the agent).
+//! - **WASM**: this module is not built for `wasm32`; use A2A hosting from [`crate::host`] or
+//!   `a2a_serve!` instead.
+//!
+//! ## Usage
+//!
+//! - Configure [`crate::agui::AgUiConfig`] (route path) and build [`crate::agui::AgUiApp`] from an [`crate::Agent`] that has a
+//!   **stream-capable** LLM runtime ([`crate::Agent::configure_llm_runtime`] on native).
+//! - Combine with [`crate::AgentHostBuilder::with_agui`] to serve AG-UI alongside A2A on one router.
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use std::collections::HashMap;

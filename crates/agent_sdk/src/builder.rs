@@ -262,4 +262,18 @@ mod tests {
         let agent = AgentBuilder::from_config_path(path).unwrap().build().unwrap();
         assert_eq!(agent.config().name, "file-agent");
     }
+
+    #[cfg(all(feature = "config-loader", not(target_arch = "wasm32")))]
+    #[test]
+    fn from_config_path_invalid_json_returns_error() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp, "{}", r#"not valid json {"#).unwrap();
+        let path = tmp.path().to_str().unwrap();
+        let err = AgentBuilder::from_config_path(path);
+        assert!(
+            err.is_err(),
+            "expected configuration error for invalid JSON"
+        );
+    }
 }

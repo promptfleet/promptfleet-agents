@@ -146,4 +146,4 @@ Maintenance-only:
 
 ## Examples
 
-Minimal examples live under `crates/agent_sdk/examples/`.
+Minimal examples live under the crate’s [`examples/`](./examples/) directory (relative to `crates/agent_sdk`).

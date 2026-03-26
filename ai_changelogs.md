@@ -1,5 +1,25 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — `agent_sdk` plan follow-up: remaining docs + A2A router tests + plan status
+
+### Changes
+- **Docs (4B/4C/4D gaps):** `host` (`AgentHostBuilder` / `AgentHost` / methods), `interaction` field docs, expanded **`agui`** module overview (native + `event-stream`), **`callable`**, **`a2a_app`** method docs; **`lib.rs`** feature matrix table + **`configure_llm_runtime`** example (`rust,ignore`); **`README`** examples link via [`examples/`](./examples/) relative to the crate.
+- **Tests:** `a2a_app` **`tokio`** tests — GET **`/health`** → 200, GET **`/.well-known/agent-card.json`** → JSON with `name`; **`builder`** — invalid JSON file returns error (missing-file not asserted: **`pf_config`** may still succeed depending on loader behavior).
+- **Deps:** dev-dependency **`tower`** (`util`) for `ServiceExt::oneshot` in tests.
+- **Plan:** `.cursor/plans/sdk_assessment_fixes_188d9e96.plan.md` frontmatter todos set to **completed**.
+
+### Files modified
+- `crates/agent_sdk/src/host.rs`, `interaction.rs`, `agui.rs`, `callable.rs`, `a2a_app.rs`, `lib.rs`, `builder.rs`, `Cargo.toml`
+- `crates/agent_sdk/README.md`
+- `../promptfleet-agents-cloud/.cursor/plans/sdk_assessment_fixes_188d9e96.plan.md`
+
+### Tests
+- `cargo doc -p agent_sdk --no-deps --all-features`: **0 warnings**
+- `cargo test -p agent_sdk --all-features`: **all passed** (lib + integration + doctests)
+
+### Notes
+- **`AgUiConfig` / `AgUiApp`** links in `agui.rs` use explicit `crate::agui::...` paths for rustdoc on all targets.
+
 ## 2026-03-26 — `agent_sdk` Phase 4: rustdoc (zero warnings) + crate/README docs
 
 ### Changes

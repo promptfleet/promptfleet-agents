@@ -1,0 +1,1557 @@
+---
+title: "structured_logging"
+description: "# Enhanced Structured Logging for SpinKube Agents"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Enhanced Structured Logging for SpinKube Agents
+
+This crate provides performance optimizations and convenience APIs on top of the excellent
+`observability_core` hexagonal architecture. It focuses on:
+
+- 🚀 **Performance**: String interning, buffer pooling, zero-allocation fast paths
+- 🔗 **Correlation**: Enhanced W3C baggage, scoped contexts, advanced tracing
+- 🎪 **Convenience**: Domain-specific APIs for LLM, template, and A2A operations
+
+## Architecture
+
+This crate builds on `observability_core`'s solid foundation:
+- **Domain**: Reuses LogEntry, ProcessorChain, TraceContext
+- **Ports**: Extends TransportPort, FormatterPort interfaces  
+- **Adapters**: Enhances with performance-optimized implementations
+- **Extension**: Provides enhanced configuration and management
+
+## Usage Tiers
+
+### Tier 1: Standard (90% of users)
+```rust,ignore
+// Just use observability_core - works perfectly
+use observability_core::ObservabilityManager;
+log::info!("Standard structured logging");
+```
+
+### Tier 2: Enhanced (8% of users)  
+```rust,ignore
+// Add convenience methods
+use structured_logging::convenience::*;
+log_llm_request("gpt-4", duration, tokens, "success")?;
+```
+
+### Tier 3: Performance (2% of users)
+```rust,ignore
+// Full performance optimization
+use structured_logging::{EnhancedObservabilityConfig, PerformanceExtension};
+```
+
+## Constants
+
+### `VERSION`
+
+```rust
+const VERSION: &str = ;
+```
+
+Version information
+
+## Type Aliases
+
+### `Result`
+
+```rust
+type Result = Result<T, StructuredLoggingError>;
+```
+
+Result type for structured logging operations
+
+## Traits
+
+### `A2aContextManager`
+
+Port (trait) for A2A context management
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, message_type: &str, from_agent: &str, to_agent: &str, component: &str)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+### `ContextManagerRegistry`
+
+Combined context manager that coordinates all context types
+
+**Required / Provided Methods**
+
+```rust
+fn get_llm_manager(&self) -> Option<Arc<dyn LlmContextManager>>
+```
+
+
+```rust
+fn get_a2a_manager(&self) -> Option<Arc<dyn A2aContextManager>>
+```
+
+
+```rust
+fn get_request_manager(&self) -> Option<Arc<dyn RequestContextManager>>
+```
+
+
+### `LlmContextManager`
+
+Port (trait) for LLM context management
+
+Extensions like structured_logging can implement this trait to provide
+concrete context management functionality.
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, model: &str, component: &str)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+### `RequestContextManager`
+
+Port (trait) for request context management
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, request_id: &str, user_id: Option<&str>, session_id: Option<&str>)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+## Structs
+
+### `EnhancedObservabilityConfig`
+
+Enhanced configuration for structured logging with performance and convenience features
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `base` | `observability_core::ObservabilityConfig` | Base observability configuration |
+| `performance` | `PerformanceConfig` | Performance optimization settings |
+| `correlation` | `CorrelationConfig` | Correlation enhancement settings |
+| `convenience` | `ConvenienceConfig` | Convenience feature settings |
+| `panic_handler` | `PanicHandlerConfig` | Panic handling configuration |
+
+**Methods**
+
+#### `with_base`
+
+```rust
+fn with_base(base: ObservabilityConfig) -> Self
+```
+
+Create enhanced config with specified base config
+
+#### `with_panic_handler`
+
+```rust
+fn with_panic_handler(self, config: PanicHandlerConfig) -> Self
+```
+
+Set panic handler configuration  
+
+#### `with_all_performance_features`
+
+```rust
+fn with_all_performance_features(self) -> Self
+```
+
+Enable all performance features (feature-gated)
+
+#### `with_no_performance_features`
+
+```rust
+fn with_no_performance_features(self) -> Self
+```
+
+Disable all performance features (feature-gated)
+
+#### `to_base_config`
+
+```rust
+fn to_base_config(&self) -> ObservabilityConfig
+```
+
+Convert to base observability config
+
+#### `validate`
+
+```rust
+fn validate(&self) -> Result<()>
+```
+
+Validate configuration
+
+#### `to_json`
+
+```rust
+fn to_json(&self) -> Result<String>
+```
+
+Serialize configuration to JSON
+
+#### `from_json`
+
+```rust
+fn from_json(json: &str) -> Result<Self>
+```
+
+Deserialize configuration from JSON
+
+### `PerformanceExtension`
+
+Enhanced observability manager with performance and convenience features
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: EnhancedObservabilityConfig) -> Result<Self>
+```
+
+Create new enhanced extension
+
+#### `initialize`
+
+```rust
+fn initialize(&mut self) -> Result<()>
+```
+
+Initialize all configured features
+
+#### `is_performance_enabled`
+
+```rust
+fn is_performance_enabled(&self) -> bool
+```
+
+Check if performance features are enabled
+
+#### `is_correlation_enabled`
+
+```rust
+fn is_correlation_enabled(&self) -> bool
+```
+
+Check if correlation features are enabled
+
+#### `is_convenience_enabled`
+
+```rust
+fn is_convenience_enabled(&self) -> bool
+```
+
+Check if convenience features are enabled
+
+#### `base`
+
+```rust
+fn base(&self) -> &ObservabilityManager
+```
+
+Get base observability manager
+
+#### `config`
+
+```rust
+fn config(&self) -> &EnhancedObservabilityConfig
+```
+
+Get enhanced configuration
+
+#### `process_log_entry`
+
+```rust
+fn process_log_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry through all enabled features
+
+#### `get_performance_stats`
+
+```rust
+fn get_performance_stats(&self) -> Option<PerformanceStats>
+```
+
+Get performance statistics (if enabled)
+
+#### `reset_performance_stats`
+
+```rust
+fn reset_performance_stats(&self) -> Result<()>
+```
+
+Reset performance statistics (if enabled)
+
+#### `get_panic_stats`
+
+```rust
+fn get_panic_stats(&self) -> Result<PanicStats>
+```
+
+Get panic statistics if panic handler is enabled
+
+#### `reset_panic_stats`
+
+```rust
+fn reset_panic_stats(&self) -> Result<()>
+```
+
+Reset panic statistics if panic handler is enabled
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> Vec<&''static str>
+```
+
+Get manager capabilities
+
+### `PanicHandlerConfig`
+
+Configuration for panic logging
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_structured_logging` | `bool` | Enable structured panic logging |
+| `enable_analytics` | `bool` | Enable panic analytics and pattern detection |
+| `enable_context_preservation` | `bool` | Enable context preservation across panics |
+
+### `PanicPattern`
+
+Panic pattern for analytics
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pattern` | `String` |  |
+| `count` | `u64` |  |
+| `first_seen` | `String` |  |
+| `last_seen` | `String` |  |
+
+### `PanicStats`
+
+Panic statistics for monitoring
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_panics` | `u64` | Total panics encountered |
+| `panics_by_severity` | `HashMap&lt;String, u64&gt;` | Panics by severity |
+| `panics_by_thread` | `HashMap&lt;String, u64&gt;` | Panics by thread |
+| `common_patterns` | `Vec&lt;PanicPattern&gt;` | Most common panic patterns |
+| `last_panic_timestamp` | `Option&lt;String&gt;` | Last panic timestamp |
+
+### `StructuredPanicInfo`
+
+Structured panic information for downstream systems
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `String` | Panic message |
+| `location` | `Option&lt;String&gt;` | Panic location (file:line:column) |
+| `thread_info` | `ThreadInfo` | Thread name and ID |
+| `timestamp` | `String` | Timestamp when panic occurred (ISO 8601) |
+| `severity` | `PanicSeverity` | Panic severity classification |
+| `trace_context` | `Option&lt;domain::TraceContext&gt;` | Preserved trace context |
+| `enhanced_context` | `Option&lt;EnhancedTraceContext&gt;` | Enhanced correlation context |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Additional metadata |
+
+### `ThreadInfo`
+
+Thread information for panic context
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `Option&lt;String&gt;` |  |
+| `id` | `String` |  |
+| `is_main` | `bool` |  |
+
+### `BufferPool`
+
+Buffer pool for reusing formatting buffers
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(pool_size: usize, buffer_capacity: usize) -> Self
+```
+
+
+#### `get_buffer`
+
+```rust
+fn get_buffer(&self) -> Result<Vec<u8>>
+```
+
+
+#### `return_buffer`
+
+```rust
+fn return_buffer(&self, buffer: Vec<u8>) -> Result<()>
+```
+
+
+### `FastPathLogger`
+
+Fast path logger for hot code paths with minimal allocations
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: &PerformanceConfig) -> Result<Self>
+```
+
+
+#### `log_llm_request_fast`
+
+```rust
+fn log_llm_request_fast(&self, model: &str, duration_ms: u64, tokens: u32, status: &str) -> Result<Vec<u8>>
+```
+
+Fast path for LLM request logging with minimal allocations
+
+#### `log_a2a_message_fast`
+
+```rust
+fn log_a2a_message_fast(&self, message_type: &str, from_agent: &str, to_agent: &str, duration_ms: Option<u64>) -> Result<Vec<u8>>
+```
+
+Fast path for A2A message logging
+
+### `OptimizedWasmStdoutAdapter`
+
+Optimized WASM stdout adapter with performance enhancements
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: PerformanceConfig) -> Result<Self>
+```
+
+
+#### `write_entry_optimized`
+
+```rust
+fn write_entry_optimized(&self, entry: &LogEntry) -> Result<()>
+```
+
+Write log entry using fast path if possible
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> Result<PerformanceStats>
+```
+
+
+### `PerformanceStats`
+
+Performance statistics for monitoring optimization impact
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entries_processed` | `u64` | Total entries processed |
+| `fast_path_time` | `web_time::Duration` | Total time spent in fast paths |
+| `standard_path_time` | `web_time::Duration` | Total time spent in standard paths |
+| `string_interner_hits` | `u64` | Number of string interning hits |
+| `string_interner_misses` | `u64` | Number of string interning misses |
+| `buffer_pool_hits` | `u64` | Buffer pool hits |
+| `buffer_pool_misses` | `u64` | Buffer pool misses (new allocations) |
+| `bytes_written` | `u64` | Total bytes written |
+| `avg_processing_time_ns` | `u64` | Average entry processing time |
+
+**Methods**
+
+#### `string_interner_hit_ratio`
+
+```rust
+fn string_interner_hit_ratio(&self) -> f64
+```
+
+Calculate string interning hit ratio
+
+#### `buffer_pool_hit_ratio`
+
+```rust
+fn buffer_pool_hit_ratio(&self) -> f64
+```
+
+Calculate buffer pool hit ratio
+
+#### `fast_path_ratio`
+
+```rust
+fn fast_path_ratio(&self) -> f64
+```
+
+Calculate fast path usage ratio
+
+### `StringInterningProcessor`
+
+String interner for common log field values
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(capacity: usize) -> Result<Self>
+```
+
+
+#### `intern_string`
+
+```rust
+fn intern_string(&self, value: &str) -> Result<String>
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+
+### `BaggageManager`
+
+W3C baggage support manager
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `validate_baggage_item`
+
+```rust
+fn validate_baggage_item(&self, key: &str, value: &str) -> Result<()>
+```
+
+Validate baggage item
+
+#### `add_system_baggage`
+
+```rust
+fn add_system_baggage(&self, ctx: &mut EnhancedTraceContext, operation: &str) -> Result<()>
+```
+
+Add system baggage for agent operations
+
+### `CorrelationProcessor`
+
+Correlation processor for log entries
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry to add correlation information
+
+### `EnhancedTraceContext`
+
+Enhanced trace context with additional correlation capabilities
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `base` | `domain::TraceContext` | Base trace context from observability_core |
+| `baggage` | `HashMap&lt;String, String&gt;` | W3C baggage for cross-cutting concerns |
+| `scoped_contexts` | `Vec&lt;ScopedContext&gt;` | Scoped context stack for nested operations |
+| `correlation_metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Correlation metadata |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(base: TraceContext) -> Self
+```
+
+Create new enhanced trace context
+
+#### `from_w3c_headers`
+
+```rust
+fn from_w3c_headers(trace_parent: &str, _trace_state: Option<&str>) -> Result<Self>
+```
+
+Create from W3C trace headers
+
+#### `add_baggage`
+
+```rust
+fn add_baggage(&mut self, key: String, value: String) -> Result<()>
+```
+
+Add baggage item
+
+#### `get_baggage`
+
+```rust
+fn get_baggage(&self, key: &str) -> Option<&String>
+```
+
+Get baggage item
+
+#### `remove_baggage`
+
+```rust
+fn remove_baggage(&mut self, key: &str) -> Option<String>
+```
+
+Remove baggage item
+
+#### `push_scope`
+
+```rust
+fn push_scope(&mut self, scope_name: String, metadata: HashMap<String, Value>) -> Result<String>
+```
+
+Push new scoped context
+
+#### `pop_scope`
+
+```rust
+fn pop_scope(&mut self) -> Option<ScopedContext>
+```
+
+Pop current scoped context
+
+#### `current_scope`
+
+```rust
+fn current_scope(&self) -> Option<&ScopedContext>
+```
+
+Get current scope
+
+#### `add_correlation_metadata`
+
+```rust
+fn add_correlation_metadata(&mut self, key: String, value: Value)
+```
+
+Add correlation metadata
+
+#### `get_correlation_metadata`
+
+```rust
+fn get_correlation_metadata(&self) -> &HashMap<String, Value>
+```
+
+Get correlation metadata
+
+#### `to_baggage_header`
+
+```rust
+fn to_baggage_header(&self) -> String
+```
+
+Convert to W3C baggage header format
+
+#### `from_baggage_header`
+
+```rust
+fn from_baggage_header(&mut self, baggage_header: &str) -> Result<()>
+```
+
+Parse from W3C baggage header
+
+### `ScopedContextManager`
+
+Scoped context manager for nested operations
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `enter_scope`
+
+```rust
+fn enter_scope(&self, trace_id: &str, scope_name: String, metadata: HashMap<String, Value>) -> Result<String>
+```
+
+Enter a new scope
+
+#### `exit_scope`
+
+```rust
+fn exit_scope(&self, trace_id: &str) -> Result<Option<ScopedContext>>
+```
+
+Exit current scope
+
+#### `current_scope`
+
+```rust
+fn current_scope(&self, trace_id: &str) -> Result<Option<ScopedContext>>
+```
+
+Get current scope
+
+#### `register_context`
+
+```rust
+fn register_context(&self, ctx: EnhancedTraceContext) -> Result<()>
+```
+
+Register new trace context
+
+#### `unregister_context`
+
+```rust
+fn unregister_context(&self, trace_id: &str) -> Result<()>
+```
+
+Unregister trace context
+
+### `W3CBaggageSupport`
+
+W3C baggage support utilities
+
+**Methods**
+
+#### `extract_from_headers`
+
+```rust
+fn extract_from_headers(headers: &HashMap<String, String>) -> Result<HashMap<String, String>>
+```
+
+Extract baggage from HTTP headers
+
+#### `inject_into_headers`
+
+```rust
+fn inject_into_headers(baggage: &HashMap<String, String>, headers: &mut HashMap<String, String>)
+```
+
+Inject baggage into HTTP headers
+
+### `A2AContext`
+
+Context for A2A operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message_type` | `String` |  |
+| `from_agent` | `String` |  |
+| `to_agent` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `ConvenienceManager`
+
+Convenience manager that integrates domain-aware processing into the processor chain
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Result<Self>
+```
+
+Create new convenience manager
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry through domain-aware enhancement
+
+#### `get_processor`
+
+```rust
+fn get_processor(&self) -> &DomainContextProcessor
+```
+
+Get the domain context processor for integration with processor chain
+
+### `DomainContextProcessor`
+
+Processor that automatically enhances standard log calls with domain-specific structure
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+### `LLMContext`
+
+Context for LLM operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `TemplateContext`
+
+Context for template operations  
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `engine` | `String` |  |
+| `template` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `A2aContextGuard`
+
+RAII guard for A2A context
+
+Automatically clears A2A context when dropped, providing exception-safe cleanup.
+
+### `AllContextsGuard`
+
+Combined RAII guard for all contexts
+
+When dropped, clears all contexts in the correct order.
+This is the safest option for complex operations.
+
+### `LlmContextGuard`
+
+RAII guard for LLM context
+
+When this guard is dropped, the LLM context is automatically cleared.
+This ensures exception-safe cleanup and prevents forgetting to clear context.
+
+# Example
+```rust,ignore
+{
+    let _guard = set_llm_context_scoped("gpt-4", "openai_client");
+    log::info!("This will have LLM context");
+}
+log::info!("This will NOT have LLM context");
+```
+
+### `RequestContextGuard`
+
+RAII guard for request context
+
+Automatically clears request context when dropped, providing exception-safe cleanup.
+
+### `ScopedContextBuilder`
+
+Scoped context builder for complex nested operations
+
+Allows building up contexts step by step with automatic cleanup.
+Each context level gets its own guard for fine-grained control.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_llm_context`
+
+```rust
+fn with_llm_context(self, model: &str, component: &str) -> Self
+```
+
+
+#### `with_a2a_context`
+
+```rust
+fn with_a2a_context(self, message_type: &str, from_agent: &str, to_agent: &str, component: &str) -> Self
+```
+
+
+#### `with_request_context`
+
+```rust
+fn with_request_context(self, request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> Self
+```
+
+
+#### `execute`
+
+```rust
+fn execute<F, R>(&self, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with all built contexts active
+
+### `StructuredA2aContextManager`
+
+Adapter implementing A2A context management for structured_logging
+
+### `StructuredContextRegistry`
+
+Registry coordinating all structured_logging context managers
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new registry with all structured_logging context managers
+
+#### `register`
+
+```rust
+fn register(&self)
+```
+
+Register this registry with the global context system
+
+### `StructuredLlmContextManager`
+
+Adapter implementing LLM context management for structured_logging
+
+### `StructuredRequestContextManager`
+
+Adapter implementing request context management for structured_logging
+
+### `ConvenienceConfig`
+
+Convenience feature configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_llm_logging` | `bool` | Enable LLM operation logging |
+| `enable_template_logging` | `bool` | Enable template rendering logging |
+| `enable_a2a_logging` | `bool` | Enable A2A message logging |
+| `enable_convenience_macros` | `bool` | Enable convenience macros |
+| `enable_domain_fields` | `bool` | Enable domain-specific field extraction |
+
+### `CorrelationConfig`
+
+Correlation enhancement configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_baggage` | `bool` | Enable W3C baggage support |
+| `max_baggage_size` | `usize` | Maximum baggage size in bytes |
+| `enable_scoped_context` | `bool` | Enable scoped context management |
+| `max_context_depth` | `usize` | Maximum context nesting depth |
+| `enable_auto_propagation` | `bool` | Enable automatic context propagation |
+
+### `PerformanceConfig`
+
+Performance optimization configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_string_interning` | `bool` | Enable string interning for common log field values |
+| `string_interner_capacity` | `usize` | Initial capacity for string interner |
+| `enable_buffer_pooling` | `bool` | Enable buffer pooling for log formatting |
+| `buffer_pool_size` | `usize` | Initial buffer pool size |
+| `buffer_capacity` | `usize` | Individual buffer capacity in bytes |
+| `enable_fast_paths` | `bool` | Enable zero-allocation fast paths for hot operations |
+| `enable_wasm_optimizations` | `bool` | Enable WASM-specific memory optimizations |
+
+## Enums
+
+### `StructuredLoggingError`
+
+Enhanced error types for structured logging operations
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Observability(observability_core::ObservabilityError)` | Wraps observability_core errors |
+| `Performance { ... }` | Performance optimization errors |
+| `StringInterning { ... }` | String interning errors |
+| `BufferPool { ... }` | Buffer pool errors |
+| `Correlation { ... }` | Correlation enhancement errors |
+| `Baggage { ... }` | Baggage management errors |
+| `ScopedContext { ... }` | Scoped context errors |
+| `Convenience { ... }` | Convenience API errors |
+| `EnhancedConfig { ... }` | Configuration errors specific to enhanced features |
+| `FastPath { ... }` | Fast path errors |
+| `FeatureNotEnabled { ... }` | Feature not enabled |
+
+**Methods**
+
+#### `performance`
+
+```rust
+fn performance<T>(message: T) -> Self
+```
+
+Create a performance error
+
+#### `string_interning`
+
+```rust
+fn string_interning<T>(message: T) -> Self
+```
+
+Create a string interning error
+
+#### `buffer_pool`
+
+```rust
+fn buffer_pool<T>(message: T) -> Self
+```
+
+Create a buffer pool error
+
+#### `correlation`
+
+```rust
+fn correlation<T>(message: T) -> Self
+```
+
+Create a correlation error
+
+#### `baggage`
+
+```rust
+fn baggage<T>(message: T) -> Self
+```
+
+Create a baggage error
+
+#### `scoped_context`
+
+```rust
+fn scoped_context<T>(message: T) -> Self
+```
+
+Create a scoped context error
+
+#### `convenience`
+
+```rust
+fn convenience<T>(message: T) -> Self
+```
+
+Create a convenience API error
+
+#### `enhanced_config`
+
+```rust
+fn enhanced_config<T>(message: T) -> Self
+```
+
+Create an enhanced configuration error
+
+#### `fast_path`
+
+```rust
+fn fast_path<T>(message: T) -> Self
+```
+
+Create a fast path error
+
+#### `feature_not_enabled`
+
+```rust
+fn feature_not_enabled<T>(feature: T) -> Self
+```
+
+Create a feature not enabled error
+
+### `PanicSeverity`
+
+Panic severity levels for classification
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Low` | Low severity panic |
+| `Medium` | Medium severity panic   |
+| `High` | High severity panic |
+| `Critical` | Critical severity panic |
+
+## Functions
+
+### `create_performance_extension`
+
+```rust
+fn create_performance_extension(config: EnhancedObservabilityConfig) -> Result<PerformanceExtension>
+```
+
+Create performance extension from configuration
+
+### `create_performance_extension_from_config`
+
+```rust
+fn create_performance_extension_from_config(config_path: &str) -> Result<PerformanceExtension>
+```
+
+Create performance extension from configuration file
+
+### `get_panic_stats`
+
+```rust
+fn get_panic_stats() -> Result<PanicStats>
+```
+
+Get panic statistics if handler is installed
+
+### `install_panic_handler`
+
+```rust
+fn install_panic_handler() -> Result<()>
+```
+
+Install panic handler with default configuration
+
+### `install_panic_handler_with_config`
+
+```rust
+fn install_panic_handler_with_config(config: PanicHandlerConfig) -> Result<()>
+```
+
+Install panic handler with custom configuration
+
+### `reset_panic_stats`
+
+```rust
+fn reset_panic_stats() -> Result<()>
+```
+
+Reset panic statistics if handler is installed
+
+### `clear_a2a_context`
+
+```rust
+fn clear_a2a_context()
+```
+
+Clear A2A context only
+
+### `clear_all_contexts`
+
+```rust
+fn clear_all_contexts()
+```
+
+Clear all contexts
+
+### `clear_llm_context`
+
+```rust
+fn clear_llm_context()
+```
+
+Clear LLM context only
+
+### `clear_request_context`
+
+```rust
+fn clear_request_context()
+```
+
+Clear request context only
+
+### `clear_template_context`
+
+```rust
+fn clear_template_context()
+```
+
+Clear template context only
+
+### `emit_a2a_message_latency`
+
+```rust
+fn emit_a2a_message_latency(latency_ms: u64) -> Result<()>
+```
+
+Emit an A2A message latency metric with context
+
+### `emit_counter`
+
+```rust
+fn emit_counter(name: &str, value: f64) -> Result<()>
+```
+
+Generic counter metric with automatic context detection
+
+### `emit_histogram`
+
+```rust
+fn emit_histogram(name: &str, value: f64) -> Result<()>
+```
+
+Generic histogram metric with automatic context detection
+
+### `emit_llm_request_duration`
+
+```rust
+fn emit_llm_request_duration(model: &str, duration_ms: u64) -> Result<()>
+```
+
+Emit an LLM request duration metric with context
+
+### `emit_llm_tokens_used`
+
+```rust
+fn emit_llm_tokens_used(model: &str, tokens: u32) -> Result<()>
+```
+
+Emit an LLM token usage metric with context
+
+### `emit_request_duration`
+
+```rust
+fn emit_request_duration(duration_ms: u64) -> Result<()>
+```
+
+Emit request processing duration metric with context
+
+### `emit_template_render_duration`
+
+```rust
+fn emit_template_render_duration(template: &str, duration_ms: u64) -> Result<()>
+```
+
+Emit a template render duration metric with context  
+
+### `log_a2a_message`
+
+```rust
+fn log_a2a_message(message_type: &str, from_agent: &str, to_agent: &str, duration: Option<web_time::Duration>, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log A2A messages with structured format
+
+### `log_llm_request`
+
+```rust
+fn log_llm_request(model: &str, duration: web_time::Duration, tokens: u32, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log LLM requests with structured format
+
+### `log_template_render`
+
+```rust
+fn log_template_render(engine: &str, template: &str, duration: web_time::Duration, size: usize, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log template rendering with structured format
+
+### `set_a2a_context`
+
+```rust
+fn set_a2a_context(message_type: &str, from_agent: &str, to_agent: &str, component: &str)
+```
+
+Set A2A context
+
+### `set_llm_context`
+
+```rust
+fn set_llm_context(model: &str, component: &str)
+```
+
+Set LLM context
+
+### `set_request_context`
+
+```rust
+fn set_request_context(request_id: &str, user_id: Option<&str>, session_id: Option<&str>)
+```
+
+Set request context
+
+### `set_template_context`
+
+```rust
+fn set_template_context(engine: &str, template: &str, component: &str)
+```
+
+Set template context
+
+### `init_context_integration`
+
+```rust
+fn init_context_integration()
+```
+
+Initialize structured_logging context management integration
+
+Call this once during application startup to enable advanced RAII context
+management features in structured_logging.
+
+# Example
+```rust,ignore
+use structured_logging::context_adapter::init_context_integration;
+init_context_integration();
+let _guard = set_llm_context_scoped("gpt-4", "my_component");
+log::info!("This log will have LLM context automatically");
+```
+
+### `set_a2a_context_scoped`
+
+```rust
+fn set_a2a_context_scoped(message_type: &str, from_agent: &str, to_agent: &str, component: &str) -> A2aContextGuard
+```
+
+Set A2A context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+
+### `set_all_contexts_scoped`
+
+```rust
+fn set_all_contexts_scoped(model: &str, component: &str, message_type: &str, from_agent: &str, to_agent: &str, a2a_component: &str, request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> AllContextsGuard
+```
+
+Set all contexts with combined RAII guard
+
+Returns a guard that will automatically clear all contexts when dropped.
+This is the most comprehensive option for complex operations.
+
+### `set_llm_context_scoped`
+
+```rust
+fn set_llm_context_scoped(model: &str, component: &str) -> LlmContextGuard
+```
+
+Set LLM context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+This is the safest way to set LLM context as cleanup is guaranteed.
+
+# Example
+```rust,ignore
+let _guard = set_llm_context_scoped("gpt-4", "openai_client");
+log::info!("Processing LLM request");
+```
+
+### `set_request_context_scoped`
+
+```rust
+fn set_request_context_scoped(request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> RequestContextGuard
+```
+
+Set request context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+
+### `with_a2a_context`
+
+```rust
+fn with_a2a_context<F, R>(message_type: &str, from_agent: &str, to_agent: &str, component: &str, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with A2A context, automatically clearing when done
+
+### `with_all_contexts`
+
+```rust
+fn with_all_contexts<F, R>(model: &str, component: &str, message_type: &str, from_agent: &str, to_agent: &str, a2a_component: &str, request_id: &str, user_id: Option<&str>, session_id: Option<&str>, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with all contexts, automatically clearing when done
+
+This is the most comprehensive scoped API that sets all contexts
+and guarantees cleanup regardless of how the closure exits.
+
+### `with_llm_context`
+
+```rust
+fn with_llm_context<F, R>(model: &str, component: &str, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with LLM context, automatically clearing when done
+
+This is the most secure pattern as it guarantees context cleanup
+even if the closure panics or returns early.
+
+# Example
+```rust,ignore
+let result = with_llm_context("gpt-4", "openai_client", || {
+    log::info!("This has LLM context");
+    process_llm_request()
+});
+```
+
+### `with_request_context`
+
+```rust
+fn with_request_context<F, R>(request_id: &str, user_id: Option<&str>, session_id: Option<&str>, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with request context, automatically clearing when done  
+
+### `create_logger`
+
+```rust
+fn create_logger() -> ObservabilityResult<ObservabilityManager>
+```
+
+Create a logger using observability_core foundation
+
+### `create_performance_logger`
+
+```rust
+fn create_performance_logger() -> Result<PerformanceExtension>
+```
+
+Create an enhanced logger with performance optimizations
+
+### `create_logger_from_config`
+
+```rust
+fn create_logger_from_config(config: ObservabilityConfig) -> ObservabilityResult<ObservabilityManager>
+```
+
+Create logger from configuration
+
+### `create_enhanced_logger_from_config`
+
+```rust
+fn create_enhanced_logger_from_config(config: EnhancedObservabilityConfig) -> Result<PerformanceExtension>
+```
+
+Create enhanced logger from enhanced configuration
+
+## Macros
+
+### `llm_context!`
+
+Set LLM context for subsequent standard log calls
+
+### `template_context!`
+
+Set template context for subsequent standard log calls
+
+### `a2a_context!`
+
+Set A2A context for subsequent standard log calls
+
+### `clear_context!`
+
+Clear all domain contexts
+
+### `llm_log!`
+
+Convenience macros for structured logging
+
+### `template_log!`
+
+
+### `a2a_log!`
+
+
+### `with_llm_context_scoped!`
+
+Macro for easy scoped LLM context
+
+# Example
+```rust,ignore
+with_llm_context_scoped!("gpt-4", "openai_client" => {
+    log::info!("Processing with LLM context");
+});
+```
+
+### `with_a2a_context_scoped!`
+
+Macro for easy scoped A2A context
+
+### `with_request_context_scoped!`
+
+Macro for easy scoped request context
+
+### `supervised!`
+
+Macro for supervised execution with panic capturing

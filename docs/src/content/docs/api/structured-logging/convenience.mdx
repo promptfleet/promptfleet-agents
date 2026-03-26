@@ -1,0 +1,280 @@
+---
+title: "convenience"
+description: "Context-aware processors for domain-specific logging operations"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Context-aware processors for domain-specific logging operations
+
+These processors automatically detect and enhance standard log::info!, log::debug! calls
+based on context and structured fields, maintaining standard Rust logging interface.
+
+## Structs
+
+### `LLMContext`
+
+Context for LLM operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `TemplateContext`
+
+Context for template operations  
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `engine` | `String` |  |
+| `template` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `A2AContext`
+
+Context for A2A operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message_type` | `String` |  |
+| `from_agent` | `String` |  |
+| `to_agent` | `String` |  |
+| `component` | `String` |  |
+| `operation_start` | `String` |  |
+
+### `RequestContext`
+
+Context for request operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `request_id` | `String` |  |
+| `user_id` | `Option&lt;String&gt;` |  |
+| `session_id` | `Option&lt;String&gt;` |  |
+| `operation_start` | `String` |  |
+
+### `DomainContextProcessor`
+
+Processor that automatically enhances standard log calls with domain-specific structure
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+### `ConvenienceManager`
+
+Convenience manager that integrates domain-aware processing into the processor chain
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Result<Self>
+```
+
+Create new convenience manager
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry through domain-aware enhancement
+
+#### `get_processor`
+
+```rust
+fn get_processor(&self) -> &DomainContextProcessor
+```
+
+Get the domain context processor for integration with processor chain
+
+## Functions
+
+### `set_llm_context`
+
+```rust
+fn set_llm_context(model: &str, component: &str)
+```
+
+Set LLM context
+
+### `set_template_context`
+
+```rust
+fn set_template_context(engine: &str, template: &str, component: &str)
+```
+
+Set template context
+
+### `set_a2a_context`
+
+```rust
+fn set_a2a_context(message_type: &str, from_agent: &str, to_agent: &str, component: &str)
+```
+
+Set A2A context
+
+### `set_request_context`
+
+```rust
+fn set_request_context(request_id: &str, user_id: Option<&str>, session_id: Option<&str>)
+```
+
+Set request context
+
+### `clear_llm_context`
+
+```rust
+fn clear_llm_context()
+```
+
+Clear LLM context only
+
+### `clear_template_context`
+
+```rust
+fn clear_template_context()
+```
+
+Clear template context only
+
+### `clear_a2a_context`
+
+```rust
+fn clear_a2a_context()
+```
+
+Clear A2A context only
+
+### `clear_request_context`
+
+```rust
+fn clear_request_context()
+```
+
+Clear request context only
+
+### `clear_all_contexts`
+
+```rust
+fn clear_all_contexts()
+```
+
+Clear all contexts
+
+### `set_metrics_port`
+
+```rust
+fn set_metrics_port(port: Box<dyn MetricsPort>)
+```
+
+Set the active MetricsPort implementation
+
+### `clear_metrics_port`
+
+```rust
+fn clear_metrics_port()
+```
+
+Clear the active MetricsPort implementation
+
+### `emit_llm_request_duration`
+
+```rust
+fn emit_llm_request_duration(model: &str, duration_ms: u64) -> Result<()>
+```
+
+Emit an LLM request duration metric with context
+
+### `emit_llm_tokens_used`
+
+```rust
+fn emit_llm_tokens_used(model: &str, tokens: u32) -> Result<()>
+```
+
+Emit an LLM token usage metric with context
+
+### `emit_a2a_message_latency`
+
+```rust
+fn emit_a2a_message_latency(latency_ms: u64) -> Result<()>
+```
+
+Emit an A2A message latency metric with context
+
+### `emit_template_render_duration`
+
+```rust
+fn emit_template_render_duration(template: &str, duration_ms: u64) -> Result<()>
+```
+
+Emit a template render duration metric with context  
+
+### `emit_request_duration`
+
+```rust
+fn emit_request_duration(duration_ms: u64) -> Result<()>
+```
+
+Emit request processing duration metric with context
+
+### `emit_counter`
+
+```rust
+fn emit_counter(name: &str, value: f64) -> Result<()>
+```
+
+Generic counter metric with automatic context detection
+
+### `emit_histogram`
+
+```rust
+fn emit_histogram(name: &str, value: f64) -> Result<()>
+```
+
+Generic histogram metric with automatic context detection
+
+### `log_llm_request`
+
+```rust
+fn log_llm_request(model: &str, duration: web_time::Duration, tokens: u32, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log LLM requests with structured format
+
+### `log_template_render`
+
+```rust
+fn log_template_render(engine: &str, template: &str, duration: web_time::Duration, size: usize, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log template rendering with structured format
+
+### `log_a2a_message`
+
+```rust
+fn log_a2a_message(message_type: &str, from_agent: &str, to_agent: &str, duration: Option<web_time::Duration>, status: &str) -> Result<observability_core::LogEntry>
+```
+
+Convenience function to log A2A messages with structured format

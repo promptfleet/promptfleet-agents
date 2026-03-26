@@ -1,0 +1,342 @@
+---
+title: "context_adapter"
+description: "Advanced context management for structured_logging"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Advanced context management for structured_logging
+
+This module provides domain-specific context management capabilities that build on
+observability_core's basic trace context foundation. It includes:
+- RAII scoped context management
+- Domain-specific context managers (LLM, A2A, Request)
+- Dependency injection registry
+- Advanced correlation features
+
+## Traits
+
+### `LlmContextManager`
+
+Port (trait) for LLM context management
+
+Extensions like structured_logging can implement this trait to provide
+concrete context management functionality.
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, model: &str, component: &str)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+### `A2aContextManager`
+
+Port (trait) for A2A context management
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, message_type: &str, from_agent: &str, to_agent: &str, component: &str)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+### `RequestContextManager`
+
+Port (trait) for request context management
+
+**Required / Provided Methods**
+
+```rust
+fn set_context(&self, request_id: &str, user_id: Option<&str>, session_id: Option<&str>)
+```
+
+
+```rust
+fn clear_context(&self)
+```
+
+
+### `ContextManagerRegistry`
+
+Combined context manager that coordinates all context types
+
+**Required / Provided Methods**
+
+```rust
+fn get_llm_manager(&self) -> Option<Arc<dyn LlmContextManager>>
+```
+
+
+```rust
+fn get_a2a_manager(&self) -> Option<Arc<dyn A2aContextManager>>
+```
+
+
+```rust
+fn get_request_manager(&self) -> Option<Arc<dyn RequestContextManager>>
+```
+
+
+## Structs
+
+### `StructuredLlmContextManager`
+
+Adapter implementing LLM context management for structured_logging
+
+### `StructuredA2aContextManager`
+
+Adapter implementing A2A context management for structured_logging
+
+### `StructuredRequestContextManager`
+
+Adapter implementing request context management for structured_logging
+
+### `StructuredContextRegistry`
+
+Registry coordinating all structured_logging context managers
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new registry with all structured_logging context managers
+
+#### `register`
+
+```rust
+fn register(&self)
+```
+
+Register this registry with the global context system
+
+### `LlmContextGuard`
+
+RAII guard for LLM context
+
+When this guard is dropped, the LLM context is automatically cleared.
+This ensures exception-safe cleanup and prevents forgetting to clear context.
+
+# Example
+```rust,ignore
+{
+    let _guard = set_llm_context_scoped("gpt-4", "openai_client");
+    log::info!("This will have LLM context");
+}
+log::info!("This will NOT have LLM context");
+```
+
+### `A2aContextGuard`
+
+RAII guard for A2A context
+
+Automatically clears A2A context when dropped, providing exception-safe cleanup.
+
+### `RequestContextGuard`
+
+RAII guard for request context
+
+Automatically clears request context when dropped, providing exception-safe cleanup.
+
+### `AllContextsGuard`
+
+Combined RAII guard for all contexts
+
+When dropped, clears all contexts in the correct order.
+This is the safest option for complex operations.
+
+### `ScopedContextBuilder`
+
+Scoped context builder for complex nested operations
+
+Allows building up contexts step by step with automatic cleanup.
+Each context level gets its own guard for fine-grained control.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_llm_context`
+
+```rust
+fn with_llm_context(self, model: &str, component: &str) -> Self
+```
+
+
+#### `with_a2a_context`
+
+```rust
+fn with_a2a_context(self, message_type: &str, from_agent: &str, to_agent: &str, component: &str) -> Self
+```
+
+
+#### `with_request_context`
+
+```rust
+fn with_request_context(self, request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> Self
+```
+
+
+#### `execute`
+
+```rust
+fn execute<F, R>(&self, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with all built contexts active
+
+## Functions
+
+### `register_context_managers`
+
+```rust
+fn register_context_managers(registry: Arc<dyn ContextManagerRegistry>)
+```
+
+Register a context manager registry (dependency injection)
+
+This allows structured_logging to register its context managers
+
+### `set_llm_context_scoped`
+
+```rust
+fn set_llm_context_scoped(model: &str, component: &str) -> LlmContextGuard
+```
+
+Set LLM context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+This is the safest way to set LLM context as cleanup is guaranteed.
+
+# Example
+```rust,ignore
+let _guard = set_llm_context_scoped("gpt-4", "openai_client");
+log::info!("Processing LLM request");
+```
+
+### `set_a2a_context_scoped`
+
+```rust
+fn set_a2a_context_scoped(message_type: &str, from_agent: &str, to_agent: &str, component: &str) -> A2aContextGuard
+```
+
+Set A2A context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+
+### `set_request_context_scoped`
+
+```rust
+fn set_request_context_scoped(request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> RequestContextGuard
+```
+
+Set request context with RAII guard
+
+Returns a guard that will automatically clear the context when dropped.
+
+### `set_all_contexts_scoped`
+
+```rust
+fn set_all_contexts_scoped(model: &str, component: &str, message_type: &str, from_agent: &str, to_agent: &str, a2a_component: &str, request_id: &str, user_id: Option<&str>, session_id: Option<&str>) -> AllContextsGuard
+```
+
+Set all contexts with combined RAII guard
+
+Returns a guard that will automatically clear all contexts when dropped.
+This is the most comprehensive option for complex operations.
+
+### `with_llm_context`
+
+```rust
+fn with_llm_context<F, R>(model: &str, component: &str, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with LLM context, automatically clearing when done
+
+This is the most secure pattern as it guarantees context cleanup
+even if the closure panics or returns early.
+
+# Example
+```rust,ignore
+let result = with_llm_context("gpt-4", "openai_client", || {
+    log::info!("This has LLM context");
+    process_llm_request()
+});
+```
+
+### `with_a2a_context`
+
+```rust
+fn with_a2a_context<F, R>(message_type: &str, from_agent: &str, to_agent: &str, component: &str, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with A2A context, automatically clearing when done
+
+### `with_request_context`
+
+```rust
+fn with_request_context<F, R>(request_id: &str, user_id: Option<&str>, session_id: Option<&str>, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with request context, automatically clearing when done  
+
+### `with_all_contexts`
+
+```rust
+fn with_all_contexts<F, R>(model: &str, component: &str, message_type: &str, from_agent: &str, to_agent: &str, a2a_component: &str, request_id: &str, user_id: Option<&str>, session_id: Option<&str>, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a closure with all contexts, automatically clearing when done
+
+This is the most comprehensive scoped API that sets all contexts
+and guarantees cleanup regardless of how the closure exits.
+
+### `init_context_integration`
+
+```rust
+fn init_context_integration()
+```
+
+Initialize structured_logging context management integration
+
+Call this once during application startup to enable advanced RAII context
+management features in structured_logging.
+
+# Example
+```rust,ignore
+use structured_logging::context_adapter::init_context_integration;
+init_context_integration();
+let _guard = set_llm_context_scoped("gpt-4", "my_component");
+log::info!("This log will have LLM context automatically");
+```

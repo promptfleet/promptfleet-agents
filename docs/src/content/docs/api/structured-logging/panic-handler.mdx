@@ -1,0 +1,178 @@
+---
+title: "panic_handler"
+description: "Structured panic logging for downstream observability systems"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Structured panic logging for downstream observability systems
+
+This module provides structured panic logging that integrates with observability
+infrastructure like Grafana, focusing purely on capturing panic information
+in structured format for monitoring and analysis.
+
+## Features
+- 🔥 **Structured Panic Logging**: Detailed panic information in structured JSON format
+- 📊 **Panic Analytics**: Basic statistics for monitoring patterns
+- 🔗 **Context Preservation**: Maintains trace context for correlation
+- 🎯 **WASM Compatibility**: Works in WebAssembly environments
+- 🏥 **Downstream Integration**: Designed for Grafana and monitoring stacks
+
+## Structs
+
+### `PanicHandlerConfig`
+
+Configuration for panic logging
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_structured_logging` | `bool` | Enable structured panic logging |
+| `enable_analytics` | `bool` | Enable panic analytics and pattern detection |
+| `enable_context_preservation` | `bool` | Enable context preservation across panics |
+
+### `StructuredPanicInfo`
+
+Structured panic information for downstream systems
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `String` | Panic message |
+| `location` | `Option&lt;String&gt;` | Panic location (file:line:column) |
+| `thread_info` | `ThreadInfo` | Thread name and ID |
+| `timestamp` | `String` | Timestamp when panic occurred (ISO 8601) |
+| `severity` | `PanicSeverity` | Panic severity classification |
+| `trace_context` | `Option&lt;domain::TraceContext&gt;` | Preserved trace context |
+| `enhanced_context` | `Option&lt;EnhancedTraceContext&gt;` | Enhanced correlation context |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Additional metadata |
+
+### `ThreadInfo`
+
+Thread information for panic context
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `Option&lt;String&gt;` |  |
+| `id` | `String` |  |
+| `is_main` | `bool` |  |
+
+### `PanicStats`
+
+Panic statistics for monitoring
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_panics` | `u64` | Total panics encountered |
+| `panics_by_severity` | `HashMap&lt;String, u64&gt;` | Panics by severity |
+| `panics_by_thread` | `HashMap&lt;String, u64&gt;` | Panics by thread |
+| `common_patterns` | `Vec&lt;PanicPattern&gt;` | Most common panic patterns |
+| `last_panic_timestamp` | `Option&lt;String&gt;` | Last panic timestamp |
+
+### `PanicPattern`
+
+Panic pattern for analytics
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pattern` | `String` |  |
+| `count` | `u64` |  |
+| `first_seen` | `String` |  |
+| `last_seen` | `String` |  |
+
+### `PanicHandler`
+
+Structured panic logger for downstream systems
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: PanicHandlerConfig) -> Result<Self>
+```
+
+Create a new panic handler
+
+#### `install`
+
+```rust
+fn install(config: PanicHandlerConfig) -> Result<()>
+```
+
+Install the panic handler globally
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> Result<PanicStats>
+```
+
+Get current panic statistics
+
+#### `reset_stats`
+
+```rust
+fn reset_stats(&self) -> Result<()>
+```
+
+Reset panic statistics
+
+## Enums
+
+### `PanicSeverity`
+
+Panic severity levels for classification
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Low` | Low severity panic |
+| `Medium` | Medium severity panic   |
+| `High` | High severity panic |
+| `Critical` | Critical severity panic |
+
+## Functions
+
+### `install_panic_handler`
+
+```rust
+fn install_panic_handler() -> Result<()>
+```
+
+Install panic handler with default configuration
+
+### `install_panic_handler_with_config`
+
+```rust
+fn install_panic_handler_with_config(config: PanicHandlerConfig) -> Result<()>
+```
+
+Install panic handler with custom configuration
+
+### `get_panic_stats`
+
+```rust
+fn get_panic_stats() -> Result<PanicStats>
+```
+
+Get panic statistics if handler is installed
+
+### `reset_panic_stats`
+
+```rust
+fn reset_panic_stats() -> Result<()>
+```
+
+Reset panic statistics if handler is installed

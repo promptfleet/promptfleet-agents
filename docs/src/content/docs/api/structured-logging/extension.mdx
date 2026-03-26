@@ -1,0 +1,267 @@
+---
+title: "extension"
+description: "Enhanced configuration and management for structured logging"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Enhanced configuration and management for structured logging
+
+This module provides core configuration and management functionality for structured logging
+without external extension system dependencies.
+
+## Structs
+
+### `EnhancedObservabilityConfig`
+
+Enhanced configuration for structured logging with performance and convenience features
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `base` | `observability_core::ObservabilityConfig` | Base observability configuration |
+| `performance` | `PerformanceConfig` | Performance optimization settings |
+| `correlation` | `CorrelationConfig` | Correlation enhancement settings |
+| `convenience` | `ConvenienceConfig` | Convenience feature settings |
+| `panic_handler` | `PanicHandlerConfig` | Panic handling configuration |
+
+**Methods**
+
+#### `with_base`
+
+```rust
+fn with_base(base: ObservabilityConfig) -> Self
+```
+
+Create enhanced config with specified base config
+
+#### `with_panic_handler`
+
+```rust
+fn with_panic_handler(self, config: PanicHandlerConfig) -> Self
+```
+
+Set panic handler configuration  
+
+#### `with_all_performance_features`
+
+```rust
+fn with_all_performance_features(self) -> Self
+```
+
+Enable all performance features (feature-gated)
+
+#### `with_no_performance_features`
+
+```rust
+fn with_no_performance_features(self) -> Self
+```
+
+Disable all performance features (feature-gated)
+
+#### `to_base_config`
+
+```rust
+fn to_base_config(&self) -> ObservabilityConfig
+```
+
+Convert to base observability config
+
+#### `validate`
+
+```rust
+fn validate(&self) -> Result<()>
+```
+
+Validate configuration
+
+#### `to_json`
+
+```rust
+fn to_json(&self) -> Result<String>
+```
+
+Serialize configuration to JSON
+
+#### `from_json`
+
+```rust
+fn from_json(json: &str) -> Result<Self>
+```
+
+Deserialize configuration from JSON
+
+### `PerformanceConfig`
+
+Performance optimization configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_string_interning` | `bool` | Enable string interning for common log field values |
+| `string_interner_capacity` | `usize` | Initial capacity for string interner |
+| `enable_buffer_pooling` | `bool` | Enable buffer pooling for log formatting |
+| `buffer_pool_size` | `usize` | Initial buffer pool size |
+| `buffer_capacity` | `usize` | Individual buffer capacity in bytes |
+| `enable_fast_paths` | `bool` | Enable zero-allocation fast paths for hot operations |
+| `enable_wasm_optimizations` | `bool` | Enable WASM-specific memory optimizations |
+
+### `CorrelationConfig`
+
+Correlation enhancement configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_baggage` | `bool` | Enable W3C baggage support |
+| `max_baggage_size` | `usize` | Maximum baggage size in bytes |
+| `enable_scoped_context` | `bool` | Enable scoped context management |
+| `max_context_depth` | `usize` | Maximum context nesting depth |
+| `enable_auto_propagation` | `bool` | Enable automatic context propagation |
+
+### `ConvenienceConfig`
+
+Convenience feature configuration
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enable_llm_logging` | `bool` | Enable LLM operation logging |
+| `enable_template_logging` | `bool` | Enable template rendering logging |
+| `enable_a2a_logging` | `bool` | Enable A2A message logging |
+| `enable_convenience_macros` | `bool` | Enable convenience macros |
+| `enable_domain_fields` | `bool` | Enable domain-specific field extraction |
+
+### `PerformanceExtension`
+
+Enhanced observability manager with performance and convenience features
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: EnhancedObservabilityConfig) -> Result<Self>
+```
+
+Create new enhanced extension
+
+#### `initialize`
+
+```rust
+fn initialize(&mut self) -> Result<()>
+```
+
+Initialize all configured features
+
+#### `is_performance_enabled`
+
+```rust
+fn is_performance_enabled(&self) -> bool
+```
+
+Check if performance features are enabled
+
+#### `is_correlation_enabled`
+
+```rust
+fn is_correlation_enabled(&self) -> bool
+```
+
+Check if correlation features are enabled
+
+#### `is_convenience_enabled`
+
+```rust
+fn is_convenience_enabled(&self) -> bool
+```
+
+Check if convenience features are enabled
+
+#### `base`
+
+```rust
+fn base(&self) -> &ObservabilityManager
+```
+
+Get base observability manager
+
+#### `config`
+
+```rust
+fn config(&self) -> &EnhancedObservabilityConfig
+```
+
+Get enhanced configuration
+
+#### `process_log_entry`
+
+```rust
+fn process_log_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry through all enabled features
+
+#### `get_performance_stats`
+
+```rust
+fn get_performance_stats(&self) -> Option<PerformanceStats>
+```
+
+Get performance statistics (if enabled)
+
+#### `reset_performance_stats`
+
+```rust
+fn reset_performance_stats(&self) -> Result<()>
+```
+
+Reset performance statistics (if enabled)
+
+#### `get_panic_stats`
+
+```rust
+fn get_panic_stats(&self) -> Result<PanicStats>
+```
+
+Get panic statistics if panic handler is enabled
+
+#### `reset_panic_stats`
+
+```rust
+fn reset_panic_stats(&self) -> Result<()>
+```
+
+Reset panic statistics if panic handler is enabled
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> Vec<&''static str>
+```
+
+Get manager capabilities
+
+## Functions
+
+### `create_performance_extension`
+
+```rust
+fn create_performance_extension(config: EnhancedObservabilityConfig) -> Result<PerformanceExtension>
+```
+
+Create performance extension from configuration
+
+### `create_performance_extension_from_config`
+
+```rust
+fn create_performance_extension_from_config(config_path: &str) -> Result<PerformanceExtension>
+```
+
+Create performance extension from configuration file

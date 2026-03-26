@@ -1,0 +1,296 @@
+---
+title: "correlation"
+description: "Correlation enhancement features for structured logging"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Correlation enhancement features for structured logging
+
+## Structs
+
+### `EnhancedTraceContext`
+
+Enhanced trace context with additional correlation capabilities
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `base` | `domain::TraceContext` | Base trace context from observability_core |
+| `baggage` | `HashMap&lt;String, String&gt;` | W3C baggage for cross-cutting concerns |
+| `scoped_contexts` | `Vec&lt;ScopedContext&gt;` | Scoped context stack for nested operations |
+| `correlation_metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Correlation metadata |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(base: TraceContext) -> Self
+```
+
+Create new enhanced trace context
+
+#### `from_w3c_headers`
+
+```rust
+fn from_w3c_headers(trace_parent: &str, _trace_state: Option<&str>) -> Result<Self>
+```
+
+Create from W3C trace headers
+
+#### `add_baggage`
+
+```rust
+fn add_baggage(&mut self, key: String, value: String) -> Result<()>
+```
+
+Add baggage item
+
+#### `get_baggage`
+
+```rust
+fn get_baggage(&self, key: &str) -> Option<&String>
+```
+
+Get baggage item
+
+#### `remove_baggage`
+
+```rust
+fn remove_baggage(&mut self, key: &str) -> Option<String>
+```
+
+Remove baggage item
+
+#### `push_scope`
+
+```rust
+fn push_scope(&mut self, scope_name: String, metadata: HashMap<String, Value>) -> Result<String>
+```
+
+Push new scoped context
+
+#### `pop_scope`
+
+```rust
+fn pop_scope(&mut self) -> Option<ScopedContext>
+```
+
+Pop current scoped context
+
+#### `current_scope`
+
+```rust
+fn current_scope(&self) -> Option<&ScopedContext>
+```
+
+Get current scope
+
+#### `add_correlation_metadata`
+
+```rust
+fn add_correlation_metadata(&mut self, key: String, value: Value)
+```
+
+Add correlation metadata
+
+#### `get_correlation_metadata`
+
+```rust
+fn get_correlation_metadata(&self) -> &HashMap<String, Value>
+```
+
+Get correlation metadata
+
+#### `to_baggage_header`
+
+```rust
+fn to_baggage_header(&self) -> String
+```
+
+Convert to W3C baggage header format
+
+#### `from_baggage_header`
+
+```rust
+fn from_baggage_header(&mut self, baggage_header: &str) -> Result<()>
+```
+
+Parse from W3C baggage header
+
+### `ScopedContext`
+
+Scoped context for nested operations
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scope_id` | `String` | Unique identifier for this scope |
+| `scope_name` | `String` | Scope name (e.g., "llm_request", "template_render") |
+| `start_time` | `String` | When this scope started (as timestamp string for WASM compatibility) |
+| `parent_scope_id` | `Option&lt;String&gt;` | Parent scope ID (if nested) |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Scope-specific metadata |
+
+### `BaggageManager`
+
+W3C baggage support manager
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `validate_baggage_item`
+
+```rust
+fn validate_baggage_item(&self, key: &str, value: &str) -> Result<()>
+```
+
+Validate baggage item
+
+#### `add_system_baggage`
+
+```rust
+fn add_system_baggage(&self, ctx: &mut EnhancedTraceContext, operation: &str) -> Result<()>
+```
+
+Add system baggage for agent operations
+
+### `ScopedContextManager`
+
+Scoped context manager for nested operations
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `enter_scope`
+
+```rust
+fn enter_scope(&self, trace_id: &str, scope_name: String, metadata: HashMap<String, Value>) -> Result<String>
+```
+
+Enter a new scope
+
+#### `exit_scope`
+
+```rust
+fn exit_scope(&self, trace_id: &str) -> Result<Option<ScopedContext>>
+```
+
+Exit current scope
+
+#### `current_scope`
+
+```rust
+fn current_scope(&self, trace_id: &str) -> Result<Option<ScopedContext>>
+```
+
+Get current scope
+
+#### `register_context`
+
+```rust
+fn register_context(&self, ctx: EnhancedTraceContext) -> Result<()>
+```
+
+Register new trace context
+
+#### `unregister_context`
+
+```rust
+fn unregister_context(&self, trace_id: &str) -> Result<()>
+```
+
+Unregister trace context
+
+### `W3CBaggageSupport`
+
+W3C baggage support utilities
+
+**Methods**
+
+#### `extract_from_headers`
+
+```rust
+fn extract_from_headers(headers: &HashMap<String, String>) -> Result<HashMap<String, String>>
+```
+
+Extract baggage from HTTP headers
+
+#### `inject_into_headers`
+
+```rust
+fn inject_into_headers(baggage: &HashMap<String, String>, headers: &mut HashMap<String, String>)
+```
+
+Inject baggage into HTTP headers
+
+### `CorrelationProcessor`
+
+Correlation processor for log entries
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: CorrelationConfig) -> Self
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+Process log entry to add correlation information
+
+### `CorrelationManager`
+
+Correlation manager that coordinates all correlation features
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: &CorrelationConfig) -> Result<Self>
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+
+#### `baggage_manager`
+
+```rust
+fn baggage_manager(&self) -> &BaggageManager
+```
+
+
+#### `scoped_context_manager`
+
+```rust
+fn scoped_context_manager(&self) -> &ScopedContextManager
+```
+

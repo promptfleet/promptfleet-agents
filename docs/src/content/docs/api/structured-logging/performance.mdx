@@ -1,0 +1,201 @@
+---
+title: "performance"
+description: "Performance optimization features for structured logging"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Performance optimization features for structured logging
+
+## Structs
+
+### `PerformanceStats`
+
+Performance statistics for monitoring optimization impact
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entries_processed` | `u64` | Total entries processed |
+| `fast_path_time` | `web_time::Duration` | Total time spent in fast paths |
+| `standard_path_time` | `web_time::Duration` | Total time spent in standard paths |
+| `string_interner_hits` | `u64` | Number of string interning hits |
+| `string_interner_misses` | `u64` | Number of string interning misses |
+| `buffer_pool_hits` | `u64` | Buffer pool hits |
+| `buffer_pool_misses` | `u64` | Buffer pool misses (new allocations) |
+| `bytes_written` | `u64` | Total bytes written |
+| `avg_processing_time_ns` | `u64` | Average entry processing time |
+
+**Methods**
+
+#### `string_interner_hit_ratio`
+
+```rust
+fn string_interner_hit_ratio(&self) -> f64
+```
+
+Calculate string interning hit ratio
+
+#### `buffer_pool_hit_ratio`
+
+```rust
+fn buffer_pool_hit_ratio(&self) -> f64
+```
+
+Calculate buffer pool hit ratio
+
+#### `fast_path_ratio`
+
+```rust
+fn fast_path_ratio(&self) -> f64
+```
+
+Calculate fast path usage ratio
+
+### `StringInterningProcessor`
+
+String interner for common log field values
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(capacity: usize) -> Result<Self>
+```
+
+
+#### `intern_string`
+
+```rust
+fn intern_string(&self, value: &str) -> Result<String>
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+
+### `BufferPool`
+
+Buffer pool for reusing formatting buffers
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(pool_size: usize, buffer_capacity: usize) -> Self
+```
+
+
+#### `get_buffer`
+
+```rust
+fn get_buffer(&self) -> Result<Vec<u8>>
+```
+
+
+#### `return_buffer`
+
+```rust
+fn return_buffer(&self, buffer: Vec<u8>) -> Result<()>
+```
+
+
+### `FastPathLogger`
+
+Fast path logger for hot code paths with minimal allocations
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: &PerformanceConfig) -> Result<Self>
+```
+
+
+#### `log_llm_request_fast`
+
+```rust
+fn log_llm_request_fast(&self, model: &str, duration_ms: u64, tokens: u32, status: &str) -> Result<Vec<u8>>
+```
+
+Fast path for LLM request logging with minimal allocations
+
+#### `log_a2a_message_fast`
+
+```rust
+fn log_a2a_message_fast(&self, message_type: &str, from_agent: &str, to_agent: &str, duration_ms: Option<u64>) -> Result<Vec<u8>>
+```
+
+Fast path for A2A message logging
+
+### `OptimizedWasmStdoutAdapter`
+
+Optimized WASM stdout adapter with performance enhancements
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: PerformanceConfig) -> Result<Self>
+```
+
+
+#### `write_entry_optimized`
+
+```rust
+fn write_entry_optimized(&self, entry: &LogEntry) -> Result<()>
+```
+
+Write log entry using fast path if possible
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> Result<PerformanceStats>
+```
+
+
+### `PerformanceManager`
+
+Performance manager that coordinates all optimization features
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: &PerformanceConfig) -> Result<Self>
+```
+
+
+#### `process_entry`
+
+```rust
+fn process_entry(&self, entry: LogEntry) -> Result<LogEntry>
+```
+
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> PerformanceStats
+```
+
+
+#### `reset_stats`
+
+```rust
+fn reset_stats(&self) -> Result<()>
+```
+

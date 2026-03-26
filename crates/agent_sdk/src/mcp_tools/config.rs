@@ -54,7 +54,7 @@ pub struct McpServerEntry {
     #[serde(default)]
     pub command: Option<String>,
 
-    /// Arguments to the command (e.g., ["-y", "tavily-mcp@latest"])
+    /// Arguments to the command (e.g. pass `-y` and `tavily-mcp@latest` as separate entries)
     #[serde(default)]
     pub args: Vec<String>,
 

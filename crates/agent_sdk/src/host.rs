@@ -1,3 +1,7 @@
+//! Compose protocol adapters (A2A, optional AG-UI) around a shared [`crate::Agent`].
+//!
+//! [`AgentHostBuilder`] constructs an [`AgentHost`] with at least one enabled adapter.
+
 use std::sync::Arc;
 
 use crate::{Agent, SdkError, SdkResult};

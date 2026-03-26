@@ -1,3 +1,7 @@
+//! Typed interaction payloads for human-in-the-loop flows (questions, confirmations).
+//!
+//! See [`InteractionRequest`] and [`InteractionResponse`] for the wire shape consumed by adapters.
+
 use serde::{Deserialize, Serialize};
 
 /// Interaction kinds supported by the typed interaction contract.

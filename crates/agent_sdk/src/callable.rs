@@ -1,3 +1,7 @@
+//! JSON-in / JSON-out async callable used by protocol-neutral tooling.
+//!
+//! See [`CallableSkill`].
+
 use std::pin::Pin;
 
 use serde_json::Value;

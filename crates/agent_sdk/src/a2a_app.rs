@@ -1,3 +1,8 @@
+//! A2A application facade: owns the HTTP server wiring around a shared [`crate::Agent`].
+//!
+//! Construct via [`A2aApp::from_agent`] or [`A2aApp::from_shared_agent`] when the `a2a-server`
+//! feature is enabled.
+
 #[cfg(feature = "a2a-server")]
 use std::sync::Arc;
 

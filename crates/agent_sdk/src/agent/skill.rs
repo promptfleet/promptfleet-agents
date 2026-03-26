@@ -672,8 +672,8 @@ pub fn build_wired_read_skill_tool(registry: Arc<SkillRegistry>) -> Option<super
 
 /// Fluent builder for skill registration.
 ///
-/// Created via [`SkillRegistry::add_skill`] / [`Agent::add_skill`], or [`SkillRegistry::skill`] /
-/// [`Agent::skill`] when providing a handler. Finalize with [`.register()`](Self::register).
+/// Created via [`SkillRegistry::add_skill`] / [`crate::Agent::add_skill`], or [`SkillRegistry::skill`] /
+/// [`crate::Agent::skill`] when providing a handler. Finalize with [`.register()`](Self::register).
 pub struct SkillEntryBuilder<'a> {
     registry: &'a mut SkillRegistry,
     name: String,

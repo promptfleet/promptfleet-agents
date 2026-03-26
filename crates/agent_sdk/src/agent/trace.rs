@@ -77,7 +77,7 @@ pub enum AgentTraceEvent {
     /// In the streaming path this is emitted immediately when the LLM
     /// signals a tool call (before argument deltas arrive). The
     /// `arguments` field is `Value::Null` at this point; the full
-    /// arguments are available in [`ToolCallArgsCompleted`].
+    /// arguments are available in [`AgentTraceEvent::ToolCallArgsCompleted`].
     ToolCallStarted {
         /// Tool call index within this turn (for parallel calls)
         index: u32,
@@ -113,9 +113,9 @@ pub enum AgentTraceEvent {
 
     /// A tool call finished execution.
     ToolCallCompleted {
-        /// Tool call index (matches [`ToolCallStarted::index`])
+        /// Tool call index (matches the `index` field on [`AgentTraceEvent::ToolCallStarted`])
         index: u32,
-        /// Unique ID (matches [`ToolCallStarted::id`])
+        /// Unique ID (matches the `id` field on [`AgentTraceEvent::ToolCallStarted`])
         id: String,
         /// Function name
         name: String,

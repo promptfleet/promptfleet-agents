@@ -138,7 +138,9 @@ impl IntoLlmStreamInvoker for Arc<LlmClient> {
 /// temperature stripped and max_tokens remapped to max_completion_tokens.
 #[derive(Debug, Clone, Default)]
 pub struct LlmRequestDefaults {
+    /// Sampling temperature; merged into the request when set.
     pub temperature: Option<f32>,
+    /// Maximum completion tokens; merged when set (may be remapped by model profiles).
     pub max_tokens: Option<u32>,
     /// Extra top-level JSON fields (e.g. reasoning_effort, chat_template_kwargs).
     /// These are merged last and can override anything.
@@ -152,25 +154,32 @@ pub struct LlmRequestDefaults {
 // Policy
 // ---------------------------------------------------------------------------
 
-/// Minimal policy for MVP
+/// Tool-loop limits, checkpoint behavior, and context-window policy for the LLM orchestrator.
 #[derive(Debug, Clone)]
 pub struct LlmPolicy {
+    /// When true, require a finalization checkpoint turn when the model would otherwise stop.
     pub finalize_required: bool,
+    /// Stop after this many consecutive tool failures.
     pub max_failed_tool_calls: usize,
-    // New decoupled limits
+    /// Cap total LLM turns; `None` means no limit.
     pub max_turns: Option<usize>,
+    /// Cap total tool invocations; `None` means no limit.
     pub max_tool_calls: Option<usize>,
+    /// Abort after this many consecutive turns without progress; `None` disables.
     pub max_no_progress_turns: Option<usize>,
+    /// Wall-clock timeout for the whole run (milliseconds); `None` disables.
     pub wall_clock_timeout_ms: Option<u64>,
-    // checkpoint_task gating (runtime-configurable)
+    /// How `checkpoint_task` is exposed to the protocol (see [`crate::runtime_vars::CheckpointMode`]).
     pub checkpoint_mode: CheckpointMode,
+    /// Allow plain message responses during checkpoint turns.
     pub checkpoint_allow_message_response: bool,
+    /// Mirror internal agent state into task metadata during checkpoints.
     pub checkpoint_mirror_internal_state_to_task_meta: bool,
     /// Maximum tokens for the context window (input messages + tools).
     ///
     /// When set, the orchestrator trims the message history using a sliding
     /// window before each LLM call to stay within this budget. Derived from
-    /// [`ModelCapabilities::context_window`] minus output reservation.
+    /// [`llm_client::profile::ModelCapabilities::context_window`] minus output reservation.
     ///
     /// When `None`, messages accumulate unboundedly (legacy behavior).
     pub max_context_tokens: Option<u32>,

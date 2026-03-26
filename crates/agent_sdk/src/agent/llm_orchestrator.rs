@@ -1,14 +1,13 @@
 //! LLM orchestration over the protocol-free engine.
 //!
 //! This module provides runtime orchestration plus compatibility wrappers:
-//! - `crate::a2a::execute_a2a`: adapter-owned request-response compatibility entry point
+//! - [`crate::a2a::execute_a2a`]: adapter-owned request-response compatibility entry point
 //! - [`run_tools_loop_stream`]: native-only streaming entry point with trace events
 //! - [`run_tools_loop_agnostic`]: protocol-agnostic streaming entry point
 //!
-//! The core tool-calling loop lives in [`engine::core_loop`](super::engine::core_loop).
-//! LLM invoker traits and policy configuration are in [`llm_invoker`](super::llm_invoker)
-//! and re-exported here for backward compatibility.
-//! Sentinel-tool finalization logic is in [`finalization`](super::finalization).
+//! The core tool-calling loop lives in [`crate::agent::engine`]. LLM invoker traits and policy
+//! types are re-exported here (for example [`LlmPolicy`], [`LlmInvoker`]). Sentinel-tool
+//! finalization helpers are crate-internal.
 
 // ── Re-exports ──────────────────────────────────────────────────────────
 //
@@ -38,24 +37,25 @@ use std::sync::Arc;
 // Native-only: streaming tools loop over ToolEngine core
 // =========================================================================
 
-/// Execute a streaming tools loop that yields [`AgentTraceEvent`]s in
-/// real-time.
+/// Execute a streaming tools loop that yields [`crate::agent::trace::AgentTraceEvent`] values in
+/// real time.
 ///
-/// This is the streaming counterpart of [`run_tools_loop`]. It consumes
+/// This is the streaming counterpart of [`run_tools_loop_agnostic`]. It consumes
 /// an [`LlmStreamInvoker`] and yields trace events through a channel as
 /// the LLM generates tokens and tools are executed.
 ///
-/// The returned [`AgentTraceStream`] completes when the agent finishes
-/// (either with [`AgentTraceEvent::Completed`] or [`Failed`]).
+/// The returned [`crate::agent::trace::AgentTraceStream`] completes when the agent finishes
+/// (either with [`crate::agent::trace::AgentTraceEvent::Completed`] or
+/// [`crate::agent::trace::AgentTraceEvent::Failed`]).
 ///
 /// # Implementation
 ///
 /// This is a thin runtime wrapper that:
 /// 1. Builds OpenAI-format messages from `MessageContext` / `TaskContext`
 /// 2. Converts `LlmPolicy` to `EngineConfig`
-/// 3. Delegates to [`engine::core_loop::execute`] — the single source of truth
+/// 3. Delegates to the engine core loop (see [`crate::agent::engine`]) — the single source of truth
 ///
-/// # Differences from `run_tools_loop`
+/// # Differences from [`run_tools_loop_agnostic`]
 ///
 /// - Uses streaming LLM calls (real SSE from the provider)
 /// - Emits `ContentDelta` / `ReasoningDelta` per-token

@@ -4,7 +4,8 @@
 
 The core contract is:
 
-- build an [`Agent`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html)
+- build an [`Agent`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html) with [`AgentBuilder`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.AgentBuilder.html) (or [`Agent::new_runtime`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.new_runtime) for minimal defaults)
+- register skills with [`Agent::add_skill`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.add_skill) / [`SkillEntryBuilder::handler`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.SkillEntryBuilder.html#method.handler), or the shorthand [`Agent::skill`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.skill)
 - add A2A with `agent_sdk::a2a`
 - add native host composition with `AgentHostBuilder`
 
@@ -42,6 +43,30 @@ fn build_agent() -> SdkResult<()> {
     Ok(())
 }
 ```
+
+### Skills (fluent, handler optional)
+
+```rust,no_run
+use agent_sdk::{AgentBuilder, SdkResult};
+use serde_json::json;
+
+fn build_agent() -> SdkResult<()> {
+    let mut agent = AgentBuilder::new("my-agent")?.build()?;
+    agent
+        .add_skill("echo")
+        .handler(|params| async move { Ok(json!({ "echo": params })) })
+        .register()?;
+    Ok(())
+}
+```
+
+### Which features?
+
+- **Runtime + tools only:** `agent-core`
+- **Built-in LLM tool loop:** add `llm-engine`
+- **A2A wire + server:** add `a2a-server` / `a2a-client` as needed
+- **AG-UI streaming (native):** add `event-stream` and use `AgentHostBuilder::with_agui`
+- **Opinionated bundle:** `pf-agent` pulls the common platform stack; trim with default features off if you need a smaller graph
 
 ### Native Host Composition
 

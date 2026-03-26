@@ -36,17 +36,20 @@
 //! ### Core Agent
 //!
 //! ```rust,no_run
-//! use agent_sdk::{Agent, error::SdkResult};
-//! use serde_json::{json, Value};
+//! use agent_sdk::{AgentBuilder, error::SdkResult};
+//! use serde_json::json;
 //!
 //! #[tokio::main]
 //! async fn main() -> SdkResult<()> {
-//!     let mut agent = Agent::new_runtime("weather-agent")?;
-//!     
-//!     agent.skill("get_weather", |params| async move {
-//!         let location = params["location"].as_str().unwrap_or("unknown");
-//!         Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
-//!     }).register()?;
+//!     let mut agent = AgentBuilder::new("weather-agent")?.build()?;
+//!
+//!     agent
+//!         .add_skill("get_weather")
+//!         .handler(|params| async move {
+//!             let location = params["location"].as_str().unwrap_or("unknown");
+//!             Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
+//!         })
+//!         .register()?;
 //!
 //!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
 //!
@@ -57,8 +60,8 @@
 //! ### Migration from older SDK snapshots
 //!
 //! - Use [`AgentBuilder::new`] or [`AgentBuilder::from_config`] instead of crate-root `new`/`new_runtime` helpers (removed).
-//! - Use [`Agent::configure_llm_runtime`] instead of `set_llm_tools_message_handler_configured` / `_with`.
-//! - Use [`SkillEntryBuilder`] via [`Agent::add_skill`] for optional handler + full metadata.
+//! - Use [`crate::Agent::configure_llm_runtime`] instead of `set_llm_tools_message_handler_configured` / `_with`.
+//! - Use [`SkillEntryBuilder`] via [`crate::Agent::add_skill`] for optional handler + full metadata.
 //!
 //! ### Native Host Composition
 //!
@@ -189,7 +192,7 @@ pub fn new_client(endpoint: &str) -> Result<a2a::A2aClient, SdkError> {
 /// use agent_sdk::a2a_serve;
 ///
 /// a2a_serve! {
-///     Agent::new_runtime("my-agent")?
+///     AgentBuilder::new("my-agent")?.build()?
 ///         .skill("echo", |params| async move {
 ///             Ok(json!({"echo": params}))
 ///         }).register()?
@@ -202,12 +205,13 @@ pub fn new_client(endpoint: &str) -> Result<a2a::A2aClient, SdkError> {
 /// fn handle_request(req: spin_sdk::http::Request) -> anyhow::Result<spin_sdk::http::Response> {
 ///     static APP: std::sync::OnceLock<agent_sdk::a2a::A2aApp> = std::sync::OnceLock::new();
 ///     let app = APP.get_or_init(|| {
-///         let agent = Agent::new_runtime("my-agent")
-///             .and_then(|mut a| {
-///                 a.skill("echo", |params| async move {
+///         let agent = AgentBuilder::new("my-agent")
+///             .and_then(|builder| {
+///                 let mut agent = builder.build()?;
+///                 agent.skill("echo", |params| async move {
 ///                     Ok(json!({"echo": params}))
 ///                 }).register()?;
-///                 Ok(a)
+///                 Ok(agent)
 ///             })
 ///             .expect("Failed to initialize agent");
 ///         agent_sdk::a2a::app(agent).expect("Failed to initialize A2A app")

@@ -1,5 +1,24 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — `agent_sdk` Phase 4: rustdoc (zero warnings) + crate/README docs
+
+### Changes
+- **Rustdoc**: resolved intra-doc links in `llm_orchestrator`, `trace`, `skill`, `lib`; MCP `mod`/`config`/`web_search`; `LlmPolicy` / `LlmRequestDefaults` field docs; avoided private-module links.
+- **Module docs**: `host.rs`, `interaction.rs`, `callable.rs`, `a2a_app.rs` (`agui.rs` already had a module banner).
+- **`lib.rs`**: quick start uses **`AgentBuilder::new`**, **`add_skill`**, **`handler`**; migration bullets use **`crate::Agent::...`**; **`a2a_serve`** examples use **`AgentBuilder`** and a correct `build()` + `skill().register()` expansion sketch.
+- **`crates/agent_sdk/README.md`**: core contract bullets (builder + skill APIs), fluent skill sample, short **Which features?** guide.
+
+### Files modified
+- `crates/agent_sdk/src/agent/llm_orchestrator.rs`, `trace.rs`, `llm_invoker.rs`, `skill.rs`, `lib.rs`, `host.rs`, `interaction.rs`, `callable.rs`, `a2a_app.rs`, `mcp_tools/mod.rs`, `mcp_tools/config.rs`, `mcp_tools/web_search.rs`
+- `crates/agent_sdk/README.md`
+
+### Tests
+- `cargo doc -p agent_sdk --no-deps --all-features`: **0 warnings**
+- `cargo test -p agent_sdk --all-features`: **all passed** (including doctests)
+
+### Notes
+- `mcp_tools` rust example remains `rust,ignore` (doctest skipped by design).
+
 ## 2026-03-26 — `agent_sdk` assessment: `SkillEntryBuilder`, `configure_llm_runtime`, `AgentBuilder` constructors
 
 ### Changes
@@ -23,7 +42,7 @@
 - `cargo test -p agent_sdk --all-features`: **237 lib + integration + doctests passed** (237 + 1 + 3 + … per crate targets; full run reported **all pass**)
 
 ### Notes
-- Phase 4 “17 rustdoc warnings” / extended public docs on `host`/`interaction`/`agui` were not fully applied in this pass; **`lib.rs`** migration + quick start notes added.
+- Extended rustdoc + README pass is recorded in the **`agent_sdk` Phase 4** entry above.
 
 ## 2026-03-26 — `a2a_app_ports` README: server delegation vs protocol layer
 

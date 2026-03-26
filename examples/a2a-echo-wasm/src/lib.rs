@@ -15,7 +15,11 @@ async fn handle_request(
         let config = AgentConfig::new("a2a-echo-wasm", "A2A v1.0 echo agent (WASM)")
             .with_base_url("http://127.0.0.1:3001");
         let mut agent = Agent::new_with_config(config).expect("agent init");
-        agent.add_skill("echo", "Echoes back user messages");
+        agent
+            .add_skill("echo")
+            .description("Echoes back user messages")
+            .register()
+            .expect("register echo skill");
         agent.set_message_handler(|msg_ctx, task_ctx| async move {
             let input = msg_ctx.text_content.as_deref().unwrap_or("(empty)");
             Response::message_text(

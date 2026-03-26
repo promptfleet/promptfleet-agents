@@ -48,9 +48,17 @@
 //!         Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
 //!     }).register()?;
 //!
+//!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
+//!
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ### Migration from older SDK snapshots
+//!
+//! - Use [`AgentBuilder::new`] or [`AgentBuilder::from_config`] instead of crate-root `new`/`new_runtime` helpers (removed).
+//! - Use [`Agent::configure_llm_runtime`] instead of `set_llm_tools_message_handler_configured` / `_with`.
+//! - Use [`SkillEntryBuilder`] via [`Agent::add_skill`] for optional handler + full metadata.
 //!
 //! ### Native Host Composition
 //!
@@ -136,7 +144,7 @@ pub mod sub_agent;
 pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
-    SkillBuilder, SkillCall,
+    SkillCall, SkillEntryBuilder,
 };
 pub use callable::CallableSkill;
 pub use error::{SdkError, SdkResult};
@@ -166,15 +174,6 @@ pub use a2a_tools::tools::{
 
 /// SDK version info
 pub const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Create a new runtime agent.
-pub fn new_runtime(name: &str) -> Result<AgentRuntime, SdkError> {
-    AgentRuntime::new_runtime(name)
-}
-
-pub fn new(name: &str) -> Result<AgentRuntime, SdkError> {
-    AgentRuntime::new_runtime(name)
-}
 
 /// Create a new A2A client (requires `a2a-client`)
 #[cfg(feature = "a2a-client")]
@@ -239,7 +238,7 @@ macro_rules! a2a_serve {
 pub mod prelude {
     pub use crate::{
         AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        ServiceContainer, SkillBuilder, SkillCall, SkillDefinition, TaskPhase,
+        ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder, TaskPhase,
     };
 
     pub use agent_core::ConversationContext;

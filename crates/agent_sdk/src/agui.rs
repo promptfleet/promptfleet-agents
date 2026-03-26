@@ -70,7 +70,7 @@ impl AgUiApp {
         #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
         if !agent.can_run_stream() {
             return Err(SdkError::configuration(
-                "AG-UI app requires a stream-capable LLM runtime; configure the agent with set_llm_tools_message_handler_with/configured",
+                "AG-UI app requires a stream-capable LLM runtime; configure the agent with configure_llm_runtime",
             ));
         }
 

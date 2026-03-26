@@ -117,27 +117,6 @@ impl MessageHandlerManager {
         info!("Activated Custom message handler");
     }
 
-    #[cfg(feature = "llm-engine")]
-    pub(crate) fn set_llm_tools_handler(
-        &mut self,
-        llm: Arc<dyn LlmInvoker>,
-        model: &str,
-        tools: ToolRegistry,
-        policy: Option<LlmPolicy>,
-        system_message: Option<String>,
-        history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
-    ) -> SdkResult<()> {
-        self.set_llm_tools_handler_configured(
-            llm,
-            model,
-            tools,
-            policy,
-            system_message,
-            None,
-            history_policy_runtime,
-        )
-    }
-
     /// Tools-first LLM handler with model-aware request defaults.
     ///
     /// Wires SkillRegistry into the handler closure for:

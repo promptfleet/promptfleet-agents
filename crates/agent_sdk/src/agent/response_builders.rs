@@ -60,7 +60,7 @@ impl ResponseBuilder {
     /// but doesn't have an automated handler implementation.
     pub fn create_skill_not_implemented_response(
         skill_call: &SkillCall,
-        msg_ctx: &MessageContext,
+        _msg_ctx: &MessageContext,
         task_ctx: Option<TaskContext>,
     ) -> SdkResult<RuntimeResponse> {
         let response_text = format!(

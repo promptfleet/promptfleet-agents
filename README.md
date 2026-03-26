@@ -78,7 +78,10 @@ async fn main() -> anyhow::Result<()> {
         .with_base_url("http://127.0.0.1:3000");
 
     let mut agent = Agent::new_with_config(config)?;
-    agent.add_skill("echo", "Echo user messages");
+    agent
+        .add_skill("echo")
+        .description("Echo user messages")
+        .register()?;
     agent.set_message_handler(echo_handler);
 
     let app = A2aApp::from_agent(agent)?;

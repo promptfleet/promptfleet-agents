@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(feature = "context-window"),
+    allow(dead_code, unused_imports)
+)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

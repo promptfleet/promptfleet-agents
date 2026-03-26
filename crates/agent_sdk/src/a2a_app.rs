@@ -105,3 +105,26 @@ impl A2aApp {
         result
     }
 }
+
+#[cfg(all(test, feature = "a2a-server"))]
+mod tests {
+    use super::A2aApp;
+    use crate::Agent;
+    use std::sync::Arc;
+
+    #[test]
+    fn from_shared_agent_builds() {
+        let agent = Arc::new(Agent::new_runtime("a2a-app-test").expect("agent"));
+        let app = A2aApp::from_shared_agent(agent).expect("app");
+        let _ = app;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn router_returns_axum() {
+        let agent = Arc::new(Agent::new_runtime("router-test").expect("agent"));
+        let app = A2aApp::from_shared_agent(agent).expect("app");
+        let router = app.router();
+        let _ = router;
+    }
+}

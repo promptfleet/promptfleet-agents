@@ -744,7 +744,7 @@ impl A2aClient {
     ) -> A2AResult<Value> {
         // 1. Get agent card and find skill
         let agent_card = self.fetch_remote_agent_card(agent_id).await?;
-        let skill = agent_card.get_skill(skill_id).ok_or_else(|| {
+        agent_card.get_skill(skill_id).ok_or_else(|| {
             A2AError::capability_validation_failed(format!(
                 "Skill '{}' not found in agent '{}'. Available skills: [{}]",
                 skill_id,
@@ -1077,7 +1077,7 @@ impl A2aClient {
         &self,
         agent_id: &str,
         message: Message,
-        context_id: Option<String>,
+        _context_id: Option<String>,
     ) -> A2AResult<a2a_protocol_core::data::task::Task> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -1420,5 +1420,20 @@ mod tests {
         let _ = client.list_tasks(None, None, None, None).await;
         let _ = client.agent_card().await;
         let _ = client.check_connectivity().await;
+    }
+
+    #[test]
+    fn skill_validation_error_human_readable() {
+        let err = super::SkillValidationError {
+            skill_id: "s".to_string(),
+            missing_required: vec!["a".to_string()],
+            invalid_types: vec![("f".to_string(), "num".to_string(), "str".to_string())],
+            unexpected_fields: vec!["x".to_string()],
+            expected_schema_summary: "{}".to_string(),
+        };
+        let msg = err.human_readable_message();
+        assert!(msg.contains("Missing required"));
+        assert!(msg.contains("Type errors"));
+        assert!(msg.contains("Unexpected parameters"));
     }
 }

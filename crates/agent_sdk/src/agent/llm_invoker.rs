@@ -192,3 +192,43 @@ impl Default for LlmPolicy {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{IntoLlmInvoker, IntoLlmStreamInvoker, LlmPolicy, LlmRequestDefaults};
+    use llm_client::{LlmClient, WireFormat};
+
+    #[test]
+    fn llm_policy_default() {
+        let p = LlmPolicy::default();
+        assert!(p.finalize_required);
+        assert_eq!(p.max_failed_tool_calls, 5);
+    }
+
+    #[test]
+    fn llm_request_defaults_default_empty() {
+        let d = LlmRequestDefaults::default();
+        assert!(d.temperature.is_none());
+        assert!(d.extensions.is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn llm_client_into_invokers() {
+        use llm_client::auth::ApiKeyAuth;
+        let client = LlmClient::builder(WireFormat::OpenAiCompat)
+            .base_url("http://localhost:9")
+            .auth(ApiKeyAuth::new("test-key"))
+            .build()
+            .expect("client");
+        let _ = client.clone().into_invoker();
+        let _ = std::sync::Arc::new(client).into_invoker();
+        let client2 = LlmClient::builder(WireFormat::OpenAiCompat)
+            .base_url("http://localhost:9")
+            .auth(ApiKeyAuth::new("test-key"))
+            .build()
+            .expect("client");
+        let _ = client2.clone().into_stream_invoker();
+        let _ = std::sync::Arc::new(client2).into_stream_invoker();
+    }
+}

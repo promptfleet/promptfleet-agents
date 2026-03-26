@@ -14,6 +14,7 @@ use crate::error::{SdkError, SdkResult};
 use log::{debug, error, info, trace};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -193,24 +194,20 @@ impl SkillRegistry {
         }
     }
 
-    // -- Metadata-only registration (no handler) --
+    // -- Fluent registration --
 
-    /// Register skill metadata without a handler.
-    pub fn add_skill(&mut self, skill_id: &str, description: &str) {
-        let def = SkillDefinition {
-            id: skill_id.to_string(),
-            name: skill_id.to_string(),
-            description: description.to_string(),
-            input_modes: vec!["application/json".to_string(), "text/plain".to_string()],
-            output_modes: vec!["application/json".to_string(), "text/plain".to_string()],
-            schema: None,
-            examples: None,
-            tags: None,
-            instructions: None,
-            expose: true,
-            llm_callable: false,
-        };
-        self.skill_definitions.insert(skill_id.to_string(), def);
+    /// Start registering a skill (optional handler — metadata-only if you omit `.handler()`).
+    pub fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_> {
+        SkillEntryBuilder::new(self, skill_id)
+    }
+
+    /// Register a skill with a handler (convenience — same as `add_skill(name).handler(handler)`).
+    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Value, String>> + Send + 'static,
+    {
+        self.add_skill(name).handler(handler)
     }
 
     // -- Execution --
@@ -419,16 +416,30 @@ impl SkillRegistry {
 
     // -- Builder entry point --
 
-    /// Create a skill builder for fluent registration.
-    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<'_, F, Fut>
-    where
-        F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value, String>> + Send + 'static,
-    {
-        SkillBuilder::new(self, name, handler)
-    }
+    // -- Internal registration (called by SkillEntryBuilder) --
 
-    // -- Internal registration (called by SkillBuilder) --
+    pub(crate) fn register_metadata_entry(
+        &mut self,
+        name: &str,
+        definition: SkillDefinition,
+    ) -> SdkResult<()> {
+        if name.is_empty() {
+            return Err(SdkError::invalid_input("Skill name cannot be empty"));
+        }
+        if self.skill_handlers.contains_key(name)
+            || self.skill_handlers_with_context.contains_key(name)
+            || self.skill_definitions.contains_key(name)
+        {
+            return Err(SdkError::invalid_input(format!(
+                "Skill '{}' already exists",
+                name
+            )));
+        }
+
+        self.skill_definitions.insert(name.to_string(), definition);
+        trace!("Skill '{}' registered (metadata only)", name);
+        Ok(())
+    }
 
     pub(crate) fn register_from_builder(
         &mut self,
@@ -591,7 +602,7 @@ pub fn build_read_skill_tool(registry: &SkillRegistry) -> Option<super::tools::T
             Box::pin(async move {
                 // Placeholder — the actual dispatch happens in the LLM handler closure
                 // which has access to the SkillRegistry. This executor is replaced at
-                // wiring time in set_llm_tools_handler_configured.
+                // wiring time in set_llm_tools_handler_configured / configure_llm_runtime.
                 Ok(serde_json::json!({"error": "read_skill executor not wired"}))
             })
         })),
@@ -656,16 +667,17 @@ pub fn build_wired_read_skill_tool(registry: Arc<SkillRegistry>) -> Option<super
 }
 
 // ---------------------------------------------------------------------------
-// SkillBuilder — fluent registration API
+// SkillEntryBuilder — fluent registration API (optional handler)
 // ---------------------------------------------------------------------------
 
 /// Fluent builder for skill registration.
 ///
-/// Created via `SkillRegistry::skill()` or `Agent::skill()`, finalized with `.register()`.
-pub struct SkillBuilder<'a, F, Fut> {
+/// Created via [`SkillRegistry::add_skill`] / [`Agent::add_skill`], or [`SkillRegistry::skill`] /
+/// [`Agent::skill`] when providing a handler. Finalize with [`.register()`](Self::register).
+pub struct SkillEntryBuilder<'a> {
     registry: &'a mut SkillRegistry,
     name: String,
-    handler: F,
+    handler: Option<SkillHandler>,
     display_name: Option<String>,
     description: Option<String>,
     schema: Option<Value>,
@@ -676,19 +688,14 @@ pub struct SkillBuilder<'a, F, Fut> {
     instructions: Option<String>,
     expose: bool,
     llm_callable: bool,
-    _phantom: std::marker::PhantomData<Fut>,
 }
 
-impl<'a, F, Fut> SkillBuilder<'a, F, Fut>
-where
-    F: Fn(Value) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Result<Value, String>> + Send + 'static,
-{
-    pub(crate) fn new(registry: &'a mut SkillRegistry, name: &str, handler: F) -> Self {
+impl<'a> SkillEntryBuilder<'a> {
+    pub(crate) fn new(registry: &'a mut SkillRegistry, name: &str) -> Self {
         Self {
             registry,
             name: name.to_string(),
-            handler,
+            handler: None,
             display_name: None,
             description: None,
             schema: None,
@@ -699,8 +706,21 @@ where
             instructions: None,
             expose: true,
             llm_callable: false,
-            _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Attach an async handler. Omit for metadata-only skills (discovery card + LLM awareness).
+    pub fn handler<F, Fut>(mut self, handler: F) -> Self
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Value, String>> + Send + 'static,
+    {
+        self.handler = Some(Arc::new(
+            move |params: Value| -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> {
+                Box::pin(handler(params))
+            },
+        ));
+        self
     }
 
     pub fn display_name<S: Into<String>>(mut self, name: S) -> Self {
@@ -788,39 +808,53 @@ where
 
     /// Finalize registration.
     pub fn register(self) -> SdkResult<()> {
-        let name = self.name.clone();
-        let display = self.display_name.as_deref().unwrap_or(&name);
-        let desc = self
-            .description
-            .clone()
-            .unwrap_or_else(|| format!("{}: User-defined skill", display));
+        let SkillEntryBuilder {
+            registry,
+            name,
+            handler,
+            display_name,
+            description,
+            schema,
+            examples,
+            tags,
+            input_modes,
+            output_modes,
+            instructions,
+            expose,
+            llm_callable,
+        } = self;
+
+        let display = display_name.as_deref().unwrap_or(&name);
+        let desc = description.unwrap_or_else(|| format!("{}: User-defined skill", display));
 
         let definition = SkillDefinition {
             id: name.clone(),
             name: display.to_string(),
             description: desc,
-            input_modes: self
-                .input_modes
-                .unwrap_or_else(|| vec!["application/json".to_string(), "text/plain".to_string()]),
-            output_modes: self
-                .output_modes
-                .unwrap_or_else(|| vec!["application/json".to_string(), "text/plain".to_string()]),
-            schema: self.schema,
-            examples: self.examples,
-            tags: self.tags,
-            instructions: self.instructions,
-            expose: self.expose,
-            llm_callable: self.llm_callable,
+            input_modes: input_modes.unwrap_or_else(|| {
+                vec![
+                    "application/json".to_string(),
+                    "text/plain".to_string(),
+                ]
+            }),
+            output_modes: output_modes.unwrap_or_else(|| {
+                vec![
+                    "application/json".to_string(),
+                    "text/plain".to_string(),
+                ]
+            }),
+            schema,
+            examples,
+            tags,
+            instructions,
+            expose,
+            llm_callable,
         };
 
-        let handler: SkillHandler = Arc::new(
-            move |params: Value| -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> {
-                Box::pin((self.handler)(params))
-            },
-        );
-
-        self.registry
-            .register_from_builder(&name, handler, definition)
+        match handler {
+            Some(h) => registry.register_from_builder(&name, h, definition),
+            None => registry.register_metadata_entry(&name, definition),
+        }
     }
 }
 
@@ -946,7 +980,10 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_skill_context_instructions_only() {
         let mut reg = SkillRegistry::new();
-        reg.add_skill("guide", "A guidance-only skill");
+        reg.add_skill("guide")
+            .description("A guidance-only skill")
+            .register()
+            .unwrap();
         // Manually set instructions on the definition
         if let Some(def) = reg.skill_definitions.get_mut("guide") {
             def.instructions = Some("Follow these steps carefully.".to_string());
@@ -966,7 +1003,10 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_skill_context_metadata_only_returns_none() {
         let mut reg = SkillRegistry::new();
-        reg.add_skill("empty", "No handler, no instructions");
+        reg.add_skill("empty")
+            .description("No handler, no instructions")
+            .register()
+            .unwrap();
 
         let ctx = reg.resolve_skill_context("empty", &Value::Null).await;
         assert!(ctx.is_none());

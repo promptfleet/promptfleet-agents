@@ -11,7 +11,10 @@ async fn main() -> anyhow::Result<()> {
     config.streaming = true;
 
     let mut agent = Agent::new_with_config(config)?;
-    agent.add_skill("echo", "Echoes back user messages");
+    agent
+        .add_skill("echo")
+        .description("Echoes back user messages")
+        .register()?;
     agent.set_message_handler(echo_handler);
 
     let app = A2aApp::from_agent(agent)?;

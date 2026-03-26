@@ -1,5 +1,30 @@
 # 📋 AI Changelogs
 
+## 2026-03-26 — `agent_sdk` assessment: `SkillEntryBuilder`, `configure_llm_runtime`, `AgentBuilder` constructors
+
+### Changes
+- **`SkillRegistry` / `Agent`**: `add_skill(id)` returns **`SkillEntryBuilder`** (optional `.handler()`); metadata-only skills no longer need a stub handler. **`skill(name, handler)`** delegates to `add_skill` + `.handler()`. Removed generic **`SkillBuilder`** in favor of the unified builder.
+- **LLM wiring**: **`configure_llm_runtime`** replaces `set_llm_tools_message_handler_configured`; removed **`set_llm_tools_message_handler_with`** and the public low-level **`set_llm_tools_message_handler`** (internal `set_llm_tools_handler` wrapper removed from `MessageHandlerManager`).
+- **`AgentBuilder`**: added **`from_config(AgentConfig)`** and **`new(name)`**; `from_config_path` unchanged.
+- **`lib.rs`**: removed crate-root **`new` / `new_runtime`**; documented migration and `configure_llm_runtime`.
+- **Conversions**: removed unused **`runtime_artifact_from_a2a`**.
+- **`history_policy`**: `cfg_attr(not(context-window), allow(dead_code, unused_imports))` so minimal-feature builds stay warning-clean.
+- **Tests**: `builder`, `runtime_vars`, `observability_runtime`, `a2a_app`, `llm_invoker`, `client` (`SkillValidationError`), `mcp_tools::error`; env tests use **`unsafe`** for `set_var`/`remove_var` (Rust 2024).
+- **Examples / README**: `add_skill` fluent registration; **`crates/agent_sdk/examples/`** path in README.
+- **`promptfleet-agents-cloud` / `universal_agent`**: `register_skills` uses **`add_skill`** without stub handler; **`configure_llm_runtime`** in `wiring.rs`.
+
+### Files modified
+- `crates/agent_sdk/src/agent/skill.rs`, `core.rs`, `builder.rs`, `lib.rs`, `conversions.rs`, `agent/history_policy.rs`, `agent/message_handlers.rs`, `agent/llm_invoker.rs`, `a2a_app.rs`, `agui.rs`, `client.rs`, `agent/response_builders.rs`, `runtime_vars.rs`, `observability_runtime.rs`, `mcp_tools/error.rs`, `Cargo.toml`
+- `README.md`, `crates/agent_sdk/README.md`
+- `examples/a2a-echo-wasm/src/lib.rs`, `examples/a2a-echo-native/src/main.rs`
+- `../promptfleet-agents-cloud/src/pf_cloud/universal_agent/src/wiring.rs`
+
+### Tests
+- `cargo test -p agent_sdk --all-features`: **237 lib + integration + doctests passed** (237 + 1 + 3 + … per crate targets; full run reported **all pass**)
+
+### Notes
+- Phase 4 “17 rustdoc warnings” / extended public docs on `host`/`interaction`/`agui` were not fully applied in this pass; **`lib.rs`** migration + quick start notes added.
+
 ## 2026-03-26 — `a2a_app_ports` README: server delegation vs protocol layer
 
 ### Changes

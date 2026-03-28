@@ -1,0 +1,134 @@
+---
+title: "proxy"
+description: "# MCP Proxy"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Proxy
+
+**Transport-aware proxy** for connecting to MCP servers
+- **Client ↔ Proxy**: HTTP/JSON-RPC (internal)
+- **Proxy ↔ MCP Server**: SSE (web-standard)
+- **Multi-server routing** with authentication
+
+## Structs
+
+### `McpProxyConfig`
+
+**MCP Proxy Configuration**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `servers` | `Vec&lt;McpProxyTarget&gt;` | Target MCP servers the proxy routes to |
+| `proxy_auth` | `Option&lt;String&gt;` | Proxy authentication (for incoming requests) |
+| `timeout_seconds` | `u64` | Default timeout for requests (seconds) |
+
+### `McpProxyTarget`
+
+**MCP Proxy Target** - An external MCP server the proxy connects to
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Server identifier |
+| `sse_endpoint` | `String` | SSE endpoint URL (e.g., "https://api.example.com/sse") |
+| `auth_token` | `Option&lt;String&gt;` | Authentication token for this server |
+| `description` | `Option&lt;String&gt;` | Server description |
+
+### `McpProxy`
+
+**MCP Proxy** - Routes between internal HTTP and external SSE
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: McpProxyConfig) -> Self
+```
+
+Create new MCP proxy
+
+#### `list_tools_async`
+
+```rust
+async fn list_tools_async(&self) -> Result<Vec<Tool>, ProtocolError>
+```
+
+List tools from all servers (async version)
+
+#### `call_tool_async`
+
+```rust
+async fn call_tool_async(&self, name: &str, arguments: Option<serde_json::Value>) -> Result<CallToolResult, ProtocolError>
+```
+
+Call tool (async version)
+
+#### `health_check_all`
+
+```rust
+async fn health_check_all(&self) -> HashMap<String, bool>
+```
+
+Health check all servers
+
+### `McpProxyBuilder`
+
+**MCP Proxy Builder** - Convenient proxy configuration
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new proxy builder
+
+#### `add_server`
+
+```rust
+fn add_server(self, name: &str, sse_endpoint: &str) -> Self
+```
+
+Add MCP server
+
+#### `add_server_with_auth`
+
+```rust
+fn add_server_with_auth(self, name: &str, sse_endpoint: &str, auth_token: &str) -> Self
+```
+
+Add MCP server with authentication
+
+#### `with_proxy_auth`
+
+```rust
+fn with_proxy_auth(self, auth_token: &str) -> Self
+```
+
+Set proxy authentication token
+
+#### `with_timeout`
+
+```rust
+fn with_timeout(self, timeout_seconds: u64) -> Self
+```
+
+Set timeout for external requests
+
+#### `build`
+
+```rust
+fn build(self) -> McpProxy
+```
+
+Build the MCP proxy

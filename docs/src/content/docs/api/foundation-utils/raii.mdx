@@ -1,0 +1,237 @@
+---
+title: "raii"
+description: "RAII (Resource Acquisition Is Initialization) patterns"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+RAII (Resource Acquisition Is Initialization) patterns
+
+This module provides generic RAII guard patterns that ensure automatic
+resource cleanup when guards go out of scope. Based on the proven patterns
+from observability_core but generalized for project-wide use.
+
+## Key Features
+
+- **Automatic Cleanup**: Resources are cleaned up when guards drop
+- **Exception Safety**: Cleanup happens even during panics
+- **Zero Cost**: Pure compile-time abstractions
+- **Type Safe**: Compile-time guarantees of correctness
+- **WASM Compatible**: No external dependencies
+
+## Traits
+
+### `ScopedGuard`
+
+Trait for types that can create scoped guards
+
+This trait provides a standard interface for creating RAII guards
+for different types of resources.
+
+**Associated Types**
+
+- `type Resource` — 
+- `type Guard` — 
+
+**Required / Provided Methods**
+
+```rust
+fn scoped(resource: <Self as ?>::Resource) -> <Self as ?>::Guard
+```
+
+Create a scoped guard for this resource
+
+## Structs
+
+### `Guard`
+
+Generic RAII guard that owns a resource and cleans it up on drop
+
+This is the fundamental building block for all RAII patterns in the project.
+It ensures that resources are properly cleaned up even if panics occur.
+
+# Type Parameters
+- `T`: The type of resource being managed
+- `F`: The type of cleanup function (must be `FnOnce(T)`)
+
+# Example
+```rust
+use foundation_utils::raii::Guard;
+
+let _guard = Guard::new(42, |value| {
+    println!("Cleaning up value: {}", value);
+});
+// Cleanup happens automatically when guard drops
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(resource: T, cleanup: F) -> Self
+```
+
+Create a new RAII guard
+
+# Arguments
+- `resource`: The resource to manage
+- `cleanup`: Function to call when the guard drops
+
+# Example
+```rust
+use foundation_utils::raii::Guard;
+
+let guard = Guard::new("resource", |r| println!("Cleanup: {}", r));
+```
+
+#### `resource`
+
+```rust
+fn resource(&self) -> &T
+```
+
+Get a reference to the managed resource
+
+# Panics
+Panics if the guard has already been consumed (should not happen in normal use)
+
+#### `resource_mut`
+
+```rust
+fn resource_mut(&mut self) -> &mut T
+```
+
+Get a mutable reference to the managed resource
+
+# Panics
+Panics if the guard has already been consumed (should not happen in normal use)
+
+#### `into_inner`
+
+```rust
+fn into_inner(self) -> T
+```
+
+Consume the guard and return the resource without cleanup
+
+This is useful when you want to transfer ownership without cleanup
+
+#### `cleanup_now`
+
+```rust
+fn cleanup_now(self)
+```
+
+Manually trigger cleanup now (guard becomes invalid after this)
+
+This allows explicit cleanup before the guard would naturally drop
+
+### `SharedGuard`
+
+Specialized guard for managing shared state
+
+This guard is useful for managing `Arc<Mutex<T>>` resources where
+you want to ensure proper locking and unlocking.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(resource: Arc<Mutex<T>>) -> Self
+```
+
+Create a new shared guard
+
+# Arguments
+- `resource`: The `Arc<Mutex<T>>` to manage
+
+# Example
+```rust
+use foundation_utils::raii::SharedGuard;
+use std::sync::{Arc, Mutex};
+
+let shared_data = Arc::new(Mutex::new(42));
+let _guard = SharedGuard::new(shared_data);
+// Mutex is automatically handled
+```
+
+#### `lock`
+
+```rust
+fn lock(&mut self) -> Result<MutexGuard<'_, T>, PoisonError<MutexGuard<'_, T>>>
+```
+
+Lock the mutex and get a reference to the data
+
+This is a convenience method that handles the lock/unlock pattern
+
+#### `resource`
+
+```rust
+fn resource(&self) -> &Arc<Mutex<T>>
+```
+
+Get the shared resource without locking
+
+### `ContextGuard`
+
+Context guard that manages thread-local or scoped context
+
+This is a specialized guard for managing context that needs to be
+set and cleared in a scoped manner.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context: T, setter: S, clearer: C) -> Self
+```
+
+Create a new context guard
+
+# Arguments
+- `context`: The context value to manage
+- `setter`: Function to set the context
+- `clearer`: Function to clear the context
+
+# Example
+```rust
+use foundation_utils::raii::ContextGuard;
+
+let _guard = ContextGuard::new(
+    "my_context",
+    |ctx| println!("set: {}", ctx),
+    || println!("cleared"),
+);
+// Context is automatically cleared when guard drops
+```
+
+#### `context`
+
+```rust
+fn context(&self) -> &T
+```
+
+Get a reference to the context
+
+### `NoOpGuard`
+
+No-op guard that does nothing
+
+This is useful as a placeholder when guards are conditionally created
+but you still want to maintain the same interface.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new no-op guard

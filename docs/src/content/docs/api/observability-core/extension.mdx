@@ -1,0 +1,165 @@
+---
+title: "extension"
+description: "Core observability components for structured logging"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Core observability components for structured logging
+
+This module provides core observability functionality including configuration,
+global logger singleton, and structured logging integration without external dependencies.
+
+## Structs
+
+### `GlobalLoggerSingleton`
+
+Singleton global logger that initializes once and is shared across all extension instances
+
+**Methods**
+
+#### `get_or_init`
+
+```rust
+fn get_or_init(config: ObservabilityConfig) -> ObservabilityResult<&''static GlobalLoggerSingleton>
+```
+
+Get or create the singleton instance
+
+This is thread-safe and will initialize exactly once
+
+#### `adapter`
+
+```rust
+fn adapter(&self) -> &Arc<StandardLogAdapter>
+```
+
+Get the logger adapter
+
+#### `config`
+
+```rust
+fn config(&self) -> &ObservabilityConfig
+```
+
+Get the configuration used
+
+### `ObservabilityConfig`
+
+Configuration for observability
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `level` | `String` | Minimum log level to process |
+| `format` | `String` | Output format: "json", "compact", "plain" |
+| `structured` | `bool` | Enable structured logging features |
+| `context_enrichment` | `bool` | Enable context enrichment |
+| `default_context` | `HashMap&lt;String, serde_json::Value&gt;` | Additional context fields to always include |
+
+**Methods**
+
+#### `parse_level`
+
+```rust
+fn parse_level(&self) -> ObservabilityResult<LogLevel>
+```
+
+Parse log level from string (global level only, ignores per-crate directives).
+
+#### `parse_directives`
+
+```rust
+fn parse_directives(&self) -> LogDirectives
+```
+
+Parse `RUST_LOG`-style directives from the level string.
+
+Accepts both simple levels (`"info"`) and per-crate directives
+(`"info,agent_sdk=debug,a2a_protocol_core=trace"`).
+
+#### `create_transport`
+
+```rust
+fn create_transport(&self) -> Arc<dyn TransportPort>
+```
+
+Create transport based on format configuration
+
+#### `validate`
+
+```rust
+fn validate(&self) -> ObservabilityResult<()>
+```
+
+Validate configuration
+
+### `ObservabilityManager`
+
+Core observability manager
+
+This provides structured logging integration with standard Rust logging macros
+(log::info!, log::debug!, etc.) without external extension system dependencies
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: ObservabilityConfig) -> ObservabilityResult<Self>
+```
+
+Create a new observability manager with configuration
+
+#### `initialize`
+
+```rust
+fn initialize(&mut self) -> ObservabilityResult<()>
+```
+
+Initialize global logging (convenience method)
+
+#### `config`
+
+```rust
+fn config(&self) -> &ObservabilityConfig
+```
+
+Get current configuration
+
+#### `is_enabled`
+
+```rust
+fn is_enabled(&self, level: LogLevel) -> bool
+```
+
+Check if logging is enabled for a level
+
+#### `global_logger`
+
+```rust
+fn global_logger() -> Option<Arc<StandardLogAdapter>>
+```
+
+Get the global logger instance (always available with singleton pattern)
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> Vec<String>
+```
+
+Get capabilities as strings
+
+## Functions
+
+### `create_observability_manager`
+
+```rust
+fn create_observability_manager(config: Option<serde_json::Value>) -> ObservabilityResult<ObservabilityManager>
+```
+
+Factory function for creating observability manager from JSON configuration

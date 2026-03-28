@@ -1,0 +1,56 @@
+---
+title: "serialization"
+description: "Universal serialization traits for all protocols"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Universal serialization traits for all protocols
+
+## Structs
+
+### `Serializer`
+
+**Universal Serializer**
+
+**Methods**
+
+#### `json`
+
+```rust
+fn json() -> Self
+```
+
+Create JSON serializer (most common)
+
+#### `serialize`
+
+```rust
+fn serialize<T>(&self, value: &T) -> TransportResult<Vec<u8>>
+```
+
+Serialize to bytes
+
+#### `deserialize`
+
+```rust
+fn deserialize<T>(&self, data: &[u8]) -> TransportResult<T>
+```
+
+Deserialize from bytes
+
+## Enums
+
+### `SerializationFormat`
+
+**Serialization Format**
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Json` |  |
+| `MessagePack` |  |
+| `Protobuf` |  |

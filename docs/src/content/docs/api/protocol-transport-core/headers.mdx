@@ -1,0 +1,44 @@
+---
+title: "headers"
+description: "Common header management for all protocols"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Common header management for all protocols
+
+## Structs
+
+### `ProtocolHeaders`
+
+**Common Protocol Headers**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol` | `String` |  |
+| `version` | `String` |  |
+| `correlation_id` | `String` |  |
+| `client_agent_id` | `Option&lt;String&gt;` |  |
+| `trace_id` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `from_headers`
+
+```rust
+fn from_headers(headers: &HashMap<String, String>) -> Self
+```
+
+Extract protocol headers from raw headers
+
+#### `to_headers`
+
+```rust
+fn to_headers(&self) -> HashMap<String, String>
+```
+
+Convert to raw headers HashMap

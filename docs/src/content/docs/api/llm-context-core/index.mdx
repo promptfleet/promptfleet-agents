@@ -1,0 +1,347 @@
+---
+title: "llm_context_core"
+description: "# llm_context_core"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# llm_context_core
+
+WASM-compatible LLM context window management library.
+
+Provides token estimation, context budget computation, pluggable history
+management strategies, and trait ports for long-term memory backends.
+
+## Architecture
+
+```text
+┌──────────────────────────────────────────────────┐
+│               LLM Context Window                  │
+│  ┌──────────┐  ┌─────────────┐  ┌─────────────┐ │
+│  │ System   │  │  Long-Term  │  │  Working    │ │
+│  │ Prompt   │  │  Memories   │  │  Memory     │ │
+│  │ (fixed)  │  │ (retrieved) │  │ (recent N)  │ │
+│  └──────────┘  └─────────────┘  └─────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+- **Tier 1 (Working)**: Current turn messages, bounded by token budget
+- **Tier 2 (Short-Term)**: Conversation history with sliding window / summarization
+- **Tier 3 (Long-Term)**: Cross-conversation semantic retrieval (Qdrant, etc.)
+
+## Traits
+
+### `LongTermMemory`
+
+Trait port for long-term memory backends.
+
+Implementations handle embedding, storage, and semantic retrieval.
+The trait is object-safe and WASM-compatible.
+
+# Implementations
+
+- `agent_memory_store::QdrantMemoryStore` — Qdrant + embedding_provider_lib
+- In-memory store for testing
+
+**Required / Provided Methods**
+
+```rust
+fn store(&self, entry: MemoryEntry) -> MemoryFuture<()>
+```
+
+Store a memory entry (embedding + indexing happens internally).
+
+```rust
+fn recall(&self, query: &str, top_k: usize, filters: MemoryFilters) -> MemoryFuture<Vec<MemoryEntry>>
+```
+
+Recall relevant memories by semantic similarity to a query.
+
+Returns up to `top_k` entries sorted by relevance (highest first).
+
+```rust
+fn forget(&self, filters: MemoryFilters) -> MemoryFuture<u64>
+```
+
+Delete memories matching the given filters.
+
+Returns the number of entries deleted.
+
+### `ContextStrategy`
+
+Trait for context window management strategies.
+
+Implementations decide which messages to retain when the conversation
+history exceeds the available token budget. The contract:
+
+- Input: full message history (OpenAI JSON format) + budget
+- Output: trimmed message list that fits within `budget.available_for_history`
+- Ordering must be preserved (messages keep their chronological order)
+
+**Required / Provided Methods**
+
+```rust
+fn apply(&self, messages: &[serde_json::Value], budget: &ContextBudget) -> Vec<serde_json::Value>
+```
+
+Apply this strategy to trim messages to fit within budget.
+
+Returns a new `Vec` containing only the messages that should be
+sent to the LLM. The caller owns the returned vector.
+
+```rust
+fn name(&self) -> &''static str
+```
+
+Human-readable name for logging and diagnostics.
+
+## Structs
+
+### `ContextBudget`
+
+Token budget allocation for an LLM context window.
+
+Breaks the total context window into reserved zones and computes
+the remaining space available for conversation history.
+
+```text
+┌────────────────────────────────────────────────────┐
+│                  Context Window (total)             │
+├────────────┬────────────┬────────┬─────────────────┤
+│  System    │   Tools    │ Output │   Available     │
+│  (fixed)   │  (schemas) │ (gen)  │  for History    │
+└────────────┴────────────┴────────┴─────────────────┘
+```
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | `u32` | Total context window in tokens (from ModelCapabilities). |
+| `reserved_output` | `u32` | Tokens reserved for model output generation. |
+| `reserved_system` | `u32` | Tokens consumed by the system prompt. |
+| `reserved_tools` | `u32` | Tokens consumed by tool schema definitions. |
+| `available_for_history` | `u32` | Remaining tokens available for conversation history + memories. |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_window: u32, max_output_tokens: u32, system_message: Option<&str>, tools_json: &[serde_json::Value]) -> Self
+```
+
+Create a new budget from model capabilities and current context.
+
+# Parameters
+- `context_window`: Total tokens the model can accept
+- `max_output_tokens`: Tokens to reserve for generation
+- `system_message`: The system prompt text (will be estimated)
+- `tools_json`: Tool schema definitions (will be estimated)
+
+#### `history_usage`
+
+```rust
+fn history_usage(&self, history_messages: &[serde_json::Value]) -> u32
+```
+
+Compute how many tokens are actually used by a set of history messages.
+
+#### `would_exceed`
+
+```rust
+fn would_exceed(&self, history_messages: &[serde_json::Value]) -> bool
+```
+
+Check whether adding the given messages would exceed the history budget.
+
+#### `utilization`
+
+```rust
+fn utilization(&self, history_messages: &[serde_json::Value]) -> f32
+```
+
+Utilization ratio (0.0 to 1.0) of the full context window.
+
+#### `remaining`
+
+```rust
+fn remaining(&self, history_messages: &[serde_json::Value]) -> u32
+```
+
+Remaining tokens available after current history usage.
+
+### `HistoryManager`
+
+Central manager for LLM context window management.
+
+Call [`prepare_messages`](Self::prepare_messages) before each LLM invocation
+to get a trimmed, budget-aware message list. Call
+[`on_turn_complete`](Self::on_turn_complete) after each turn to update
+summaries and store memories.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: HistoryManagerConfig) -> Self
+```
+
+Create a new HistoryManager with the given configuration.
+
+#### `with_summarizer`
+
+```rust
+fn with_summarizer(self, summarizer: Arc<dyn Summarizer>) -> Self
+```
+
+Set the summarizer implementation.
+
+#### `with_memory`
+
+```rust
+fn with_memory(self, memory: Arc<dyn LongTermMemory>) -> Self
+```
+
+Set the long-term memory backend.
+
+#### `with_summaries`
+
+```rust
+fn with_summaries(self, summaries: Vec<String>) -> Self
+```
+
+Seed the manager with previously persisted conversation summaries.
+
+#### `prepare_messages`
+
+```rust
+async fn prepare_messages(&self, budget: &ContextBudget, system_message: Option<&str>, history: &[serde_json::Value], current_turn: &[serde_json::Value], memory_filters: &MemoryFilters) -> Vec<serde_json::Value>
+```
+
+Prepare messages for the next LLM invocation.
+
+This is the main entry point. It:
+1. Optionally retrieves relevant long-term memories
+2. Constructs the system message (with memories + summaries)
+3. Applies the context strategy to trim history within budget
+
+Returns the message list ready to be sent to the LLM.
+
+#### `on_turn_complete`
+
+```rust
+async fn on_turn_complete(&mut self, evicted_messages: &[serde_json::Value], agent_id: &str, user_id: Option<&str>, conversation_id: Option<&str>)
+```
+
+Notify the manager that a turn has completed.
+
+If summarization is enabled, this may generate a summary of evicted
+messages and optionally store it in long-term memory.
+
+#### `summaries`
+
+```rust
+fn summaries(&self) -> &[String]
+```
+
+Get accumulated summaries (for diagnostics).
+
+#### `strategy_name`
+
+```rust
+fn strategy_name(&self) -> &''static str
+```
+
+Get the strategy name (for diagnostics).
+
+### `HistoryManagerConfig`
+
+Configuration for the [`HistoryManager`].
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `strategy` | `ContextStrategyKind` | Which strategy to use for trimming history. |
+| `enable_summarization` | `bool` | Whether to generate summaries of evicted messages. |
+| `enable_long_term_memory` | `bool` | Whether to query long-term memory for relevant context. |
+| `recall_top_k` | `usize` | Number of long-term memories to inject per turn. |
+| `memory_token_budget` | `u32` | Maximum tokens to allocate for injected long-term memories. |
+
+### `MemoryEntry`
+
+A single memory entry stored in the long-term memory backend.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Unique ID for this memory entry. |
+| `agent_id` | `String` | Agent that created this memory. |
+| `user_id` | `Option&lt;String&gt;` | User this memory belongs to (for multi-tenant isolation). |
+| `conversation_id` | `Option&lt;String&gt;` | Conversation this memory was extracted from. |
+| `content` | `String` | The text content to embed and store. |
+| `memory_type` | `MemoryType` | Classification of this memory. |
+| `timestamp` | `u64` | Unix timestamp (seconds) when this memory was created. |
+| `score` | `f32` | Relevance score (set during retrieval, 0.0 to 1.0). |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Arbitrary metadata (e.g. source turn number, tags). |
+
+### `MemoryFilters`
+
+Filters for memory retrieval.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent_id` | `Option&lt;String&gt;` | Filter by agent ID. |
+| `user_id` | `Option&lt;String&gt;` | Filter by user ID. |
+| `conversation_id` | `Option&lt;String&gt;` | Filter by conversation ID. |
+| `memory_types` | `Vec&lt;MemoryType&gt;` | Filter by memory type(s). |
+| `after_timestamp` | `Option&lt;u64&gt;` | Only return memories newer than this timestamp (seconds). |
+
+## Enums
+
+### `MemoryType`
+
+Type of memory entry — helps with filtering and relevance scoring.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Summary` | Summarized conversation segment. |
+| `Fact` | Extracted factual statement (e.g. "User prefers dark mode"). |
+| `Instruction` | User instruction or preference. |
+| `ToolResult` | Compressed tool result worth remembering. |
+| `Custom(String)` | Arbitrary user-defined type. |
+
+### `ContextStrategyKind`
+
+Selects which context strategy to use (serializable for config).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `SlidingWindow` | Keep the most recent messages that fit within budget. |
+| `SlidingWindowWithSummary` | Sliding window, but prepend a summary of evicted messages. |
+| `PriorityBased` | Score messages by importance; keep highest-scoring within budget. |
+
+## Functions
+
+### `estimate_tokens`
+
+```rust
+fn estimate_tokens(text: &str) -> u32
+```
+
+Estimate token count for a text string.
+
+Uses the widely-accepted heuristic of ~4 characters per token for English text,
+with a small overhead for BPE tokenizer framing. Non-ASCII text uses a slightly
+higher ratio (3 chars/token) to account for multi-byte characters.

@@ -1,0 +1,72 @@
+---
+title: "prepare"
+description: "prepare module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Traits
+
+### `RequestMutator`
+
+
+**Required / Provided Methods**
+
+```rust
+fn name(&self) -> &''static str
+```
+
+
+```rust
+fn mutate(&self, cfg: &ModelConfig, req: &mut LlmRequest) -> anyhow::Result<()>
+```
+
+
+### `RequestValidator`
+
+
+**Required / Provided Methods**
+
+```rust
+fn name(&self) -> &''static str
+```
+
+
+```rust
+fn validate(&self, cfg: &ModelConfig, req: &LlmRequest, policy: Policy) -> anyhow::Result<()>
+```
+
+
+## Structs
+
+### `ProfileCapabilityValidator`
+
+
+### `Gpt5Mutator`
+
+
+### `QwenVllmExtras`
+
+
+## Enums
+
+### `Policy`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Strict` |  |
+| `Permissive` |  |
+
+## Functions
+
+### `prepare_request`
+
+```rust
+fn prepare_request(cfg: &ModelConfig, req: LlmRequest, mutators: &[Box<dyn RequestMutator>], validators: &[Box<dyn RequestValidator>], policy: Policy) -> anyhow::Result<LlmRequest>
+```
+

@@ -1,0 +1,82 @@
+---
+title: "runtime_vars"
+description: "runtime_vars module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Structs
+
+### `ActivationEnv`
+
+Activation budget configuration loaded from env vars / Spin variables.
+
+Controls SDK-side retry behavior when calling potentially cold (scaled-to-zero) agents.
+These values override `ActivationConfig` defaults in `a2a_http_client::activation`.
+
+Variables (all optional, defaults applied if absent):
+- `PF_ACTIVATION_MAX_COLD_START_MS` / `pf_activation_max_cold_start_ms` (u64, default: 60000)
+- `PF_ACTIVATION_INITIAL_BACKOFF_MS` / `pf_activation_initial_backoff_ms` (u64, default: 100)
+- `PF_ACTIVATION_MAX_BACKOFF_MS` / `pf_activation_max_backoff_ms` (u64, default: 2000)
+- `PF_ACTIVATION_MAX_RETRIES` / `pf_activation_max_retries` (u32, default: 3)
+- `PF_ACTIVATION_JITTER` / `pf_activation_jitter` (bool, default: true)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_cold_start_ms` | `u64` |  |
+| `initial_backoff_ms` | `u64` |  |
+| `max_backoff_ms` | `u64` |  |
+| `max_retries` | `u32` |  |
+| `jitter` | `bool` |  |
+
+**Methods**
+
+#### `load_optional`
+
+```rust
+fn load_optional() -> Self
+```
+
+Load activation configuration from env vars / Spin variables.
+All fields are optional -- defaults are applied when missing or unparseable.
+
+### `CheckpointEnv`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mode` | `CheckpointMode` |  |
+| `allow_message_response` | `bool` | If true, allow respond.kind="message" (only meaningful in ResponseControl mode) |
+| `mirror_internal_state_to_task_meta` | `bool` | If true, mirror `internal_state` into Task metadata under `internal_state` key (when present) |
+
+**Methods**
+
+#### `load_optional`
+
+```rust
+fn load_optional() -> Self
+```
+
+Optional:
+- pf_checkpoint_mode | PF_CHECKPOINT_MODE (state_only|task_observable|response_control)
+- pf_checkpoint_allow_message_response | PF_CHECKPOINT_ALLOW_MESSAGE_RESPONSE (bool)
+- pf_checkpoint_mirror_internal_state_to_task_meta | PF_CHECKPOINT_MIRROR_INTERNAL_STATE_TO_TASK_META (bool)
+
+## Enums
+
+### `CheckpointMode`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `StateOnly` | Only internal emit/state recording (no task_patch / respond controls) |
+| `TaskObservable` | Allow updating A2A Task state/metadata for polling |
+| `ResponseControl` | Allow choosing response kind (Task vs Message) |

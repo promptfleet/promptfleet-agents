@@ -1,0 +1,131 @@
+---
+title: "client"
+description: "[`LlmClient`] facade and builder — primary public entry point."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+[`LlmClient`] facade and builder — primary public entry point.
+
+## Structs
+
+### `LlmClientBuilder`
+
+Configures an [`LlmClient`].
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(wire_format: WireFormat) -> Self
+```
+
+
+#### `base_url`
+
+```rust
+fn base_url<impl Into<String>>(self, url: impl Into) -> Self
+```
+
+
+#### `auth`
+
+```rust
+fn auth<impl AuthProvider + 'static>(self, auth: impl AuthProvider + ?) -> Self
+```
+
+
+#### `api_mode`
+
+```rust
+fn api_mode(self, mode: ApiMode) -> Self
+```
+
+For OpenAI-compatible endpoints only. Ignored for Anthropic.
+
+#### `streaming_policy`
+
+```rust
+fn streaming_policy(self, policy: StreamingPolicy) -> Self
+```
+
+
+#### `default_headers`
+
+```rust
+fn default_headers(self, headers: HashMap<String, String>) -> Self
+```
+
+
+#### `openai_paths`
+
+```rust
+fn openai_paths(self, chat: String, responses: String) -> Self
+```
+
+Override OpenAI chat and responses URL paths (Azure uses `/chat/completions`, etc.).
+
+#### `build`
+
+```rust
+fn build(self) -> Result<LlmClient, LlmError>
+```
+
+
+### `LlmClient`
+
+High-level LLM client (single entry point for apps).
+
+**Methods**
+
+#### `builder`
+
+```rust
+fn builder(wire_format: WireFormat) -> LlmClientBuilder
+```
+
+
+#### `azure_openai_builder`
+
+```rust
+fn azure_openai_builder(resource_name: &str, deployment_id: &str, api_version: &str, credential: AzureCredential) -> LlmClientBuilder
+```
+
+Convenience for Azure OpenAI chat deployments.
+
+#### `chat`
+
+```rust
+async fn chat(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>
+```
+
+
+#### `chat_stream`
+
+```rust
+async fn chat_stream(&self, req: LlmRequest) -> Result<LlmEventStream, LlmError>
+```
+
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> ClientCapabilities
+```
+
+
+## Enums
+
+### `WireFormat`
+
+JSON schema family for the remote endpoint.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `OpenAiCompat` | OpenAI chat completions / responses shape (incl. Azure OpenAI, OpenRouter, vLLM, …). |
+| `AnthropicMessages` | Anthropic Messages API shape (incl. Bedrock / Vertex Claude when routed that way). |

@@ -1,0 +1,43 @@
+---
+title: "model_client"
+description: "model_client module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Type Aliases
+
+### `ClientResult`
+
+```rust
+type ClientResult = Result<T, LlmError>;
+```
+
+
+## Structs
+
+### `ClientCapabilities`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `streaming` | `bool` |  |
+| `tool_calling` | `bool` |  |
+| `structured_output` | `bool` |  |
+
+## Enums
+
+### `ApiMode`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Chat` |  |
+| `Responses` |  |
+| `Auto` |  |

@@ -1,0 +1,2062 @@
+---
+title: "a2a_protocol_core"
+description: "# A2A Protocol Core — v1.0.0"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# A2A Protocol Core — v1.0.0
+
+Pure A2A (Agent-to-Agent) protocol domain logic, completely transport agnostic.
+
+## Constants
+
+### `A2A_PROTOCOL_VERSION`
+
+```rust
+const A2A_PROTOCOL_VERSION: &str = ;
+```
+
+A2A Protocol Version
+
+## Type Aliases
+
+### `A2AResult`
+
+```rust
+type A2AResult = Result<T, A2AError>;
+```
+
+
+### `A2AMethodHandler`
+
+```rust
+type A2AMethodHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+A2A Method Handler function type
+
+Handlers receive a JSON-RPC request and return a JSON-RPC response.
+All A2A protocol logic is handled through JSON-RPC 2.0 messages.
+
+### `A2ANotificationHandler`
+
+```rust
+type A2ANotificationHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+A2A Notification Handler function type
+
+Notification handlers receive notifications and perform side effects
+without returning responses (fire-and-forget).
+
+### `MessageSendParams`
+
+```rust
+type MessageSendParams = SendMessageRequest;
+```
+
+
+### `MessageSendResponse`
+
+```rust
+type MessageSendResponse = SendMessageResponse;
+```
+
+
+### `TaskCancelParams`
+
+```rust
+type TaskCancelParams = CancelTaskRequest;
+```
+
+
+### `TaskGetParams`
+
+```rust
+type TaskGetParams = GetTaskRequest;
+```
+
+
+### `TaskListParams`
+
+```rust
+type TaskListParams = ListTasksRequest;
+```
+
+
+### `TaskListResult`
+
+```rust
+type TaskListResult = ListTasksResponse;
+```
+
+
+## Traits
+
+### `A2ATransport`
+
+A2A Transport trait
+
+Defines the interface for sending A2A protocol messages over various
+transport mechanisms. Implementations handle the actual network
+communication while the protocol core handles the A2A semantics.
+
+# Design Principles
+
+- **Transport Agnostic**: Works with HTTP, WebSocket, gRPC, etc.
+- **JSON-RPC Foundation**: Uses JSON-RPC 2.0 message types
+- **Async Compatible**: Supports both sync and async implementations
+- **Error Transparent**: Transport errors are mapped to A2A errors
+
+# Examples
+
+```rust
+use a2a_protocol_core::{A2ATransport, JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, A2AResult};
+use serde_json::json;
+
+// Mock transport implementation
+struct MockTransport;
+
+impl A2ATransport for MockTransport {
+    async fn send_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse> {
+        // Implementation sends request over network
+        Ok(JsonRpcResponse::success(request.id, json!({"pong": true})))
+    }
+
+    async fn send_notification(&self, notification: JsonRpcNotification) -> A2AResult<()> {
+        // Implementation sends notification (fire-and-forget)
+        Ok(())
+    }
+
+    async fn health_check(&self) -> A2AResult<()> {
+        // Check if transport is available
+        Ok(())
+    }
+}
+```
+
+**Required / Provided Methods**
+
+```rust
+async fn send_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+Send a JSON-RPC request and wait for response
+
+This method sends a request to a remote agent and waits for the response.
+The transport implementation handles the actual network communication,
+serialization, and correlation of requests with responses.
+
+# Arguments
+
+- `request`: The JSON-RPC 2.0 request to send
+
+# Returns
+
+- `Ok(JsonRpcResponse)`: The response from the remote agent
+- `Err(A2AError)`: Transport or protocol error
+
+```rust
+async fn send_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+Send a JSON-RPC notification (fire-and-forget)
+
+This method sends a notification to a remote agent without waiting for
+a response. Notifications are used for logging, metrics, events, and
+other operations where the sender doesn't need confirmation.
+
+# Arguments
+
+- `notification`: The JSON-RPC 2.0 notification to send
+
+# Returns
+
+- `Ok(())`: Notification was sent successfully
+- `Err(A2AError)`: Transport error occurred
+
+```rust
+async fn health_check(&self) -> A2AResult<()>
+```
+
+Check if the transport is available and healthy
+
+This method verifies that the transport can communicate with remote
+agents. It's used for health checks, circuit breakers, and load
+balancing decisions.
+
+# Returns
+
+- `Ok(())`: Transport is healthy and available
+- `Err(A2AError)`: Transport is unavailable or unhealthy
+
+```rust
+fn get_metadata(&self) -> HashMap<String, Value>
+```
+
+Get transport-specific metadata
+
+This method returns metadata about the transport implementation,
+such as connection info, capabilities, or configuration details.
+
+# Returns
+
+A map of metadata key-value pairs
+
+```rust
+fn transport_type(&self) -> &''static str
+```
+
+Get the transport type identifier
+
+Returns a string identifying the transport type (e.g., "http", "websocket").
+This is used for logging, monitoring, and debugging.
+
+### `A2ATransportFactory`
+
+A2A Transport Factory trait
+
+Factory for creating transport instances for different agents or endpoints.
+This enables connection pooling, load balancing, and dynamic transport
+configuration.
+
+**Associated Types**
+
+- `type Transport` — Transport type created by this factory
+
+**Required / Provided Methods**
+
+```rust
+async fn create_transport(&self, agent_id: &str, endpoint: &str, config: Option<HashMap<String, Value>>) -> A2AResult<<Self as ?>::Transport>
+```
+
+Create a transport instance for the specified agent
+
+# Arguments
+
+- `agent_id`: Target agent identifier
+- `endpoint`: Agent endpoint URL or connection string
+- `config`: Optional transport-specific configuration
+
+# Returns
+
+- `Ok(Transport)`: Successfully created transport
+- `Err(A2AError)`: Failed to create transport
+
+```rust
+async fn get_transport(&self, agent_id: &str, endpoint: &str) -> A2AResult<<Self as ?>::Transport>
+```
+
+Get or create cached transport for agent
+
+This method may reuse existing connections for better performance.
+
+# Arguments
+
+- `agent_id`: Target agent identifier
+- `endpoint`: Agent endpoint URL or connection string
+
+# Returns
+
+- `Ok(Transport)`: Transport ready for use
+- `Err(A2AError)`: Failed to get/create transport
+
+```rust
+async fn remove_transport(&self, agent_id: &str) -> A2AResult<()>
+```
+
+Remove cached transport for agent
+
+Forces creation of a new transport on next request.
+Useful for handling connection failures or configuration changes.
+
+```rust
+fn get_config(&self) -> HashMap<String, Value>
+```
+
+Get factory configuration
+
+### `AgentDiscovery`
+
+Trait for agent discovery.
+
+**Required / Provided Methods**
+
+```rust
+fn agent_authenticated_extended_card(&self, params: AuthenticatedExtendedCardParams) -> A2AResult<AuthenticatedExtendedCardResult>
+```
+
+
+### `TaskStorage`
+
+**Enhanced Task Storage Service Interface**
+
+Defines the contract for task storage operations with proper A2A protocol
+support for context-based operations (1 context : N tasks relationship).
+
+**Required / Provided Methods**
+
+```rust
+fn store_task(&self, task: Task) -> A2AResult<()>
+```
+
+Store a new or updated task
+
+```rust
+fn get_task(&self, task_id: &str) -> A2AResult<Option<Task>>
+```
+
+Retrieve a task by ID
+
+```rust
+fn update_task(&self, task: Task) -> A2AResult<()>
+```
+
+Update an existing task
+
+```rust
+fn list_tasks(&self) -> A2AResult<Vec<Task>>
+```
+
+List all tasks (for tasks/list method)
+
+```rust
+fn remove_task(&self, task_id: &str) -> A2AResult<bool>
+```
+
+Remove a task (if needed for cleanup)
+
+```rust
+fn task_exists(&self, task_id: &str) -> A2AResult<bool>
+```
+
+Check if a task exists
+
+```rust
+fn get_tasks_by_context(&self, context_id: &str) -> A2AResult<Vec<Task>>
+```
+
+Get all tasks within a specific context (conversation)
+
+This is the key method for A2A protocol compliance - allows retrieving
+all tasks that belong to the same conversation context.
+
+```rust
+fn get_latest_task_in_context(&self, context_id: &str) -> A2AResult<Option<Task>>
+```
+
+Get the latest (most recently created) task in a context
+
+Useful for conversation continuity and determining the most recent
+task state within a conversation.
+
+```rust
+fn get_context_history(&self, context_id: &str) -> A2AResult<Vec<Message>>
+```
+
+Get conversation history from all tasks in a context
+
+Aggregates message history from all tasks in a conversation context
+for LLM context management as specified in A2A protocol.
+
+```rust
+fn get_or_create_context(&self, context_id: &str) -> A2AResult<ConversationContext>
+```
+
+Get or create conversation context
+
+Manages conversation context lifecycle - creates new context if it
+doesn't exist, returns existing context otherwise.
+
+```rust
+fn update_context_activity(&self, context_id: &str) -> A2AResult<()>
+```
+
+Update context activity (called when new task is added)
+
+Updates the conversation context metadata when tasks are added
+to track conversation lifecycle.
+
+```rust
+fn list_contexts(&self) -> A2AResult<Vec<ConversationContext>>
+```
+
+List all conversation contexts
+
+Returns all active conversation contexts for management/debugging.
+
+## Structs
+
+### `AgentCapabilities`
+
+**Agent Capabilities** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `streaming` | `bool` |  |
+| `push_notifications` | `bool` |  |
+| `extensions` | `Option&lt;Vec&lt;AgentExtension&gt;&gt;` |  |
+| `extended_agent_card` | `bool` |  |
+
+### `AgentCard`
+
+**Agent Card** — v1.0 top-level metadata object.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `version` | `Option&lt;String&gt;` |  |
+| `supported_interfaces` | `Option&lt;Vec&lt;AgentInterface&gt;&gt;` |  |
+| `capabilities` | `Option&lt;AgentCapabilities&gt;` |  |
+| `skills` | `Vec&lt;AgentSkill&gt;` |  |
+| `default_input_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `default_output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `security_schemes` | `Option&lt;HashMap&lt;String, SecurityScheme&gt;&gt;` |  |
+| `security_requirements` | `Option&lt;Vec&lt;SecurityRequirement&gt;&gt;` |  |
+| `signatures` | `Option&lt;Vec&lt;AgentCardSignature&gt;&gt;` |  |
+| `icon_url` | `Option&lt;String&gt;` |  |
+| `provider` | `Option&lt;AgentProvider&gt;` |  |
+| `documentation_url` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(name: impl Into) -> Self
+```
+
+Minimal card with just a name.
+
+#### `with_capability`
+
+```rust
+fn with_capability<impl Into<String>, impl Into<String>>(self, method: impl Into, description: impl Into) -> Self
+```
+
+Register a method capability on this agent card.
+
+Stores the method name and description in the card's `pf:methods`
+metadata map. Used by `A2AProtocol::register_method` to keep the
+agent card in sync with the method registry.
+
+#### `supports_method`
+
+```rust
+fn supports_method(&self, method: &str) -> bool
+```
+
+
+#### `get_method_description`
+
+```rust
+fn get_method_description(&self, method: &str) -> Option<String>
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(self, skill: AgentSkill) -> Self
+```
+
+
+#### `get_skill`
+
+```rust
+fn get_skill(&self, skill_id: &str) -> Option<&AgentSkill>
+```
+
+
+#### `get_skills_by_input_mode`
+
+```rust
+fn get_skills_by_input_mode(&self, input_mode: &str) -> Vec<&AgentSkill>
+```
+
+
+#### `supports_structured_skills`
+
+```rust
+fn supports_structured_skills(&self) -> bool
+```
+
+
+### `AgentCardSignature`
+
+JWS signature for agent card integrity.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protected` | `String` |  |
+| `signature` | `String` |  |
+| `header` | `Option&lt;serde_json::Value&gt;` |  |
+
+### `AgentExtension`
+
+**Agent Extension** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uri` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `required` | `bool` |  |
+| `params` | `Option&lt;serde_json::Value&gt;` |  |
+
+### `AgentInterface`
+
+**Agent Interface** (v1.0) — how to reach this agent.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `String` |  |
+| `protocol_binding` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `protocol_version` | `Option&lt;String&gt;` |  |
+
+### `AgentProvider`
+
+**Agent Provider** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `Option&lt;String&gt;` |  |
+| `organization` | `String` |  |
+
+### `AgentSkill`
+
+**Agent Skill** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `tags` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `examples` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `input_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `security_requirements` | `Option&lt;Vec&lt;SecurityRequirement&gt;&gt;` |  |
+
+**Methods**
+
+#### `with_examples`
+
+```rust
+fn with_examples(self, examples: Vec<String>) -> Self
+```
+
+
+#### `with_example`
+
+```rust
+fn with_example<impl Into<String>>(self, example: impl Into) -> Self
+```
+
+
+#### `with_tags`
+
+```rust
+fn with_tags(self, tags: Vec<String>) -> Self
+```
+
+
+#### `supports_json_input`
+
+```rust
+fn supports_json_input(&self) -> bool
+```
+
+
+### `A2AProtocol`
+
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent_card: AgentCard) -> Self
+```
+
+
+#### `with_registry`
+
+```rust
+fn with_registry(agent_card: AgentCard, registry: A2AMethodRegistry) -> Self
+```
+
+
+#### `agent_card`
+
+```rust
+fn agent_card(&self) -> &AgentCard
+```
+
+
+#### `update_agent_card`
+
+```rust
+fn update_agent_card(&mut self, agent_card: AgentCard)
+```
+
+
+#### `registry`
+
+```rust
+fn registry(&self) -> &A2AMethodRegistry
+```
+
+
+#### `registry_mut`
+
+```rust
+fn registry_mut(&mut self) -> &mut A2AMethodRegistry
+```
+
+
+#### `register_method`
+
+```rust
+fn register_method<F>(&mut self, method: &str, description: &str, handler: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+
+#### `register_notification`
+
+```rust
+fn register_notification<F>(&mut self, method: &str, description: &str, handler: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+
+#### `handle_request`
+
+```rust
+fn handle_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+
+#### `handle_notification`
+
+```rust
+fn handle_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+
+#### `handle_incoming`
+
+```rust
+fn handle_incoming(&self, incoming: JsonRpcIncoming) -> A2AResult<Option<JsonRpcResponse>>
+```
+
+
+#### `get_capabilities`
+
+```rust
+fn get_capabilities(&self) -> Value
+```
+
+
+#### `get_method_metadata`
+
+```rust
+fn get_method_metadata(&self) -> HashMap<String, &MethodMetadata>
+```
+
+
+#### `validate_request_params`
+
+```rust
+fn validate_request_params(&self, method: &str, params: &Value) -> A2AResult<()>
+```
+
+
+#### `register_a2a_methods`
+
+```rust
+fn register_a2a_methods(&mut self, storage: Option<Arc<dyn TaskStorage>>)
+```
+
+Register all A2A v1.0 protocol methods.
+
+#### `send_request`
+
+```rust
+async fn send_request<T>(&self, transport: &T, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+
+#### `send_notification`
+
+```rust
+async fn send_notification<T>(&self, transport: &T, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+
+### `A2AMethodRegistry`
+
+A2A Method Registry
+
+Central registry for A2A protocol methods and their handlers.
+Provides method registration, lookup, and validation functionality
+without any transport dependencies.
+
+# Design Principles
+
+- **Pure Domain Logic**: No transport or infrastructure concerns
+- **JSON-RPC Foundation**: All methods use JSON-RPC 2.0 message types
+- **Thread Safe**: Can be safely shared across multiple threads
+- **Method Metadata**: Rich metadata for discovery and documentation
+
+# Examples
+
+```rust
+use a2a_protocol_core::{A2AMethodRegistry, JsonRpcRequest, JsonRpcResponse, A2AError};
+use serde_json::json;
+use std::sync::Arc;
+
+fn example() -> Result<(), A2AError> {
+    let mut registry = A2AMethodRegistry::new();
+     
+    // Register a method handler
+    registry.register_method(
+        "ping",
+        "Simple ping method",
+        Arc::new(|request| {
+            Ok(JsonRpcResponse::success(request.id, json!({"pong": true})))
+        })
+    );
+     
+    // Handle requests
+    let request = JsonRpcRequest::new(json!("req-123"), "ping".to_string(), json!({}));
+    let response = registry.handle_request(request)?;
+    Ok(())
+}
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty registry
+
+#### `with_agent_card`
+
+```rust
+fn with_agent_card(agent_card: AgentCard) -> Self
+```
+
+Create a registry with agent card
+
+#### `set_agent_card`
+
+```rust
+fn set_agent_card(&mut self, agent_card: AgentCard)
+```
+
+Set the agent card for this registry
+
+#### `agent_card`
+
+```rust
+fn agent_card(&self) -> Option<&AgentCard>
+```
+
+Get the agent card
+
+#### `register_method`
+
+```rust
+fn register_method<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, handler: A2AMethodHandler)
+```
+
+Register a method handler
+
+Registers a handler function for JSON-RPC requests to the specified method.
+
+# Arguments
+
+- `method`: Method name (e.g., "ping", "process_data")
+- `description`: Human-readable description of the method
+- `handler`: Function that handles requests for this method
+
+#### `register_method_with_metadata`
+
+```rust
+fn register_method_with_metadata<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, parameters: Option<Value>, returns: Option<Value>, handler: A2AMethodHandler)
+```
+
+Register a method handler with metadata
+
+Registers a method handler with detailed parameter and return type information.
+
+#### `register_notification`
+
+```rust
+fn register_notification<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, handler: A2ANotificationHandler)
+```
+
+Register a notification handler
+
+Registers a handler function for JSON-RPC notifications (fire-and-forget).
+
+# Arguments
+
+- `method`: Method name (e.g., "log.info", "metric.counter")
+- `description`: Human-readable description of the notification
+- `handler`: Function that handles notifications for this method
+
+#### `handle_request`
+
+```rust
+fn handle_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+Handle a JSON-RPC request
+
+Looks up the method handler and executes it with the request.
+
+# Arguments
+
+- `request`: The JSON-RPC 2.0 request to handle
+
+# Returns
+
+- `Ok(JsonRpcResponse)`: Success response from method handler
+- `Err(A2AError)`: Method not found or handler error
+
+#### `handle_notification`
+
+```rust
+fn handle_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+Handle a JSON-RPC notification
+
+Looks up the notification handler and executes it.
+
+# Arguments
+
+- `notification`: The JSON-RPC 2.0 notification to handle
+
+# Returns
+
+- `Ok(())`: Notification handled successfully
+- `Err(A2AError)`: Method not found or handler error
+
+#### `has_method`
+
+```rust
+fn has_method(&self, method: &str) -> bool
+```
+
+Check if method is registered
+
+#### `has_notification`
+
+```rust
+fn has_notification(&self, method: &str) -> bool
+```
+
+Check if notification is registered
+
+#### `get_method_metadata`
+
+```rust
+fn get_method_metadata(&self, method: &str) -> Option<&MethodMetadata>
+```
+
+Get method metadata
+
+#### `list_methods`
+
+```rust
+fn list_methods(&self) -> Vec<String>
+```
+
+List all registered methods
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+List all registered notifications
+
+#### `get_all_metadata`
+
+```rust
+fn get_all_metadata(&self) -> &HashMap<String, MethodMetadata>
+```
+
+Get all method metadata
+
+#### `unregister_method`
+
+```rust
+fn unregister_method(&mut self, method: &str) -> bool
+```
+
+Unregister a method
+
+#### `unregister_notification`
+
+```rust
+fn unregister_notification(&mut self, method: &str) -> bool
+```
+
+Unregister a notification
+
+#### `clear`
+
+```rust
+fn clear(&mut self)
+```
+
+Clear all registrations
+
+#### `stats`
+
+```rust
+fn stats(&self) -> RegistryStats
+```
+
+Get registry statistics
+
+### `MethodMetadata`
+
+Method metadata
+
+Contains information about a registered method including
+its description, parameters, and capabilities.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `parameters` | `Option&lt;serde_json::Value&gt;` |  |
+| `returns` | `Option&lt;serde_json::Value&gt;` |  |
+| `is_notification` | `bool` |  |
+
+### `RegistryStats`
+
+Registry statistics
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `method_count` | `usize` |  |
+| `notification_count` | `usize` |  |
+| `total_registrations` | `usize` |  |
+
+### `ApiKeySecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `location` | `String` |  |
+| `name` | `String` |  |
+
+### `AuthorizationCodeOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorization_url` | `String` |  |
+| `token_url` | `String` |  |
+| `refresh_url` | `Option&lt;String&gt;` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+| `pkce_required` | `Option&lt;bool&gt;` |  |
+
+### `ClientCredentialsOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token_url` | `String` |  |
+| `refresh_url` | `Option&lt;String&gt;` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+
+### `DeviceCodeOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `device_authorization_url` | `String` |  |
+| `token_url` | `String` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+
+### `HttpAuthSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `scheme` | `String` |  |
+| `bearer_format` | `Option&lt;String&gt;` |  |
+
+### `MutualTlsSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+
+### `OAuthFlows`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorization_code` | `Option&lt;AuthorizationCodeOAuthFlow&gt;` |  |
+| `client_credentials` | `Option&lt;ClientCredentialsOAuthFlow&gt;` |  |
+| `device_code` | `Option&lt;DeviceCodeOAuthFlow&gt;` |  |
+
+### `OAuth2SecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `flows` | `OAuthFlows` |  |
+| `oauth2_metadata_url` | `Option&lt;String&gt;` |  |
+
+### `OpenIdConnectSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `open_id_connect_url` | `String` |  |
+
+### `SecurityRequirement`
+
+Security requirement: map of scheme name -> required scopes.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schemes` | `HashMap&lt;String, Vec&lt;String&gt;&gt;` |  |
+
+### `Artifact`
+
+**Artifact**: Agent output (v1.0 shape)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `artifact_id` | `String` |  |
+| `name` | `Option&lt;String&gt;` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `parts` | `Vec&lt;Part&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `extensions` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(parts: Vec<Part>) -> Self
+```
+
+Create an artifact with a generated ID.
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(text: impl Into) -> Self
+```
+
+Create a simple text artifact.
+
+#### `data`
+
+```rust
+fn data(value: Value) -> Self
+```
+
+Create a data artifact.
+
+#### `with_name`
+
+```rust
+fn with_name<impl Into<String>>(self, name: impl Into) -> Self
+```
+
+Builder: set name.
+
+#### `with_description`
+
+```rust
+fn with_description<impl Into<String>>(self, description: impl Into) -> Self
+```
+
+Builder: set description.
+
+#### `with_id`
+
+```rust
+fn with_id<impl Into<String>>(self, id: impl Into) -> Self
+```
+
+Builder: set artifact_id explicitly.
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `get_text_content`
+
+```rust
+fn get_text_content(&self) -> Option<&str>
+```
+
+Extract text from the first text part (convenience).
+
+#### `get_data_content`
+
+```rust
+fn get_data_content(&self) -> Option<&Value>
+```
+
+Extract data from the first data part (convenience).
+
+### `AuthenticationInfo`
+
+Authentication information for push notification delivery.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scheme` | `String` |  |
+| `credentials` | `String` |  |
+
+### `Message`
+
+**Message**: Core A2A communication object (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | `MessageRole` |  |
+| `parts` | `Vec&lt;Part&gt;` |  |
+| `message_id` | `String` |  |
+| `task_id` | `Option&lt;String&gt;` |  |
+| `context_id` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `extensions` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `reference_task_ids` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(role: MessageRole, parts: Vec<Part>, task_id: String) -> Self
+```
+
+
+#### `with_id`
+
+```rust
+fn with_id(message_id: String, role: MessageRole, parts: Vec<Part>) -> Self
+```
+
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(role: MessageRole, text: impl Into, task_id: String) -> Self
+```
+
+
+#### `status`
+
+```rust
+fn status<impl Into<String>>(text: impl Into, task_id: String) -> Self
+```
+
+
+#### `error`
+
+```rust
+fn error<impl Into<String>>(text: impl Into, task_id: String) -> Self
+```
+
+
+#### `add_part`
+
+```rust
+fn add_part(&mut self, part: Part)
+```
+
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `with_context`
+
+```rust
+fn with_context(self, context_id: String) -> Self
+```
+
+
+#### `add_extension`
+
+```rust
+fn add_extension(&mut self, extension: String)
+```
+
+
+#### `get_text_content`
+
+```rust
+fn get_text_content(&self) -> String
+```
+
+
+#### `is_text_only`
+
+```rust
+fn is_text_only(&self) -> bool
+```
+
+
+#### `get_data_parts`
+
+```rust
+fn get_data_parts(&self) -> Vec<&Part>
+```
+
+
+### `Part`
+
+**Part**: Flat multi-modal content container (v1.0)
+
+A Part carries exactly one of: text, raw (base64), url, or structured data.
+Additional fields (filename, media_type, metadata) annotate the content.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `Option&lt;String&gt;` |  |
+| `raw` | `Option&lt;String&gt;` |  |
+| `url` | `Option&lt;String&gt;` |  |
+| `data` | `Option&lt;serde_json::Value&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `filename` | `Option&lt;String&gt;` |  |
+| `media_type` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(text: impl Into) -> Self
+```
+
+Text-only part.
+
+#### `data`
+
+```rust
+fn data(value: Value) -> Self
+```
+
+Structured data part.
+
+#### `url`
+
+```rust
+fn url<impl Into<String>>(uri: impl Into) -> Self
+```
+
+URL reference part.
+
+#### `raw`
+
+```rust
+fn raw<impl Into<String>>(base64: impl Into) -> Self
+```
+
+Base64-encoded raw bytes part.
+
+#### `url_with_media`
+
+```rust
+fn url_with_media<impl Into<String>, impl Into<String>>(uri: impl Into, media_type: impl Into) -> Self
+```
+
+URL part with media type annotation.
+
+#### `is_text`
+
+```rust
+fn is_text(&self) -> bool
+```
+
+Check which content variant is populated.
+
+#### `is_data`
+
+```rust
+fn is_data(&self) -> bool
+```
+
+
+#### `is_url`
+
+```rust
+fn is_url(&self) -> bool
+```
+
+
+#### `is_raw`
+
+```rust
+fn is_raw(&self) -> bool
+```
+
+
+#### `get_text`
+
+```rust
+fn get_text(&self) -> Option<&str>
+```
+
+Extract text content (if present).
+
+### `Task`
+
+**Task**: Core A2A work unit (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `context_id` | `String` |  |
+| `status` | `TaskStatus` |  |
+| `history` | `Option&lt;Vec&lt;Message&gt;&gt;` |  |
+| `artifacts` | `Option&lt;Vec&lt;Artifact&gt;&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_id: String) -> Self
+```
+
+
+#### `with_id`
+
+```rust
+fn with_id(id: String, context_id: String) -> Self
+```
+
+
+#### `update_status`
+
+```rust
+fn update_status(&mut self, state: TaskState)
+```
+
+
+#### `update_status_with_message`
+
+```rust
+fn update_status_with_message(&mut self, state: TaskState, message: Message)
+```
+
+
+#### `add_artifact`
+
+```rust
+fn add_artifact(&mut self, artifact: Artifact)
+```
+
+
+#### `add_to_history`
+
+```rust
+fn add_to_history(&mut self, message: Message)
+```
+
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `is_terminal`
+
+```rust
+fn is_terminal(&self) -> bool
+```
+
+
+#### `is_active`
+
+```rust
+fn is_active(&self) -> bool
+```
+
+
+### `TaskPushNotificationConfig`
+
+Per-task push notification configuration (v1.0).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tenant` | `Option&lt;String&gt;` |  |
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+| `url` | `String` |  |
+| `token` | `Option&lt;String&gt;` |  |
+| `authentication` | `Option&lt;AuthenticationInfo&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>, impl Into<String>, impl Into<String>>(id: impl Into, task_id: impl Into, url: impl Into) -> Self
+```
+
+
+#### `with_tenant`
+
+```rust
+fn with_tenant<impl Into<String>>(self, tenant: impl Into) -> Self
+```
+
+
+#### `with_token`
+
+```rust
+fn with_token<impl Into<String>>(self, token: impl Into) -> Self
+```
+
+
+#### `with_authentication`
+
+```rust
+fn with_authentication(self, auth: AuthenticationInfo) -> Self
+```
+
+
+### `TaskStatus`
+
+**Task Status**: Current state with optional message.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | `TaskState` |  |
+| `message` | `Option&lt;Message&gt;` |  |
+| `timestamp` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(state: TaskState) -> Self
+```
+
+
+#### `update_timestamp`
+
+```rust
+fn update_timestamp(&mut self)
+```
+
+
+### `AuthenticatedExtendedCardParams`
+
+Params for `GetExtendedAgentCard` (was `agent/card/getAuthenticatedExtended`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `auth_token` | `Option&lt;String&gt;` |  |
+| `scope` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+### `AuthenticatedExtendedCardResult`
+
+Result for `GetExtendedAgentCard`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent_card` | `crate::AgentCard` |  |
+| `discovery_metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `timestamp` | `Option&lt;String&gt;` |  |
+
+### `DefaultAgentDiscovery`
+
+Default discovery implementation.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent_card: AgentCard) -> Self
+```
+
+
+#### `with_authentication_required`
+
+```rust
+fn with_authentication_required(self, required: bool) -> Self
+```
+
+
+### `CancelTaskRequest`
+
+Request params for `CancelTask` (was `tasks/cancel`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `CreateTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `config` | `TaskPushNotificationConfig` |  |
+
+### `DeleteTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+
+### `GetTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+
+### `GetTaskRequest`
+
+Request params for `GetTask` (was `tasks/get`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `ListTaskPushNotificationConfigsRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | `String` |  |
+
+### `ListTasksRequest`
+
+Request params for `ListTasks` (was `tasks/list`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tenant` | `Option&lt;String&gt;` |  |
+| `context_id` | `Option&lt;String&gt;` |  |
+| `status` | `Option&lt;String&gt;` |  |
+| `page_size` | `Option&lt;u32&gt;` |  |
+| `page_token` | `Option&lt;String&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+| `status_timestamp_after` | `Option&lt;String&gt;` |  |
+| `include_artifacts` | `bool` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `ListTasksResponse`
+
+Response for `ListTasks`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tasks` | `Vec&lt;Task&gt;` |  |
+| `next_page_token` | `Option&lt;String&gt;` |  |
+| `page_size` | `Option&lt;u32&gt;` |  |
+| `total_size` | `Option&lt;u32&gt;` |  |
+
+### `SendMessageConfiguration`
+
+Optional configuration for `SendMessage`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `accepted_output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `task_push_notification_config` | `Option&lt;TaskPushNotificationConfig&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+| `return_immediately` | `bool` |  |
+
+### `SendMessageRequest`
+
+Request params for `SendMessage` (was `message/send`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `Message` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `configuration` | `Option&lt;SendMessageConfiguration&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `SubscribeToTaskRequest`
+
+Request params for `SubscribeToTask` (reconnect to existing task SSE).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+
+### `ConversationContext`
+
+**Context Information for Conversation Management**
+
+Represents a conversation context that contains multiple tasks
+following the A2A protocol specification.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `context_id` | `String` | Unique context identifier (persistent across tasks) |
+| `created_at` | `String` | When the conversation started |
+| `last_active` | `String` | Last interaction time |
+| `task_count` | `u32` | Number of tasks in this context |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_id: String) -> Self
+```
+
+Create a new conversation context
+
+#### `update_activity`
+
+```rust
+fn update_activity(&mut self)
+```
+
+Update last active timestamp and increment task count
+
+### `InMemoryTaskStorage`
+
+In-Memory Task Storage Implementation
+
+Provides a simple in-memory task storage for development and testing.
+In production, this would be replaced with persistent storage.
+
+**Enhanced A2A Protocol Support**: Now includes separate context tracking
+for proper conversation management with 1:N context:task relationship.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new in-memory task storage
+
+#### `task_count`
+
+```rust
+fn task_count(&self) -> usize
+```
+
+Get the number of stored tasks (for testing)
+
+#### `context_count`
+
+```rust
+fn context_count(&self) -> usize
+```
+
+Get the number of stored contexts (for testing)
+
+#### `clear`
+
+```rust
+fn clear(&self)
+```
+
+Clear all tasks and contexts (for testing)
+
+## Enums
+
+### `A2AError`
+
+A2A Protocol Error
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `MethodNotFound { ... }` |  |
+| `InvalidParams { ... }` |  |
+| `AgentUnavailable { ... }` |  |
+| `CapabilityValidationFailed { ... }` |  |
+| `MethodExecutionFailed { ... }` |  |
+| `RegistryError { ... }` |  |
+| `ProtocolValidationError { ... }` |  |
+| `JsonRpcError(anyhow::Error)` |  |
+| `SerializationError(serde_json::Error)` |  |
+| `Internal { ... }` |  |
+| `TaskNotFound { ... }` |  |
+| `TaskNotCancelable { ... }` |  |
+| `PushNotificationNotSupported` |  |
+| `UnsupportedOperation { ... }` |  |
+| `ContentTypeNotSupported { ... }` |  |
+| `InvalidAgentResponse { ... }` |  |
+| `VersionNotSupported { ... }` |  |
+
+**Methods**
+
+#### `to_jsonrpc_error`
+
+```rust
+fn to_jsonrpc_error(&self) -> JsonRpcError
+```
+
+
+#### `method_not_found`
+
+```rust
+fn method_not_found<impl Into<String>>(method: impl Into) -> Self
+```
+
+
+#### `invalid_params`
+
+```rust
+fn invalid_params<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+
+#### `agent_unavailable`
+
+```rust
+fn agent_unavailable<impl Into<String>, impl Into<String>>(agent_id: impl Into, reason: impl Into) -> Self
+```
+
+
+#### `capability_validation_failed`
+
+```rust
+fn capability_validation_failed<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `method_execution_failed`
+
+```rust
+fn method_execution_failed<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+
+#### `registry_error`
+
+```rust
+fn registry_error<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `protocol_validation_error`
+
+```rust
+fn protocol_validation_error<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `internal`
+
+```rust
+fn internal<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `task_not_found`
+
+```rust
+fn task_not_found<impl Into<String>>(task_id: impl Into) -> Self
+```
+
+
+#### `task_not_cancelable`
+
+```rust
+fn task_not_cancelable<impl Into<String>>(task_id: impl Into) -> Self
+```
+
+
+#### `unsupported_operation`
+
+```rust
+fn unsupported_operation<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `version_not_supported`
+
+```rust
+fn version_not_supported<impl Into<String>>(version: impl Into) -> Self
+```
+
+
+### `SecurityScheme`
+
+Security scheme union (v1.0).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `ApiKey(ApiKeySecurityScheme)` |  |
+| `Http(HttpAuthSecurityScheme)` |  |
+| `OAuth2(OAuth2SecurityScheme)` |  |
+| `OpenIdConnect(OpenIdConnectSecurityScheme)` |  |
+| `MutualTls(MutualTlsSecurityScheme)` |  |
+
+### `MessageRole`
+
+**Message Role** (v1.0 — SCREAMING_SNAKE serialization)
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Unspecified` |  |
+| `User` |  |
+| `Agent` |  |
+
+### `TaskState`
+
+**Task State**: A2A v1.0 SCREAMING_SNAKE enum.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Unspecified` |  |
+| `Submitted` |  |
+| `Working` |  |
+| `InputRequired` |  |
+| `Completed` |  |
+| `Failed` |  |
+| `Canceled` |  |
+| `Rejected` |  |
+| `AuthRequired` |  |
+
+**Methods**
+
+#### `is_terminal`
+
+```rust
+fn is_terminal(&self) -> bool
+```
+
+Returns `true` for terminal states: Completed, Failed, Canceled, Rejected.
+
+#### `is_active`
+
+```rust
+fn is_active(&self) -> bool
+```
+
+Returns `true` for active states: Submitted, Working, InputRequired.
+
+#### `as_str`
+
+```rust
+fn as_str(&self) -> &''static str
+```
+
+Lowercase string for logging/display (not wire format).
+
+### `SendMessageResponse`
+
+Response for `SendMessage` — either a Task or a direct Message.
+
+Serialized as externally-tagged `{"task": {...}}` or `{"message": {...}}`
+matching the protobuf `oneof` JSON mapping required by A2A v1.0.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Task(Task)` |  |
+| `Message(Message)` |  |

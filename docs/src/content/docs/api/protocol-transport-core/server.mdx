@@ -1,0 +1,51 @@
+---
+title: "server"
+description: "Universal server abstractions for all protocols"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Universal server abstractions for all protocols
+
+## Structs
+
+### `UniversalServer`
+
+**Universal Server** - Single entry point for all protocols
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new universal server
+
+#### `register_protocol`
+
+```rust
+fn register_protocol<H>(&mut self, protocol: &str, handler: H)
+where
+    H: crate::AsyncProtocolHandler + ?
+```
+
+Register protocol handler with the router
+
+#### `add_health_endpoint`
+
+```rust
+fn add_health_endpoint(&mut self, protocol: &str, endpoint: &str)
+```
+
+Add health endpoint for specific protocol
+
+#### `serve_mock_request`
+
+```rust
+fn serve_mock_request(&self, path: &str, _method: &str, _body: &[u8]) -> anyhow::Result<(u16, HashMap<String, String>, Vec<u8>)>
+```
+

@@ -1,0 +1,63 @@
+---
+title: "timeout_policy"
+description: "Unified timeout policy for the agent platform."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Unified timeout policy for the agent platform.
+
+`TimeoutPolicy` is the single root configuration that propagates through
+every sub-component (A2A client, LLM client, coordination runtime,
+activation retries). It replaces scattered hardcoded defaults with an
+explicit three-clock streaming model.
+
+Unconditional: compiled for both WASM and native targets.
+
+## Structs
+
+### `TimeoutPolicy`
+
+Top-level timeout configuration.
+
+Propagated from CRD → `AgentRuntimeConfig` → `AgentBuilder` → sub-components.
+OSS users get `TimeoutPolicy::streaming_default()` automatically via
+`AgentBuilder::from_config_path()`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connect_ms` | `u64` | TCP + TLS handshake timeout (ms). Default: 10_000. |
+| `first_byte_ms` | `u64` | Time until first data chunk arrives (ms). Default: 45_000. |
+| `idle_ms` | `u64` | Max silence between consecutive chunks (ms). Resets on each chunk. Default: 90_000. |
+| `activation_budget_ms` | `u64` | Total activation budget for cold-start retries (ms). Default: 60_000. |
+| `wall_clock_ms` | `Option&lt;u64&gt;` | Wall-clock ceiling for LLM execution loops (ms). |
+
+**Methods**
+
+#### `streaming_default`
+
+```rust
+fn streaming_default() -> Self
+```
+
+Streaming-optimized defaults. Used for agents that serve SSE streams.
+
+#### `rpc_default`
+
+```rust
+fn rpc_default() -> Self
+```
+
+RPC (non-streaming) defaults. Total wall-clock 30s, no idle.
+
+#### `to_streaming_policy`
+
+```rust
+fn to_streaming_policy(&self) -> StreamingPolicy
+```
+
+Derive a `StreamingPolicy` for transport-level clients.

@@ -1,0 +1,72 @@
+---
+title: "pf_config"
+description: "pf_config - Layered configuration loader"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+pf_config - Layered configuration loader
+
+Sources (in precedence, low -> high):
+- Cargo.toml section (feature: cargo-toml)
+- JSON files
+- .env (feature: dotenv)
+- OS environment variables
+
+This crate is target-agnostic by design; initial implementation is native-only.
+
+## Structs
+
+### `LoadOptions`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `json_paths` | `Vec&lt;PathBuf&gt;` |  |
+| `enable_dotenv` | `bool` |  |
+| `env_prefix` | `Option&lt;&''static str&gt;` |  |
+| `env_key_transform` | `EnvKeyTransform` |  |
+| `required` | `bool` |  |
+
+## Enums
+
+### `ConfigError`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Io(Error)` |  |
+| `JsonParse(serde_json::Error)` |  |
+| `TypeMismatch(serde_json::Error)` |  |
+| `NotFound(String)` |  |
+
+### `EnvKeyTransform`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `DoubleUnderscoreToNested` | Convert `PREFIX_A__B__C` to nested `{"a": {"b": {"c": value}}}` |
+
+## Functions
+
+### `load_config_untyped`
+
+```rust
+fn load_config_untyped(opts: LoadOptions) -> Result<serde_json::Value, ConfigError>
+```
+
+
+### `load_config`
+
+```rust
+fn load_config<T>(opts: LoadOptions) -> Result<T, ConfigError>
+```
+

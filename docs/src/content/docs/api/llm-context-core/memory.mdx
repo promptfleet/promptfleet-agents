@@ -1,0 +1,118 @@
+---
+title: "memory"
+description: "Long-term memory trait ports."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Long-term memory trait ports.
+
+Defines the interface for cross-conversation semantic memory backends
+(e.g. Qdrant + embeddings). This module contains only trait definitions
+and types — implementations live in `agent_memory_store`.
+
+WASM-compatible: no async runtime dependencies.
+
+## Type Aliases
+
+### `MemoryFuture`
+
+```rust
+type MemoryFuture = Pin<Box<dyn Future + Send>>;
+```
+
+Boxed future type for native (requires Send).
+
+## Traits
+
+### `LongTermMemory`
+
+Trait port for long-term memory backends.
+
+Implementations handle embedding, storage, and semantic retrieval.
+The trait is object-safe and WASM-compatible.
+
+# Implementations
+
+- `agent_memory_store::QdrantMemoryStore` — Qdrant + embedding_provider_lib
+- In-memory store for testing
+
+**Required / Provided Methods**
+
+```rust
+fn store(&self, entry: MemoryEntry) -> MemoryFuture<()>
+```
+
+Store a memory entry (embedding + indexing happens internally).
+
+```rust
+fn recall(&self, query: &str, top_k: usize, filters: MemoryFilters) -> MemoryFuture<Vec<MemoryEntry>>
+```
+
+Recall relevant memories by semantic similarity to a query.
+
+Returns up to `top_k` entries sorted by relevance (highest first).
+
+```rust
+fn forget(&self, filters: MemoryFilters) -> MemoryFuture<u64>
+```
+
+Delete memories matching the given filters.
+
+Returns the number of entries deleted.
+
+## Structs
+
+### `MemoryEntry`
+
+A single memory entry stored in the long-term memory backend.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Unique ID for this memory entry. |
+| `agent_id` | `String` | Agent that created this memory. |
+| `user_id` | `Option&lt;String&gt;` | User this memory belongs to (for multi-tenant isolation). |
+| `conversation_id` | `Option&lt;String&gt;` | Conversation this memory was extracted from. |
+| `content` | `String` | The text content to embed and store. |
+| `memory_type` | `MemoryType` | Classification of this memory. |
+| `timestamp` | `u64` | Unix timestamp (seconds) when this memory was created. |
+| `score` | `f32` | Relevance score (set during retrieval, 0.0 to 1.0). |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Arbitrary metadata (e.g. source turn number, tags). |
+
+### `MemoryFilters`
+
+Filters for memory retrieval.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent_id` | `Option&lt;String&gt;` | Filter by agent ID. |
+| `user_id` | `Option&lt;String&gt;` | Filter by user ID. |
+| `conversation_id` | `Option&lt;String&gt;` | Filter by conversation ID. |
+| `memory_types` | `Vec&lt;MemoryType&gt;` | Filter by memory type(s). |
+| `after_timestamp` | `Option&lt;u64&gt;` | Only return memories newer than this timestamp (seconds). |
+
+### `NoOpMemory`
+
+No-op memory backend (used when long-term memory is disabled).
+
+## Enums
+
+### `MemoryType`
+
+Type of memory entry — helps with filtering and relevance scoring.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Summary` | Summarized conversation segment. |
+| `Fact` | Extracted factual statement (e.g. "User prefers dark mode"). |
+| `Instruction` | User instruction or preference. |
+| `ToolResult` | Compressed tool result worth remembering. |
+| `Custom(String)` | Arbitrary user-defined type. |

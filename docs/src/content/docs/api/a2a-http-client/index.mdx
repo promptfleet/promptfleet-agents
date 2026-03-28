@@ -1,0 +1,304 @@
+---
+title: "a2a_http_client"
+description: "# A2A HTTP Client"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# A2A HTTP Client
+
+**A2A HTTP Client** with WASM default and native testing support
+
+✅ **Target Adaptive**: WASM (Spin SDK) + Native (Reqwest) with identical APIs
+✅ **Complete Feature Parity**: All A2A protocol methods work identically
+✅ **Testing Excellence**: Native async runtime for comprehensive testing
+✅ **Clean Interface**: Same call() method across all targets
+✅ **Activation Aware**: Retry with backoff for KEDA scale-to-zero cold starts
+
+## Structs
+
+### `ActivationConfig`
+
+Configuration for activation-aware retries when calling potentially cold agents.
+
+These values drive the SDK-side retry budget. The KEDA HTTP Add-on
+`HTTPScaledObject` does NOT have a CRD-level queueDepth -- this is the
+platform's enforcement layer.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_cold_start_timeout` | `Duration` | Max time to wait for a cold agent to respond. Default: 5s. |
+| `initial_backoff` | `Duration` | Initial retry delay. Default: 100ms. |
+| `max_backoff` | `Duration` | Max retry delay cap. Default: 2s. |
+| `max_retries` | `u32` | Max retries before giving up. Default: 3. |
+| `jitter` | `bool` | Add jitter to backoff. Default: true. |
+
+**Methods**
+
+#### `backoff_for_attempt`
+
+```rust
+fn backoff_for_attempt(&self, attempt: u32) -> Duration
+```
+
+Compute the backoff duration for a given attempt (0-indexed).
+
+Uses exponential backoff: `initial * 2^attempt`, capped at `max_backoff`.
+When jitter is enabled, the result is multiplied by a factor in [0.5, 1.0].
+
+#### `is_retriable_status`
+
+```rust
+fn is_retriable_status(status: u16) -> bool
+```
+
+Check if an HTTP status code indicates a retriable cold-start scenario.
+
+#### `is_retriable_error`
+
+```rust
+fn is_retriable_error(error_msg: &str) -> bool
+```
+
+Check if an error message indicates a retriable connection failure.
+
+### `Client`
+
+**External A2A Client** - Native implementation using Reqwest
+
+Built streaming-first: the internal `reqwest::Client` has only a
+`connect_timeout` — no total request timeout. RPC (non-streaming) calls
+add a per-request `.timeout()`. Streaming calls use `first_byte_ms` +
+`IdleTimeoutStream` instead of wall-clock limits.
+
+**Methods**
+
+#### `external`
+
+```rust
+fn external<impl Into<String>>(url: impl Into) -> Self
+```
+
+Create client for external agent with default streaming policy.
+
+#### `external_with_policy`
+
+```rust
+fn external_with_policy<impl Into<String>>(url: impl Into, policy: StreamingPolicy) -> Self
+```
+
+Create client for external agent with explicit streaming policy.
+
+#### `with_header`
+
+```rust
+fn with_header(self, key: String, value: String) -> Self
+```
+
+Add custom header
+
+#### `url`
+
+```rust
+fn url(&self) -> &str
+```
+
+Get URL (for testing)
+
+#### `has_header`
+
+```rust
+fn has_header(&self, key: &str) -> bool
+```
+
+Check if header exists (for testing)
+
+#### `call`
+
+```rust
+async fn call(&self, method: &str, params: Value) -> Result<Value, RpcError>
+```
+
+**UNIVERSAL CALL** - Same interface as core Client::call()
+
+#### `ping`
+
+```rust
+async fn ping(&self) -> Result<Value, RpcError>
+```
+
+
+#### `get_agent_card`
+
+```rust
+async fn get_agent_card(&self) -> Result<Value, RpcError>
+```
+
+
+#### `metadata`
+
+```rust
+async fn metadata(&self) -> Result<Value, RpcError>
+```
+
+Backward-compat alias for `get_agent_card`.
+
+#### `run`
+
+```rust
+async fn run(&self, input: Value) -> Result<Value, RpcError>
+```
+
+
+#### `message_send`
+
+```rust
+async fn message_send(&self, message: Message, metadata: Option<HashMap<String, Value>>) -> Result<Value, RpcError>
+```
+
+**SendMessage** — Send message using A2A v1.0 protocol.
+
+#### `task_get`
+
+```rust
+async fn task_get(&self, task_id: String) -> Result<Task, RpcError>
+```
+
+**GetTask** — Retrieve task state and artifacts.
+
+#### `task_cancel`
+
+```rust
+async fn task_cancel(&self, task_id: String) -> Result<Task, RpcError>
+```
+
+**CancelTask** — Cancel an ongoing task.
+
+#### `task_list`
+
+```rust
+async fn task_list(&self, context_id: Option<String>, status: Option<String>, page_size: Option<u32>, page_token: Option<String>) -> Result<Value, RpcError>
+```
+
+**ListTasks** — List agent tasks with filtering.
+
+#### `get_extended_agent_card`
+
+```rust
+async fn get_extended_agent_card(&self, auth_token: Option<String>, scope: Option<Vec<String>>, metadata: Option<HashMap<String, Value>>) -> Result<Value, RpcError>
+```
+
+**GetExtendedAgentCard** — Get extended agent information.
+
+#### `agent_card`
+
+```rust
+async fn agent_card(&self) -> Result<String, ClientError>
+```
+
+**AGENT CARD**: Get agent discovery info (HTTP GET, not JSON-RPC)
+
+#### `call_with_activation`
+
+```rust
+async fn call_with_activation(&self, method: &str, params: serde_json::Value, config: &ActivationConfig, request_id: &str) -> Result<serde_json::Value, RpcError>
+```
+
+Call an A2A method with activation-aware retries for cold-start tolerance.
+
+When KEDA scales an agent to 0 replicas, the KEDA interceptor buffers
+the request and triggers scale-up. If the interceptor returns a retriable
+error (503, 502, 504, connection refused), this method retries with
+exponential backoff per the provided [`ActivationConfig`].
+
+Non-retriable errors (4xx, 500) are returned immediately without retry.
+
+An idempotency key is generated per attempt using `request_id` for safe
+retries on state-mutating methods like `message/send`. The key is
+available for future HTTP header injection (`X-Idempotency-Key`).
+
+### `RpcError`
+
+**RPC Error type** - Compatible with core client interface
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `i32` |  |
+| `message` | `String` |  |
+
+**Methods**
+
+#### `internal_error`
+
+```rust
+fn internal_error(message: &str) -> Self
+```
+
+
+## Enums
+
+### `ClientError`
+
+Client errors
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Network(String)` |  |
+| `Serialization(String)` |  |
+| `JsonRpc(String)` |  |
+| `Validation(String)` |  |
+
+## Functions
+
+### `activation_delay`
+
+```rust
+async fn activation_delay(duration: Duration)
+```
+
+Async delay for activation retries. Uses `tokio::time::sleep` on native
+and `std::thread::sleep` (WASI monotonic clock) on WASM.
+
+### `idempotency_key`
+
+```rust
+fn idempotency_key(request_id: &str, attempt: u32) -> String
+```
+
+Generate an idempotency key for safe retries on state-mutating requests.
+
+Format: `{request_id}:{attempt}` -- the server should deduplicate by this key.
+
+### `retry_with_activation`
+
+```rust
+async fn retry_with_activation<T, E, F, Fut>(config: &ActivationConfig, call_fn: F) -> Result<T, E>
+where
+    E: Display,
+    F: FnMut,
+    Fut: Future
+```
+
+Execute an async operation with activation-aware retries.
+
+`call_fn` receives the 0-indexed attempt number and returns `Result<T, E>`.
+Errors whose `Display` output matches [`ActivationConfig::is_retriable_error`]
+are retried with exponential backoff; all other errors are returned immediately.
+
+Returns the first `Ok`, or the last `Err` when retries are exhausted.
+
+### `check_connectivity`
+
+```rust
+async fn check_connectivity(url: &str) -> bool
+```
+
+**CONVENIENCE**: Check if target is reachable

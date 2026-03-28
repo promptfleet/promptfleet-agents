@@ -1,0 +1,89 @@
+---
+title: "pf_types"
+description: "Lightweight naming and validation primitives for the PromptFleet agent ecosystem."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.2.0.</Aside>
+
+Lightweight naming and validation primitives for the PromptFleet agent ecosystem.
+
+This crate provides [`AgentSlug`] (the canonical `tenant:space:agent` address)
+and name normalisation helpers. It has **no** runtime dependencies beyond
+`thiserror` and optional `serde` — intentionally kept small so WASM agents
+and third-party integrations can depend on it without pulling in cloud
+platform concerns.
+
+## Structs
+
+### `AgentSlug`
+
+
+**Methods**
+
+#### `canonical`
+
+```rust
+fn canonical(&self) -> &str
+```
+
+
+#### `into_string`
+
+```rust
+fn into_string(self) -> String
+```
+
+
+#### `from_canonical`
+
+```rust
+fn from_canonical(input: &str) -> Result<Self, TypeError>
+```
+
+
+#### `from_names`
+
+```rust
+fn from_names(tenant: &str, space: &str, agent: &str) -> Result<Self, TypeError>
+```
+
+
+#### `to_subject`
+
+```rust
+fn to_subject(&self) -> String
+```
+
+
+#### `from_subject`
+
+```rust
+fn from_subject(subject: &str) -> Result<Self, TypeError>
+```
+
+
+## Enums
+
+### `TypeError`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `InvalidSlugSegment { ... }` |  |
+| `InvalidSubject(String)` |  |
+
+## Functions
+
+### `normalize_name`
+
+```rust
+fn normalize_name(input: &str) -> Result<String, TypeError>
+```
+
+Normalize a name segment to a K8s-label-safe, lowercase string.
+
+Public so downstream crates can apply the same normalisation rules.

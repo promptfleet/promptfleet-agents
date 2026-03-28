@@ -1,0 +1,150 @@
+---
+title: "mcp_protocol"
+description: "# Model Context Protocol (MCP) Implementation"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Model Context Protocol (MCP) Implementation
+
+**Standards-compliant MCP implementation** for PromptFleet agents
+- **JSON-RPC 2.0** wire format (MCP specification requirement)
+- **HTTP/HTTPS transport** with OAuth 2.1 Bearer token support
+- **FastMCP compatible** - interoperable with Python FastMCP and TypeScript MCP SDKs
+- **External MCP servers** - connect to any MCP server via proxy
+
+## Compatibility Verified (June 2025)
+- MCP Specification 2025-06-18 (latest)
+- JSON-RPC 2.0 specification compliant
+- FastMCP Python implementation compatible
+- Standard OAuth 2.1 Bearer token authentication
+- HTTP+SSE and Streamable HTTP transport support
+
+## Core Features
+- **Tool Discovery**: `list_tools` method
+- **Tool Execution**: `call_tool` method with proper parameter handling
+- **Memory Operations**: `add_memory`, `search_memory` methods
+- **Health Monitoring**: `heartbeat` and health endpoints
+- **Authentication**: Bearer token and custom auth strategies
+- **Proxy Support**: Connect to external MCP servers outside Kubernetes
+
+## Constants
+
+### `MCP_PROTOCOL_VERSION`
+
+```rust
+const MCP_PROTOCOL_VERSION: &str = ;
+```
+
+**MCP Protocol Version** - Current specification version
+
+### `JSONRPC_VERSION`
+
+```rust
+const JSONRPC_VERSION: &str = ;
+```
+
+**JSON-RPC Version** - Required by MCP specification
+
+## Traits
+
+### `ToolProvider`
+
+**Tool Provider Trait** - Pure abstraction for tool operations
+
+**Required / Provided Methods**
+
+```rust
+fn list_tools(&self) -> Result<Vec<Tool>, ProtocolError>
+```
+
+List tools from this provider
+
+```rust
+fn call_tool<'life0, 'life1, 'async_trait>(&self, name: &''life1 str, arguments: Option<serde_json::Value>) -> pin::Pin<Box<dyn future::Future + marker::Send>>
+where
+    Self: ?
+```
+
+Execute tool via this provider
+
+## Structs
+
+### `McpProtocolHandler`
+
+**MCP Protocol Handler** - Integrates with protocol_transport_core
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new MCP protocol handler
+
+#### `with_capabilities`
+
+```rust
+fn with_capabilities(self, capabilities: ServerCapabilities) -> Self
+```
+
+Configure server capabilities
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Configure authentication handler
+
+#### `with_tool_provider`
+
+```rust
+fn with_tool_provider<P>(self, provider: P) -> Self
+```
+
+Configure tool provider
+
+#### `with_query_mode`
+
+```rust
+fn with_query_mode(self, query_mode: QueryMode) -> Self
+```
+
+Configure query mode
+
+## Enums
+
+### `QueryMode`
+
+**Query Mode** - How to handle tool listing
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Single` | List tools from single provider (standard MCP behavior) |
+| `Aggregate` | Aggregate tools from all providers (special case) |
+
+## Functions
+
+### `create_mcp_handler`
+
+```rust
+fn create_mcp_handler() -> McpProtocolHandler
+```
+
+**Quick setup function** for MCP protocol handler
+
+### `create_mcp_handler_with_capabilities`
+
+```rust
+fn create_mcp_handler_with_capabilities(capabilities: ServerCapabilities) -> McpProtocolHandler
+```
+
+**Quick setup function** for MCP protocol handler with custom capabilities

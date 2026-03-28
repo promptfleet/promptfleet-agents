@@ -1,0 +1,1320 @@
+---
+title: "agent_sdk"
+description: "# Agent SDK"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Agent SDK
+
+Runtime-first SDK for building PromptFleet agents with optional protocol
+adapters.
+
+The public foundation of this crate is the agent runtime: skills, tools,
+services, protocol-neutral message types, and runtime event streams.
+Protocol adapters such as A2A and AG-UI are enabled through explicit
+features rather than defining the identity of the crate.
+
+The canonical model is:
+- build one [`Agent`]
+- compose A2A support with [`crate::a2a`]
+- compose AG-UI support with [`crate::agui`]
+
+## Feature Presets
+
+- `agui-agent`: user-facing AG-UI agent runtime
+- `a2a-agent`: A2A-capable interoperable agent runtime
+- `dual-agent`: both A2A and AG-UI
+- `pf-agent`: PromptFleet opinionated full bundle
+
+## Which Features Do I Need?
+
+- Building a runtime with skills, tools, and your own loop: `agent-core`
+- Adding the built-in LLM loop: `llm-engine`
+- Serving only a user-facing AG-UI experience: `agui-agent`
+- Serving and calling A2A agents: `a2a-agent`
+- Supporting both A2A and AG-UI in one runtime: `dual-agent`
+- Using the full PromptFleet stack: `pf-agent`
+- Adding context trimming or token budgeting: `context-window`
+- Adding observability, storage, or sub-agents: compose the matching primitive features on top
+
+## Feature matrix (surfaces)
+
+| Surface | Native | WASM |
+| --- | --- | --- |
+| [`AgentBuilder`] | yes | yes |
+| [`crate::a2a::A2aApp`] | yes | yes |
+| [`crate::a2a::A2aClient`] | yes | target-gated |
+| [`AgentHostBuilder`] + A2A | yes | yes |
+| [`AgentHostBuilder`] + AG-UI | yes | no |
+
+## Quick Start
+
+### Core Agent
+
+```rust
+use agent_sdk::{AgentBuilder, error::SdkResult};
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> SdkResult<()> {
+    let mut agent = AgentBuilder::new("weather-agent")?.build()?;
+
+    agent
+        .add_skill("get_weather")
+        .handler(|params| async move {
+            let location = params["location"].as_str().unwrap_or("unknown");
+            Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
+        })
+        .register()?;
+
+    // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
+
+    Ok(())
+}
+```
+
+### LLM runtime (`llm-engine`)
+
+On **native** with `llm-engine`, call [`crate::Agent::configure_llm_runtime`] after
+[`AgentBuilder::build`] with an OpenAI-compatible [`llm_client::LlmClient`] (or another type
+that implements the invoker traits) and a [`crate::agent::tools::ToolRegistry`]:
+
+```rust
+use agent_sdk::{AgentBuilder, SdkResult};
+use agent_sdk::agent::tools::ToolRegistry;
+use llm_client::{LlmClient, WireFormat};
+use llm_client::auth::ApiKeyAuth;
+
+fn wire_llm() -> SdkResult<()> {
+    let mut agent = AgentBuilder::new("my-agent")?.build()?;
+    let client = LlmClient::builder(WireFormat::OpenAiCompat)
+        .base_url("https://api.openai.com/v1")
+        .auth(ApiKeyAuth::new("sk-..."))
+        .build()
+        .map_err(|e| agent_sdk::SdkError::configuration(e.to_string()))?;
+    let tools = ToolRegistry::new();
+    agent.configure_llm_runtime(client, "gpt-4o-mini", tools, None, None, None)?;
+    Ok(())
+}
+```
+
+### Migration from older SDK snapshots
+
+- Use [`AgentBuilder::new`] or [`AgentBuilder::from_config`] instead of crate-root `new`/`new_runtime` helpers (removed).
+- Use [`crate::Agent::configure_llm_runtime`] instead of `set_llm_tools_message_handler_configured` / `_with`.
+- Use [`SkillEntryBuilder`] via [`crate::Agent::add_skill`] for optional handler + full metadata.
+
+### Native Host Composition
+
+```rust
+# #[cfg(all(not(target_arch = "wasm32"), feature = "dual-agent"))]
+# {
+use agent_sdk::{AgentBuilder, AgentHostBuilder, SdkResult};
+use agent_sdk::agui::AgUiConfig;
+
+# fn example() -> SdkResult<()> {
+let agent = AgentBuilder::from_config_path("agent.json")?.build()?;
+let router = AgentHostBuilder::new(agent)
+    .with_a2a()
+    .with_agui(AgUiConfig::default())
+    .build_router()?;
+# let _ = router;
+# Ok(())
+# }
+# }
+```
+
+## Constants
+
+### `SDK_VERSION`
+
+```rust
+const SDK_VERSION: &str = ;
+```
+
+SDK version info
+
+## Type Aliases
+
+### `CallableSkill`
+
+```rust
+type CallableSkill = Box<dyn Fn + Send + Sync>;
+```
+
+Boxed async callable: `serde_json::Value` in, [`SdkResult`] of JSON out.
+
+On native targets the future is `Send`; on WASM it is single-threaded.
+
+### `SdkResult`
+
+```rust
+type SdkResult = Result<T, SdkError>;
+```
+
+Result type for SDK operations
+
+## Structs
+
+### `Agent`
+
+Core Agent implementation
+
+The `Agent` struct is the main runtime entry point for registering skills,
+wiring handlers, and dispatching runtime messages. Protocol surfaces such as
+A2A and AG-UI compose around this type via adapter modules.
+
+**Methods**
+
+#### `new_runtime`
+
+```rust
+fn new_runtime(name: &str) -> SdkResult<Self>
+```
+
+Create a new runtime-first agent.
+
+#### `new`
+
+```rust
+fn new(name: &str) -> SdkResult<Self>
+```
+
+Create a new agent (alias of `new_runtime`)
+
+#### `new_with_config`
+
+```rust
+fn new_with_config(config: AgentConfig) -> SdkResult<Self>
+```
+
+Create agent with custom configuration
+
+#### `with_service`
+
+```rust
+fn with_service<T>(self, service: T) -> Self
+```
+
+
+#### `get_service`
+
+```rust
+fn get_service<T>(&self) -> Option<Arc<T>>
+```
+
+
+#### `has_service`
+
+```rust
+fn has_service<T>(&self) -> bool
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_>
+```
+
+Register a skill via the fluent builder (handler optional — omit for metadata-only).
+
+#### `skill`
+
+```rust
+fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a skill with a handler (`add_skill(name).handler(handler)`).
+
+#### `register_notification`
+
+```rust
+fn register_notification<F, Fut>(&mut self, name: &str, handler: F) -> SdkResult<()>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a notification handler.
+
+#### `config`
+
+```rust
+fn config(&self) -> &AgentConfig
+```
+
+
+#### `list_skills`
+
+```rust
+fn list_skills(&self) -> Vec<String>
+```
+
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+
+#### `skill_registry`
+
+```rust
+fn skill_registry(&self) -> &SkillRegistry
+```
+
+Get read-only reference to the skill registry.
+
+#### `set_message_handler`
+
+```rust
+fn set_message_handler<F, Fut>(&mut self, handler: F)
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+
+#### `dispatch_message`
+
+```rust
+async fn dispatch_message(&self, msg_ctx: MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Unified entrypoint to route a built MessageContext through the active handler.
+
+### `AgentConfig`
+
+**Agent Configuration**
+
+Configuration for agent behavior, capabilities, and response patterns.
+
+# Response Modes
+
+The agent supports different response patterns:
+
+- **Stateful (default)**: Creates Task responses for conversation continuity
+- **Stateless**: Prefers lightweight Message responses for API-style interactions
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+// Default stateful agent
+let config = AgentConfig::default();
+
+// Stateless agent for API-style interactions
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `version` | `String` |  |
+| `storage_prefix` | `Option&lt;String&gt;` | Optional storage namespace prefix used by shared task-storage backends. |
+| `max_message_size` | `u64` |  |
+| `streaming` | `bool` |  |
+| `batch_processing` | `bool` |  |
+| `concurrent_tasks` | `Option&lt;u32&gt;` |  |
+| `stateless_methods` | `bool` | Prefer stateless responses (Message) over stateful (Task) for methods |
+| `base_url` | `Option&lt;String&gt;` | Base URL for constructing absolute `AgentInterface` URLs in the agent card. |
+| `history_policy` | `Option&lt;HistoryPolicyConfig&gt;` | Optional history policy used for durable continuation preparation. |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>, impl Into<String>>(name: impl Into, description: impl Into) -> Self
+```
+
+Create a new agent configuration
+
+# Arguments
+
+* `name` - Agent name
+* `description` - Agent description
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("my-agent", "My Agent Description");
+```
+
+#### `stateless`
+
+```rust
+fn stateless(self) -> Self
+```
+
+Configure agent for stateless method responses
+
+When enabled, methods will prefer lightweight Message responses
+over Task responses for API-style interactions.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+#### `stateful`
+
+```rust
+fn stateful(self) -> Self
+```
+
+Configure agent for stateful method responses (default)
+
+Methods will create Task responses for conversation continuity.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::default()
+    .stateful(); // Explicit stateful (default behavior)
+```
+
+#### `with_base_url`
+
+```rust
+fn with_base_url<impl Into<String>>(self, url: impl Into) -> Self
+```
+
+Set the base URL for absolute `AgentInterface` URLs in the agent card.
+
+The A2A v1.0 spec requires absolute URLs in `AgentInterface.url`.
+When set, the SDK produces `{base_url}/jsonrpc` instead of `/jsonrpc`.
+
+#### `with_history_policy`
+
+```rust
+fn with_history_policy(self, policy: HistoryPolicyConfig) -> Self
+```
+
+Attach a history policy for pre/post-turn continuation preparation.
+
+### `Agent`
+
+Core Agent implementation
+
+The `Agent` struct is the main runtime entry point for registering skills,
+wiring handlers, and dispatching runtime messages. Protocol surfaces such as
+A2A and AG-UI compose around this type via adapter modules.
+
+**Methods**
+
+#### `new_runtime`
+
+```rust
+fn new_runtime(name: &str) -> SdkResult<Self>
+```
+
+Create a new runtime-first agent.
+
+#### `new`
+
+```rust
+fn new(name: &str) -> SdkResult<Self>
+```
+
+Create a new agent (alias of `new_runtime`)
+
+#### `new_with_config`
+
+```rust
+fn new_with_config(config: AgentConfig) -> SdkResult<Self>
+```
+
+Create agent with custom configuration
+
+#### `with_service`
+
+```rust
+fn with_service<T>(self, service: T) -> Self
+```
+
+
+#### `get_service`
+
+```rust
+fn get_service<T>(&self) -> Option<Arc<T>>
+```
+
+
+#### `has_service`
+
+```rust
+fn has_service<T>(&self) -> bool
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_>
+```
+
+Register a skill via the fluent builder (handler optional — omit for metadata-only).
+
+#### `skill`
+
+```rust
+fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a skill with a handler (`add_skill(name).handler(handler)`).
+
+#### `register_notification`
+
+```rust
+fn register_notification<F, Fut>(&mut self, name: &str, handler: F) -> SdkResult<()>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a notification handler.
+
+#### `config`
+
+```rust
+fn config(&self) -> &AgentConfig
+```
+
+
+#### `list_skills`
+
+```rust
+fn list_skills(&self) -> Vec<String>
+```
+
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+
+#### `skill_registry`
+
+```rust
+fn skill_registry(&self) -> &SkillRegistry
+```
+
+Get read-only reference to the skill registry.
+
+#### `set_message_handler`
+
+```rust
+fn set_message_handler<F, Fut>(&mut self, handler: F)
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+
+#### `dispatch_message`
+
+```rust
+async fn dispatch_message(&self, msg_ctx: MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Unified entrypoint to route a built MessageContext through the active handler.
+
+### `AgentConfig`
+
+**Agent Configuration**
+
+Configuration for agent behavior, capabilities, and response patterns.
+
+# Response Modes
+
+The agent supports different response patterns:
+
+- **Stateful (default)**: Creates Task responses for conversation continuity
+- **Stateless**: Prefers lightweight Message responses for API-style interactions
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+// Default stateful agent
+let config = AgentConfig::default();
+
+// Stateless agent for API-style interactions
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `version` | `String` |  |
+| `storage_prefix` | `Option&lt;String&gt;` | Optional storage namespace prefix used by shared task-storage backends. |
+| `max_message_size` | `u64` |  |
+| `streaming` | `bool` |  |
+| `batch_processing` | `bool` |  |
+| `concurrent_tasks` | `Option&lt;u32&gt;` |  |
+| `stateless_methods` | `bool` | Prefer stateless responses (Message) over stateful (Task) for methods |
+| `base_url` | `Option&lt;String&gt;` | Base URL for constructing absolute `AgentInterface` URLs in the agent card. |
+| `history_policy` | `Option&lt;HistoryPolicyConfig&gt;` | Optional history policy used for durable continuation preparation. |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>, impl Into<String>>(name: impl Into, description: impl Into) -> Self
+```
+
+Create a new agent configuration
+
+# Arguments
+
+* `name` - Agent name
+* `description` - Agent description
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("my-agent", "My Agent Description");
+```
+
+#### `stateless`
+
+```rust
+fn stateless(self) -> Self
+```
+
+Configure agent for stateless method responses
+
+When enabled, methods will prefer lightweight Message responses
+over Task responses for API-style interactions.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+#### `stateful`
+
+```rust
+fn stateful(self) -> Self
+```
+
+Configure agent for stateful method responses (default)
+
+Methods will create Task responses for conversation continuity.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::default()
+    .stateful(); // Explicit stateful (default behavior)
+```
+
+#### `with_base_url`
+
+```rust
+fn with_base_url<impl Into<String>>(self, url: impl Into) -> Self
+```
+
+Set the base URL for absolute `AgentInterface` URLs in the agent card.
+
+The A2A v1.0 spec requires absolute URLs in `AgentInterface.url`.
+When set, the SDK produces `{base_url}/jsonrpc` instead of `/jsonrpc`.
+
+#### `with_history_policy`
+
+```rust
+fn with_history_policy(self, policy: HistoryPolicyConfig) -> Self
+```
+
+Attach a history policy for pre/post-turn continuation preparation.
+
+### `HistoryPolicyConfig`
+
+Agent-level history policy configuration.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mode` | `HistoryPolicyMode` |  |
+| `strategy` | `HistoryStrategyKind` |  |
+| `context_window_tokens` | `u32` |  |
+| `max_output_tokens` | `u32` |  |
+| `enable_summarization` | `bool` |  |
+| `enable_long_term_memory` | `bool` |  |
+| `recall_top_k` | `usize` |  |
+| `memory_token_budget` | `u32` |  |
+
+### `SkillCall`
+
+**Skill Call Information**
+
+Extracted from DataPart when a structured skill call is detected.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `skill_id` | `String` |  |
+| `parameters` | `serde_json::Value` |  |
+
+### `SkillEntryBuilder`
+
+Fluent builder for skill registration.
+
+Created via [`SkillRegistry::add_skill`] / [`crate::Agent::add_skill`], or [`SkillRegistry::skill`] /
+[`crate::Agent::skill`] when providing a handler. Finalize with [`.register()`](Self::register).
+
+**Methods**
+
+#### `handler`
+
+```rust
+fn handler<F, Fut>(self, handler: F) -> Self
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Attach an async handler. Omit for metadata-only skills (discovery card + LLM awareness).
+
+#### `display_name`
+
+```rust
+fn display_name<S>(self, name: S) -> Self
+```
+
+
+#### `description`
+
+```rust
+fn description<S>(self, desc: S) -> Self
+```
+
+
+#### `schema`
+
+```rust
+fn schema(self, schema: Value) -> Self
+```
+
+
+#### `examples`
+
+```rust
+fn examples(self, examples: Vec<String>) -> Self
+```
+
+
+#### `example`
+
+```rust
+fn example<S>(self, example: S) -> Self
+```
+
+
+#### `tags`
+
+```rust
+fn tags(self, tags: &[&str]) -> Self
+```
+
+
+#### `tag`
+
+```rust
+fn tag<S>(self, tag: S) -> Self
+```
+
+
+#### `input_modes`
+
+```rust
+fn input_modes(self, modes: &[&str]) -> Self
+```
+
+
+#### `output_modes`
+
+```rust
+fn output_modes(self, modes: &[&str]) -> Self
+```
+
+
+#### `json_only`
+
+```rust
+fn json_only(self) -> Self
+```
+
+
+#### `text_only`
+
+```rust
+fn text_only(self) -> Self
+```
+
+
+#### `instructions`
+
+```rust
+fn instructions<S>(self, text: S) -> Self
+```
+
+Set behavioral instructions (injected into LLM context when skill is activated).
+
+#### `expose`
+
+```rust
+fn expose(self, visible: bool) -> Self
+```
+
+Control whether the skill is visible on the discovery card (default: true).
+
+#### `llm_callable`
+
+```rust
+fn llm_callable(self, callable: bool) -> Self
+```
+
+Control whether the LLM can invoke this skill via `read_skill` tool (default: false).
+
+#### `register`
+
+```rust
+fn register(self) -> SdkResult<()>
+```
+
+Finalize registration.
+
+### `AgentHost`
+
+Single host value combining the shared [`crate::Agent`] with enabled protocol adapters.
+
+### `AgentHostBuilder`
+
+Builder for [`AgentHost`] — enable A2A and/or AG-UI adapters before [`Self::build`].
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent: Agent) -> Self
+```
+
+Start from a fully built [`crate::Agent`].
+
+#### `build`
+
+```rust
+fn build(self) -> SdkResult<AgentHost>
+```
+
+Finish configuration. Fails if no adapter was enabled (A2A and/or AG-UI).
+
+### `InteractionOption`
+
+A selectable option for interaction prompts.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Stable id for this option (used in `selected_option_id` on the response). |
+| `label` | `String` | Short label shown in the UI. |
+| `description` | `Option&lt;String&gt;` | Optional longer description. |
+
+### `InteractionRequest`
+
+Request payload emitted by agents to ask for user input.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `interaction_id` | `String` | Correlates the request with [`InteractionResponse::interaction_id`]. |
+| `kind` | `InteractionKind` | Question vs confirmation flow. |
+| `question` | `String` | Prompt text shown to the user. |
+| `options` | `Vec&lt;InteractionOption&gt;` | For choice-style prompts; empty if free-text only. |
+| `allow_free_text` | `bool` | Whether the user may type an answer instead of picking an option. |
+| `allow_cancel` | `bool` | Whether the user may dismiss without resolving (cancel). |
+| `default_option_id` | `Option&lt;String&gt;` | Pre-selected option id when `options` is non-empty. |
+| `timeout_ms` | `Option&lt;u64&gt;` | Optional auto-expiry for the interaction (milliseconds). |
+| `continuation_id` | `Option&lt;String&gt;` | Optional id for multi-step / resumed flows. |
+| `source_node` | `Option&lt;String&gt;` | Optional coordination graph node id (if applicable). |
+| `metadata` | `Option&lt;serde_json::Value&gt;` | Arbitrary extension payload. |
+
+### `InteractionResponse`
+
+Response payload for resolving a pending interaction.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `interaction_id` | `String` | Must match the pending [`InteractionRequest::interaction_id`]. |
+| `selected_option_id` | `Option&lt;String&gt;` | Chosen option when the user picked from `options`. |
+| `free_text` | `Option&lt;String&gt;` | Free-text answer when `allow_free_text` was true. |
+| `confirmed` | `Option&lt;bool&gt;` | For confirmations: explicit true/false when applicable. |
+| `cancelled` | `bool` | True when the user cancelled instead of resolving. |
+| `metadata` | `Option&lt;serde_json::Value&gt;` | Arbitrary extension payload. |
+
+### `TimeoutPolicy`
+
+Top-level timeout configuration.
+
+Propagated from CRD → `AgentRuntimeConfig` → `AgentBuilder` → sub-components.
+OSS users get `TimeoutPolicy::streaming_default()` automatically via
+`AgentBuilder::from_config_path()`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connect_ms` | `u64` | TCP + TLS handshake timeout (ms). Default: 10_000. |
+| `first_byte_ms` | `u64` | Time until first data chunk arrives (ms). Default: 45_000. |
+| `idle_ms` | `u64` | Max silence between consecutive chunks (ms). Resets on each chunk. Default: 90_000. |
+| `activation_budget_ms` | `u64` | Total activation budget for cold-start retries (ms). Default: 60_000. |
+| `wall_clock_ms` | `Option&lt;u64&gt;` | Wall-clock ceiling for LLM execution loops (ms). |
+
+**Methods**
+
+#### `streaming_default`
+
+```rust
+fn streaming_default() -> Self
+```
+
+Streaming-optimized defaults. Used for agents that serve SSE streams.
+
+#### `rpc_default`
+
+```rust
+fn rpc_default() -> Self
+```
+
+RPC (non-streaming) defaults. Total wall-clock 30s, no idle.
+
+#### `to_streaming_policy`
+
+```rust
+fn to_streaming_policy(&self) -> StreamingPolicy
+```
+
+Derive a `StreamingPolicy` for transport-level clients.
+
+### `ServiceContainer`
+
+Minimal service container for dependency injection
+
+Allows agents to accept optional services through clean dependency injection
+without hardcoding specific service fields in the Agent struct.
+
+# Examples
+
+```rust
+use agent_sdk::services::ServiceContainer;
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct MyService {
+    name: String,
+}
+
+let mut container = ServiceContainer::new();
+container.register(MyService { name: "test".to_string() });
+
+let service: Option<Arc<MyService>> = container.get();
+assert!(service.is_some());
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty service container
+
+#### `register`
+
+```rust
+fn register<T>(&mut self, service: T)
+```
+
+Register a service in the container
+
+Services are stored by their type and can be retrieved later
+using the same type signature.
+
+# Arguments
+
+* `service` - The service instance to register
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# #[derive(Clone)]
+# struct DatabaseService;
+let mut container = ServiceContainer::new();
+container.register(DatabaseService);
+```
+
+#### `get`
+
+```rust
+fn get<T>(&self) -> Option<Arc<T>>
+```
+
+Get a service from the container
+
+Returns an Arc-wrapped service if found, or None if the service
+type is not registered.
+
+# Returns
+
+* `Some(Arc<T>)` - The service if found
+* `None` - If no service of type T is registered
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# use std::sync::Arc;
+# #[derive(Clone)]
+# struct DatabaseService { pub name: String }
+# let mut container = ServiceContainer::new();
+# container.register(DatabaseService { name: "test".to_string() });
+let service: Option<Arc<DatabaseService>> = container.get();
+if let Some(db) = service {
+    println!("Database: {}", db.name);
+}
+```
+
+#### `has`
+
+```rust
+fn has<T>(&self) -> bool
+```
+
+Check if a service type is registered
+
+# Returns
+
+* `true` - If a service of type T is registered
+* `false` - If no service of type T is found
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# #[derive(Clone)]
+# struct CacheService;
+let container = ServiceContainer::new();
+assert!(!container.has::<CacheService>());
+```
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+Get the number of registered services
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+Check if the container is empty
+
+#### `clear`
+
+```rust
+fn clear(&mut self)
+```
+
+Remove all services from the container
+
+### `SkillContext`
+
+Resolved skill context ready for LLM message injection.
+
+Produced by `SkillRegistry::resolve_skill_context()`. Contains the handler's
+output (if any) and the skill's instructions (if any).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `skill_id` | `String` |  |
+| `handler_output` | `Option&lt;String&gt;` |  |
+| `instructions` | `Option&lt;String&gt;` |  |
+
+### `SkillDefinition`
+
+Protocol-independent skill definition.
+
+This is the single source of truth for skill metadata inside the SDK.
+Protocol adapters (A2A `AgentSkill`, MCP, etc.) convert from this type.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `input_modes` | `Vec&lt;String&gt;` |  |
+| `output_modes` | `Vec&lt;String&gt;` |  |
+| `schema` | `Option&lt;serde_json::Value&gt;` |  |
+| `examples` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `tags` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `instructions` | `Option&lt;String&gt;` | Behavioral guidance injected into LLM context when this skill is activated. |
+| `expose` | `bool` | Whether the skill is visible on the discovery card (default: true). |
+| `llm_callable` | `bool` | Whether the LLM can invoke this skill's handler via `read_skill` tool (default: false). |
+
+### `AgentBuilder`
+
+Fluent builder to construct the protocol-neutral [`crate::Agent`] runtime.
+
+**Methods**
+
+#### `from_config`
+
+```rust
+fn from_config(config: AgentConfig) -> SdkResult<Self>
+```
+
+Build from an in-memory [`crate::agent::config::AgentConfig`] (no JSON file required).
+
+#### `new`
+
+```rust
+fn new(name: &str) -> SdkResult<Self>
+```
+
+Minimal builder with default [`crate::agent::config::AgentConfig`] except `name`.
+
+#### `from_config_path`
+
+```rust
+fn from_config_path(path: &str) -> SdkResult<Self>
+```
+
+
+#### `with_name`
+
+```rust
+fn with_name(self, name: &str) -> Self
+```
+
+
+#### `with_timeout_policy`
+
+```rust
+fn with_timeout_policy(self, policy: TimeoutPolicy) -> Self
+```
+
+Override the default timeout policy.
+
+#### `timeout_policy`
+
+```rust
+fn timeout_policy(&self) -> Option<&TimeoutPolicy>
+```
+
+Get the currently configured timeout policy.
+
+#### `build`
+
+```rust
+fn build(self) -> SdkResult<Agent>
+```
+
+
+## Enums
+
+### `HistoryPolicyMode`
+
+History preparation mode for durable continuation.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `PassThrough` |  |
+| `HistoryManager` |  |
+
+### `HistoryStrategyKind`
+
+Strategy name exposed through SDK config without leaking `llm_context_core` types.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `SlidingWindow` |  |
+| `SlidingWindowWithSummary` |  |
+| `PriorityBased` |  |
+
+### `MessageType`
+
+**Message Type Classification**
+
+Classifies incoming messages based on their Part composition to determine
+the appropriate handling strategy (tool-like vs conversational vs hybrid).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Data` | Pure DataPart - structured tool calls |
+| `Text` | Pure TextPart - conversational interactions |
+| `Mixed` | Multiple part types - hybrid interactions |
+
+### `SdkError`
+
+SDK-specific error types
+
+Wraps underlying A2A protocol errors and adds SDK-specific error cases
+for better error handling and user experience.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `A2AProtocol(error::A2AError)` | A2A protocol error |
+| `Configuration { ... }` | Configuration error |
+| `AgentInitialization { ... }` | Agent initialization error |
+| `SkillRegistration { ... }` | Skill registration error |
+| `MethodExecution { ... }` | Method execution error |
+| `Serialization(serde_json::Error)` | Serialization error |
+| `Io(Error)` | IO error |
+| `Generic(anyhow::Error)` | Generic error |
+| `FeatureNotEnabled { ... }` | Feature not enabled |
+| `InvalidInput { ... }` | Invalid input |
+
+**Methods**
+
+#### `configuration`
+
+```rust
+fn configuration<impl Into<String>>(details: impl Into) -> Self
+```
+
+Create a configuration error
+
+#### `agent_initialization`
+
+```rust
+fn agent_initialization<impl Into<String>>(reason: impl Into) -> Self
+```
+
+Create an agent initialization error
+
+#### `skill_registration`
+
+```rust
+fn skill_registration<impl Into<String>, impl Into<String>>(skill: impl Into, reason: impl Into) -> Self
+```
+
+Create a skill registration error
+
+#### `method_execution`
+
+```rust
+fn method_execution<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+Create a method execution error
+
+#### `feature_not_enabled`
+
+```rust
+fn feature_not_enabled<impl Into<String>>(feature: impl Into) -> Self
+```
+
+Create a feature not enabled error
+
+#### `invalid_input`
+
+```rust
+fn invalid_input<impl Into<String>>(details: impl Into) -> Self
+```
+
+Create an invalid input error
+
+#### `is_recoverable`
+
+```rust
+fn is_recoverable(&self) -> bool
+```
+
+Check if error is recoverable
+
+#### `category`
+
+```rust
+fn category(&self) -> &''static str
+```
+
+Get error category for monitoring/logging
+
+### `InteractionKind`
+
+Interaction kinds supported by the typed interaction contract.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Question` |  |
+| `Confirmation` |  |

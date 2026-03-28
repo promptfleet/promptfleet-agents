@@ -1,0 +1,123 @@
+---
+title: "auth"
+description: "# MCP Authentication"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Authentication
+
+**OAuth 2.1 Bearer token authentication** for MCP protocol
+- Standard Authorization header handling
+- Custom authentication strategies support
+- External MCP server authentication
+
+## Traits
+
+### `AuthHandler`
+
+**Authentication Handler Trait**
+
+**Required / Provided Methods**
+
+```rust
+fn validate_request(&self, request: &UniversalRequest) -> Result<(), ProtocolError>
+```
+
+Validate request authentication
+
+```rust
+fn add_auth_headers(&self, request: &mut UniversalRequest) -> Result<(), ProtocolError>
+```
+
+Add authentication to outgoing request
+
+## Structs
+
+### `BearerAuthHandler`
+
+**Bearer Token Authentication Handler**
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new bearer auth handler
+
+#### `with_required_token`
+
+```rust
+fn with_required_token(self, token: &str) -> Self
+```
+
+Configure required token for server mode
+
+#### `with_client_token`
+
+```rust
+fn with_client_token(self, token: BearerToken) -> Self
+```
+
+Configure client token for outgoing requests
+
+### `NoAuthHandler`
+
+**No Authentication Handler** - Allows all requests
+
+### `CustomAuthHandler`
+
+**Custom Authentication Handler** - User-defined validation
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(validate_fn: F, add_auth_fn: G) -> Self
+```
+
+Create custom auth handler with validation and auth addition functions
+
+### `AuthBuilder`
+
+**Authentication Builder** - Convenient auth handler creation
+
+**Methods**
+
+#### `none`
+
+```rust
+fn none() -> NoAuthHandler
+```
+
+Create no authentication handler
+
+#### `bearer_server`
+
+```rust
+fn bearer_server(required_token: &str) -> BearerAuthHandler
+```
+
+Create bearer token auth for server
+
+#### `bearer_client`
+
+```rust
+fn bearer_client(token: &str) -> BearerAuthHandler
+```
+
+Create bearer token auth for client
+
+#### `bearer_both`
+
+```rust
+fn bearer_both(required_token: &str, client_token: &str) -> BearerAuthHandler
+```
+
+Create bearer token auth for both server and client

@@ -1,0 +1,285 @@
+---
+title: "adapters"
+description: "Adapters layer - Concrete implementations of ports for external integrations"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Adapters layer - Concrete implementations of ports for external integrations
+
+This module contains WASM-compatible implementations that connect our core domain
+to external systems like stdout, HTTP endpoints, and standard logging frameworks.
+
+## Structs
+
+### `JsonFormatter`
+
+JSON formatter for structured logging output
+
+### `CompactJsonFormatter`
+
+Compact JSON formatter (single line)
+
+### `PlainTextFormatter`
+
+Plain text formatter for human-readable output
+
+### `WasmStdoutAdapter`
+
+WASM stdout transport adapter
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(formatter: Box<dyn FormatterPort>) -> Self
+```
+
+
+#### `with_json_formatter`
+
+```rust
+fn with_json_formatter() -> Self
+```
+
+
+#### `with_compact_formatter`
+
+```rust
+fn with_compact_formatter() -> Self
+```
+
+
+#### `with_plain_text_formatter`
+
+```rust
+fn with_plain_text_formatter() -> Self
+```
+
+
+### `NoOpTransport`
+
+No-op transport for testing/disabled logging
+
+### `LogDirectives`
+
+Parsed `RUST_LOG`-style directives for per-target log filtering.
+
+Supports: `"info"`, `"info,agent_sdk=debug,a2a_protocol_core=trace"`.
+Unknown tokens are silently ignored.
+
+**Methods**
+
+#### `from_level`
+
+```rust
+fn from_level(level: LogLevel) -> Self
+```
+
+
+#### `parse`
+
+```rust
+fn parse(s: &str) -> Self
+```
+
+Parse a `RUST_LOG`-style directive string.
+
+Examples: `"info"`, `"info,agent_sdk=debug"`, `"warn,a2a_protocol_core=trace,llm_client=debug"`.
+
+#### `global_level`
+
+```rust
+fn global_level(&self) -> LogLevel
+```
+
+
+#### `max_level`
+
+```rust
+fn max_level(&self) -> LogLevel
+```
+
+
+#### `enabled`
+
+```rust
+fn enabled(&self, level: LogLevel, target: &str) -> bool
+```
+
+Check whether a log record at `level` from `target` should be emitted.
+
+### `StandardLogAdapter`
+
+Standard logging adapter that hooks into Rust's log crate
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(processor_chain: ProcessorChain, transport: Arc<dyn TransportPort>, directives: LogDirectives) -> Self
+```
+
+
+### `WasmContextAdapter`
+
+Thread-local context adapter (WASM-compatible)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+### `LoggingSetupBuilder`
+
+Builder for creating a complete logging setup
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_processor_chain`
+
+```rust
+fn with_processor_chain(self, chain: ProcessorChain) -> Self
+```
+
+
+#### `with_transport`
+
+```rust
+fn with_transport(self, transport: Arc<dyn TransportPort>) -> Self
+```
+
+
+#### `with_level_filter`
+
+```rust
+fn with_level_filter(self, level: LogLevel) -> Self
+```
+
+
+#### `with_directives`
+
+```rust
+fn with_directives(self, directives: LogDirectives) -> Self
+```
+
+
+#### `build`
+
+```rust
+fn build(self) -> ObservabilityResult<StandardLogAdapter>
+```
+
+
+### `TracingSubscriberAdapter`
+
+Tracing subscriber adapter for structured logging integration
+
+This adapter implements tracing::Subscriber to capture tracing events
+and convert them to LogEntry for processing through the hexagonal architecture
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(processor_chain: ProcessorChain, transport: Arc<dyn TransportPort>, level_filter: LogLevel) -> Self
+```
+
+
+### `TracingIntegrationBuilder`
+
+Builder for creating tracing-integrated logging setup
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_processor_chain`
+
+```rust
+fn with_processor_chain(self, chain: ProcessorChain) -> Self
+```
+
+
+#### `with_transport`
+
+```rust
+fn with_transport(self, transport: Arc<dyn TransportPort>) -> Self
+```
+
+
+#### `with_level_filter`
+
+```rust
+fn with_level_filter(self, level: LogLevel) -> Self
+```
+
+
+#### `build`
+
+```rust
+fn build(self) -> ObservabilityResult<TracingSubscriberAdapter>
+```
+
+
+### `WasmStdoutMetricsAdapter`
+
+Basic WASM stdout adapter for metrics (correlation-focused)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `disabled`
+
+```rust
+fn disabled() -> Self
+```
+
+
+### `UnifiedWasmStdoutAdapter`
+
+Extended WASM adapter that handles both logs and metrics with correlation
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `transport_metric`
+
+```rust
+fn transport_metric(&self, entry: &MetricsEntry) -> ObservabilityResult<()>
+```
+
+Process metrics entry through same formatting as logs for correlation

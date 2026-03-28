@@ -1,0 +1,291 @@
+---
+title: "scoped"
+description: "Scoped operations and callback patterns"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Scoped operations and callback patterns
+
+This module provides high-level APIs for scoped operations that guarantee
+setup and cleanup. Built on top of the RAII patterns but providing more
+ergonomic APIs for common use cases.
+
+## Key Features
+
+- **Scoped Callbacks**: Execute code with guaranteed setup/cleanup
+- **Builder Pattern**: Fluent APIs for complex scoped operations
+- **Exception Safety**: Cleanup happens even during panics
+- **Return Values**: Scoped operations can return values from callbacks
+- **Composable**: Scoped operations can be nested and combined
+
+## Traits
+
+### `ScopedCallback`
+
+Trait for scoped callback operations
+
+This trait provides a standard interface for types that support
+scoped operations with automatic cleanup.
+
+**Required / Provided Methods**
+
+```rust
+fn with_scope<F, R>(self, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with scoped access to the resource
+
+### `IntoScoped`
+
+Helper trait for making types support scoped operations
+
+Implement this trait to add scoped operation support to your types.
+
+**Associated Types**
+
+- `type Resource` — 
+
+**Required / Provided Methods**
+
+```rust
+fn into_scoped(self) -> <Self as ?>::Resource
+```
+
+Convert into a scoped resource
+
+```rust
+fn scoped<F, R>(self, f: F) -> R
+where
+    Self: Sized,
+    F: FnOnce
+```
+
+Execute a scoped operation with this resource
+
+## Structs
+
+### `ScopedBuilder`
+
+Builder for creating complex scoped operations
+
+This builder allows you to compose multiple scoped operations
+with different setup/cleanup phases.
+
+# Example
+```rust
+use foundation_utils::scoped::ScopedBuilder;
+
+let result = ScopedBuilder::new()
+    .with_resource("resource1", |r| println!("cleanup: {}", r))
+    .with_resource("resource2", |r| println!("cleanup: {}", r))
+    .execute(|resources| {
+        format!("used {} resources", resources.len())
+    });
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new scoped builder
+
+#### `with_resource`
+
+```rust
+fn with_resource<F>(self, resource: T, cleanup: F) -> Self
+where
+    F: FnOnce + ?
+```
+
+Add a resource with cleanup to the scoped operation
+
+# Arguments
+- `resource`: The resource to manage
+- `cleanup`: Function to clean up the resource when the scope ends
+
+#### `execute`
+
+```rust
+fn execute<F, R>(self, work: F) -> R
+where
+    F: FnOnce
+```
+
+Execute the scoped operation with all resources
+
+All cleanup functions will be called in reverse order (LIFO)
+even if the work function panics.
+
+## Functions
+
+### `with_context`
+
+```rust
+fn with_context<T, F, R>(context: T, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with a scoped context
+
+This is the most common scoped operation pattern. It sets up a context,
+executes a function with that context, and automatically cleans up.
+
+# Type Parameters
+- `T`: The type of context
+- `F`: The type of function to execute
+- `R`: The return type of the function
+
+# Arguments
+- `context`: The context value to set up
+- `f`: The function to execute with the context
+
+# Example
+```rust
+use foundation_utils::scoped::with_context;
+
+let result = with_context("my_context", |ctx| {
+    println!("Working with context: {}", ctx);
+    42
+});
+assert_eq!(result, 42);
+```
+
+### `with_setup_cleanup`
+
+```rust
+fn with_setup_cleanup<S, W, C, T, R>(setup: S, work: W, cleanup: C) -> R
+where
+    S: FnOnce,
+    W: FnOnce,
+    C: FnOnce
+```
+
+Execute a function with scoped setup and cleanup
+
+This pattern provides explicit setup and cleanup functions that are
+guaranteed to be called even if the work function panics.
+
+# Type Parameters
+- `S`: Setup function type
+- `W`: Work function type  
+- `C`: Cleanup function type
+- `T`: Resource type returned by setup
+- `R`: Return type of work function
+
+# Arguments
+- `setup`: Function to set up the resource
+- `work`: Function to do work with the resource
+- `cleanup`: Function to clean up the resource
+
+# Example
+```rust
+use foundation_utils::scoped::with_setup_cleanup;
+
+let result = with_setup_cleanup(
+    || "resource",                    // Setup
+    |resource| format!("used: {}", resource), // Work
+    |resource| println!("cleanup: {}", resource) // Cleanup
+);
+```
+
+### `with_optional_scope`
+
+```rust
+fn with_optional_scope<S, W, C, T, R>(condition: bool, setup: S, work: W, cleanup: C) -> R
+where
+    S: FnOnce,
+    W: FnOnce,
+    C: FnOnce
+```
+
+Execute a function with optional scoped setup and cleanup
+
+This is useful when setup/cleanup is conditional based on runtime conditions.
+
+# Example
+```rust
+use foundation_utils::scoped::with_optional_scope;
+
+let should_setup = true;
+let result = with_optional_scope(
+    should_setup,
+    || "resource",                    // Setup (only if condition is true)
+    |resource| format!("used: {:?}", resource), // Work
+    |resource| println!("cleanup: {}", resource) // Cleanup
+);
+```
+
+### `with_multiple_contexts`
+
+```rust
+fn with_multiple_contexts<T, S, W, C, R>(contexts: Vec<T>, setup: S, work: W, cleanup: C) -> R
+where
+    T: Clone,
+    S: Fn,
+    W: FnOnce,
+    C: Fn
+```
+
+Scoped operation that automatically manages multiple contexts
+
+This is a convenience function for managing multiple contexts
+that need to be set up and torn down together.
+
+# Example
+```rust
+use foundation_utils::scoped::with_multiple_contexts;
+
+let contexts = vec!["ctx1", "ctx2", "ctx3"];
+let result = with_multiple_contexts(
+    contexts,
+    |ctx| println!("setup: {}", ctx),
+    |contexts| {
+        println!("Working with {} contexts", contexts.len());
+        42
+    },
+    |ctx| println!("cleanup: {}", ctx)
+);
+```
+
+### `with_error_scope`
+
+```rust
+fn with_error_scope<S, W, C, T, R, E>(setup: S, work: W, cleanup: C) -> Result<R, E>
+where
+    S: FnOnce,
+    W: FnOnce,
+    C: FnOnce
+```
+
+Convenience function for scope-aware error handling
+
+This function allows you to handle errors within a scoped operation
+while still ensuring cleanup happens.
+
+# Example
+```rust
+use foundation_utils::scoped::with_error_scope;
+
+let result = with_error_scope(
+    || Ok("resource"),
+    |resource| {
+        // Work that might fail
+        if resource.len() > 0 {
+            Ok(format!("processed: {}", resource))
+        } else {
+            Err("empty resource")
+        }
+    },
+    |resource| println!("cleanup: {}", resource)
+);
+```

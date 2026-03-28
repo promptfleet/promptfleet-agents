@@ -1,0 +1,259 @@
+---
+title: "context"
+description: "Context management patterns"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Context management patterns
+
+This module provides thread-safe context management for WASM and native environments.
+Contexts are used to propagate information across function calls without explicit
+parameter passing.
+
+## Key Features
+
+- **Thread-Local Context**: WASM-compatible thread-local storage
+- **Scoped Context**: Automatic context cleanup with RAII
+- **Context Inheritance**: Child contexts inherit from parent contexts
+- **Type Safety**: Strongly typed context values
+- **Performance**: Zero-cost abstractions with compile-time optimization
+
+## Traits
+
+### `ContextManager`
+
+Context manager trait for different context implementations
+
+This trait provides a common interface for different types of context storage.
+
+**Required / Provided Methods**
+
+```rust
+fn set_string(&self, key: &str, value: String)
+```
+
+Set a string value in the context
+
+```rust
+fn get_string(&self, key: &str) -> Option<String>
+```
+
+Get a string value from the context
+
+```rust
+fn remove_string(&self, key: &str) -> bool
+```
+
+Remove a string value from the context
+
+```rust
+fn clear_all(&self)
+```
+
+Clear all context values
+
+## Structs
+
+### `ThreadLocalContext`
+
+Thread-local context storage
+
+This provides WASM-compatible thread-local context storage that automatically
+cleans up when contexts go out of scope.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new thread-local context
+
+#### `set`
+
+```rust
+fn set<T>(&self, value: T)
+```
+
+Set a typed value in the context
+
+#### `get`
+
+```rust
+fn get<T>(&self) -> Option<T>
+```
+
+Get a typed value from the context
+
+#### `remove`
+
+```rust
+fn remove<T>(&self) -> Option<T>
+```
+
+Remove a typed value from the context
+
+#### `clear`
+
+```rust
+fn clear(&self)
+```
+
+Clear all context values
+
+#### `scoped`
+
+```rust
+fn scoped<T>(&self, value: T) -> Guard<T, impl FnOnce + ?>
+```
+
+Create a scoped context guard for a typed value
+
+### `GlobalContext`
+
+Global context manager for shared state
+
+This provides a global context that can be shared across threads
+in environments that support it (not available in WASM).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new global context
+
+#### `set`
+
+```rust
+fn set<T>(&self, value: T)
+```
+
+Set a typed value in the global context
+
+#### `get`
+
+```rust
+fn get<T>(&self) -> Option<T>
+```
+
+Get a typed value from the global context
+
+#### `remove`
+
+```rust
+fn remove<T>(&self) -> bool
+```
+
+Remove a typed value from the global context
+
+#### `clear`
+
+```rust
+fn clear(&self)
+```
+
+Clear all global context values
+
+### `HashMapContext`
+
+Simple hash map based context manager
+
+This is useful for basic context management where thread safety
+is handled externally.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new hash map context
+
+### `ContextKey`
+
+Context key for type-safe context access
+
+This provides a type-safe way to access context values without
+relying on string keys.
+
+**Methods**
+
+#### `new`
+
+```rust
+const fn new(name: &''static str) -> Self
+```
+
+Create a new context key
+
+#### `name`
+
+```rust
+fn name(&self) -> &''static str
+```
+
+Get the key name
+
+## Functions
+
+### `set_context`
+
+```rust
+fn set_context<T>(value: T)
+```
+
+Set a typed value in the global thread-local context
+
+### `get_context`
+
+```rust
+fn get_context<T>() -> Option<T>
+```
+
+Get a typed value from the global thread-local context
+
+### `remove_context`
+
+```rust
+fn remove_context<T>() -> Option<T>
+```
+
+Remove a typed value from the global thread-local context
+
+### `clear_context`
+
+```rust
+fn clear_context()
+```
+
+Clear all values from the global thread-local context
+
+### `scoped_context`
+
+```rust
+fn scoped_context<T>(value: T) -> impl Drop
+```
+
+Create a scoped context guard for the global thread-local context
+
+### `with_context_value`
+
+```rust
+fn with_context_value<T, F, R>(value: T, f: F) -> R
+where
+    T: ? + Clone,
+    F: FnOnce
+```
+
+Execute a function with a scoped context value

@@ -1,0 +1,322 @@
+---
+title: "methods"
+description: "A2A v1.0 Standard Methods"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Standard Methods
+
+## Type Aliases
+
+### `MessageSendParams`
+
+```rust
+type MessageSendParams = SendMessageRequest;
+```
+
+
+### `MessageSendResponse`
+
+```rust
+type MessageSendResponse = SendMessageResponse;
+```
+
+
+### `TaskCancelParams`
+
+```rust
+type TaskCancelParams = CancelTaskRequest;
+```
+
+
+### `TaskGetParams`
+
+```rust
+type TaskGetParams = GetTaskRequest;
+```
+
+
+### `TaskListParams`
+
+```rust
+type TaskListParams = ListTasksRequest;
+```
+
+
+### `TaskListResult`
+
+```rust
+type TaskListResult = ListTasksResponse;
+```
+
+
+## Traits
+
+### `AgentDiscovery`
+
+Trait for agent discovery.
+
+**Required / Provided Methods**
+
+```rust
+fn agent_authenticated_extended_card(&self, params: AuthenticatedExtendedCardParams) -> A2AResult<AuthenticatedExtendedCardResult>
+```
+
+
+## Structs
+
+### `CancelTaskRequest`
+
+Request params for `CancelTask` (was `tasks/cancel`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `CreateTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `config` | `TaskPushNotificationConfig` |  |
+
+### `DeleteTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+
+### `GetTaskPushNotificationConfigRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+
+### `GetTaskRequest`
+
+Request params for `GetTask` (was `tasks/get`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `ListTaskPushNotificationConfigsRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | `String` |  |
+
+### `ListTasksRequest`
+
+Request params for `ListTasks` (was `tasks/list`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tenant` | `Option&lt;String&gt;` |  |
+| `context_id` | `Option&lt;String&gt;` |  |
+| `status` | `Option&lt;String&gt;` |  |
+| `page_size` | `Option&lt;u32&gt;` |  |
+| `page_token` | `Option&lt;String&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+| `status_timestamp_after` | `Option&lt;String&gt;` |  |
+| `include_artifacts` | `bool` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `ListTasksResponse`
+
+Response for `ListTasks`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tasks` | `Vec&lt;Task&gt;` |  |
+| `next_page_token` | `Option&lt;String&gt;` |  |
+| `page_size` | `Option&lt;u32&gt;` |  |
+| `total_size` | `Option&lt;u32&gt;` |  |
+
+### `SendMessageConfiguration`
+
+Optional configuration for `SendMessage`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `accepted_output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `task_push_notification_config` | `Option&lt;TaskPushNotificationConfig&gt;` |  |
+| `history_length` | `Option&lt;u32&gt;` |  |
+| `return_immediately` | `bool` |  |
+
+### `SendMessageRequest`
+
+Request params for `SendMessage` (was `message/send`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `Message` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `configuration` | `Option&lt;SendMessageConfiguration&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `from_json`
+
+```rust
+fn from_json(params: Value) -> A2AResult<Self>
+```
+
+
+#### `validate`
+
+```rust
+fn validate(&self) -> A2AResult<()>
+```
+
+
+### `SubscribeToTaskRequest`
+
+Request params for `SubscribeToTask` (reconnect to existing task SSE).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+
+### `AuthenticatedExtendedCardParams`
+
+Params for `GetExtendedAgentCard` (was `agent/card/getAuthenticatedExtended`).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `auth_token` | `Option&lt;String&gt;` |  |
+| `scope` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+### `AuthenticatedExtendedCardResult`
+
+Result for `GetExtendedAgentCard`.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent_card` | `crate::AgentCard` |  |
+| `discovery_metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `timestamp` | `Option&lt;String&gt;` |  |
+
+### `DefaultAgentDiscovery`
+
+Default discovery implementation.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent_card: AgentCard) -> Self
+```
+
+
+#### `with_authentication_required`
+
+```rust
+fn with_authentication_required(self, required: bool) -> Self
+```
+
+
+## Enums
+
+### `SendMessageResponse`
+
+Response for `SendMessage` — either a Task or a direct Message.
+
+Serialized as externally-tagged `{"task": {...}}` or `{"message": {...}}`
+matching the protobuf `oneof` JSON mapping required by A2A v1.0.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Task(Task)` |  |
+| `Message(Message)` |  |

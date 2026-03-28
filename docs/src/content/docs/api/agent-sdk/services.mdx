@@ -1,0 +1,153 @@
+---
+title: "services"
+description: "Service Container for Dependency Injection"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Service Container for Dependency Injection
+
+Provides a minimal, type-safe service container for injecting
+optional services into agents without hardcoding dependencies.
+
+## Structs
+
+### `ServiceContainer`
+
+Minimal service container for dependency injection
+
+Allows agents to accept optional services through clean dependency injection
+without hardcoding specific service fields in the Agent struct.
+
+# Examples
+
+```rust
+use agent_sdk::services::ServiceContainer;
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct MyService {
+    name: String,
+}
+
+let mut container = ServiceContainer::new();
+container.register(MyService { name: "test".to_string() });
+
+let service: Option<Arc<MyService>> = container.get();
+assert!(service.is_some());
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty service container
+
+#### `register`
+
+```rust
+fn register<T>(&mut self, service: T)
+```
+
+Register a service in the container
+
+Services are stored by their type and can be retrieved later
+using the same type signature.
+
+# Arguments
+
+* `service` - The service instance to register
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# #[derive(Clone)]
+# struct DatabaseService;
+let mut container = ServiceContainer::new();
+container.register(DatabaseService);
+```
+
+#### `get`
+
+```rust
+fn get<T>(&self) -> Option<Arc<T>>
+```
+
+Get a service from the container
+
+Returns an Arc-wrapped service if found, or None if the service
+type is not registered.
+
+# Returns
+
+* `Some(Arc<T>)` - The service if found
+* `None` - If no service of type T is registered
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# use std::sync::Arc;
+# #[derive(Clone)]
+# struct DatabaseService { pub name: String }
+# let mut container = ServiceContainer::new();
+# container.register(DatabaseService { name: "test".to_string() });
+let service: Option<Arc<DatabaseService>> = container.get();
+if let Some(db) = service {
+    println!("Database: {}", db.name);
+}
+```
+
+#### `has`
+
+```rust
+fn has<T>(&self) -> bool
+```
+
+Check if a service type is registered
+
+# Returns
+
+* `true` - If a service of type T is registered
+* `false` - If no service of type T is found
+
+# Examples
+
+```rust
+# use agent_sdk::services::ServiceContainer;
+# #[derive(Clone)]
+# struct CacheService;
+let container = ServiceContainer::new();
+assert!(!container.has::<CacheService>());
+```
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+Get the number of registered services
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+Check if the container is empty
+
+#### `clear`
+
+```rust
+fn clear(&mut self)
+```
+
+Remove all services from the container

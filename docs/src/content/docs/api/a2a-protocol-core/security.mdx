@@ -1,0 +1,136 @@
+---
+title: "security"
+description: "A2A v1.0 Security Scheme Types"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Security Scheme Types
+
+## Structs
+
+### `ApiKeySecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `location` | `String` |  |
+| `name` | `String` |  |
+
+### `HttpAuthSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `scheme` | `String` |  |
+| `bearer_format` | `Option&lt;String&gt;` |  |
+
+### `OAuth2SecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `flows` | `OAuthFlows` |  |
+| `oauth2_metadata_url` | `Option&lt;String&gt;` |  |
+
+### `OpenIdConnectSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+| `open_id_connect_url` | `String` |  |
+
+### `MutualTlsSecurityScheme`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `Option&lt;String&gt;` |  |
+
+### `OAuthFlows`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorization_code` | `Option&lt;AuthorizationCodeOAuthFlow&gt;` |  |
+| `client_credentials` | `Option&lt;ClientCredentialsOAuthFlow&gt;` |  |
+| `device_code` | `Option&lt;DeviceCodeOAuthFlow&gt;` |  |
+
+### `AuthorizationCodeOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorization_url` | `String` |  |
+| `token_url` | `String` |  |
+| `refresh_url` | `Option&lt;String&gt;` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+| `pkce_required` | `Option&lt;bool&gt;` |  |
+
+### `ClientCredentialsOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token_url` | `String` |  |
+| `refresh_url` | `Option&lt;String&gt;` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+
+### `DeviceCodeOAuthFlow`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `device_authorization_url` | `String` |  |
+| `token_url` | `String` |  |
+| `scopes` | `Option&lt;HashMap&lt;String, String&gt;&gt;` |  |
+
+### `SecurityRequirement`
+
+Security requirement: map of scheme name -> required scopes.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schemes` | `HashMap&lt;String, Vec&lt;String&gt;&gt;` |  |
+
+## Enums
+
+### `SecurityScheme`
+
+Security scheme union (v1.0).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `ApiKey(ApiKeySecurityScheme)` |  |
+| `Http(HttpAuthSecurityScheme)` |  |
+| `OAuth2(OAuth2SecurityScheme)` |  |
+| `OpenIdConnect(OpenIdConnectSecurityScheme)` |  |
+| `MutualTls(MutualTlsSecurityScheme)` |  |

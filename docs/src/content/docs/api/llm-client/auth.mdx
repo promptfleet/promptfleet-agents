@@ -1,0 +1,116 @@
+---
+title: "auth"
+description: "Per-request authentication hooks for LLM HTTP clients."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Per-request authentication hooks for LLM HTTP clients.
+
+[`AuthProvider`] runs before each request to set headers (and optionally
+influence URL query parameters). Use [`ApiKeyAuth`] for standard
+`Authorization: Bearer` endpoints (OpenAI, OpenRouter, many others).
+Use [`AnthropicApiKeyAuth`] for Anthropic's `x-api-key` header.
+Use [`AzureOpenAiAuth`] for Azure OpenAI (`api-key` header or Entra bearer)
+plus required `api-version` query parameter.
+
+## Traits
+
+### `AuthProvider`
+
+Called before each HTTP request to inject or refresh authorization.
+
+**Required / Provided Methods**
+
+```rust
+fn authorize(&self, headers: &mut HashMap<String, String>) -> Result<(), LlmError>
+```
+
+Mutate `headers` in place (add or replace auth-related entries).
+
+```rust
+fn query_params(&self) -> Vec<(String, String)>
+```
+
+Optional query parameters appended to every request URL after the path.
+
+Default: none. Azure OpenAI uses this for `api-version`.
+
+## Structs
+
+### `ApiKeyAuth`
+
+Standard bearer token: `Authorization: Bearer <key>`.
+
+Covers OpenAI, OpenRouter, Together, Fireworks, vLLM gateways, etc.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(key: impl Into) -> Self
+```
+
+
+#### `into_arc`
+
+```rust
+fn into_arc(self) -> Arc<dyn AuthProvider>
+```
+
+
+### `AnthropicApiKeyAuth`
+
+Anthropic Messages API authentication (`x-api-key` + version header).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(key: impl Into) -> Self
+```
+
+
+#### `with_version`
+
+```rust
+fn with_version<impl Into<String>>(self, version: impl Into) -> Self
+```
+
+
+#### `into_arc`
+
+```rust
+fn into_arc(self) -> Arc<dyn AuthProvider>
+```
+
+
+### `AzureOpenAiAuth`
+
+Azure OpenAI: correct auth header plus `api-version` on every request.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(api_version: impl Into, credential: AzureCredential) -> Self
+```
+
+
+## Enums
+
+### `AzureCredential`
+
+Azure OpenAI credential: static `api-key` header or Entra ID bearer token.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `ApiKey(String)` | Sent as `api-key: {key}`. |
+| `BearerToken(String)` | Sent as `Authorization: Bearer {token}`. Refresh externally before expiry. |

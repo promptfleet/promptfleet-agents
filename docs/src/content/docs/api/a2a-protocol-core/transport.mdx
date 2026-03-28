@@ -1,0 +1,199 @@
+---
+title: "transport"
+description: "A2A Transport Abstraction"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A Transport Abstraction
+
+Defines the transport abstraction for A2A protocol communication.
+This trait provides a clean interface between the A2A protocol logic
+and the underlying transport implementation (HTTP, WebSocket, etc.).
+
+## Traits
+
+### `A2ATransport`
+
+A2A Transport trait
+
+Defines the interface for sending A2A protocol messages over various
+transport mechanisms. Implementations handle the actual network
+communication while the protocol core handles the A2A semantics.
+
+# Design Principles
+
+- **Transport Agnostic**: Works with HTTP, WebSocket, gRPC, etc.
+- **JSON-RPC Foundation**: Uses JSON-RPC 2.0 message types
+- **Async Compatible**: Supports both sync and async implementations
+- **Error Transparent**: Transport errors are mapped to A2A errors
+
+# Examples
+
+```rust
+use a2a_protocol_core::{A2ATransport, JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, A2AResult};
+use serde_json::json;
+
+// Mock transport implementation
+struct MockTransport;
+
+impl A2ATransport for MockTransport {
+    async fn send_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse> {
+        // Implementation sends request over network
+        Ok(JsonRpcResponse::success(request.id, json!({"pong": true})))
+    }
+
+    async fn send_notification(&self, notification: JsonRpcNotification) -> A2AResult<()> {
+        // Implementation sends notification (fire-and-forget)
+        Ok(())
+    }
+
+    async fn health_check(&self) -> A2AResult<()> {
+        // Check if transport is available
+        Ok(())
+    }
+}
+```
+
+**Required / Provided Methods**
+
+```rust
+async fn send_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+Send a JSON-RPC request and wait for response
+
+This method sends a request to a remote agent and waits for the response.
+The transport implementation handles the actual network communication,
+serialization, and correlation of requests with responses.
+
+# Arguments
+
+- `request`: The JSON-RPC 2.0 request to send
+
+# Returns
+
+- `Ok(JsonRpcResponse)`: The response from the remote agent
+- `Err(A2AError)`: Transport or protocol error
+
+```rust
+async fn send_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+Send a JSON-RPC notification (fire-and-forget)
+
+This method sends a notification to a remote agent without waiting for
+a response. Notifications are used for logging, metrics, events, and
+other operations where the sender doesn't need confirmation.
+
+# Arguments
+
+- `notification`: The JSON-RPC 2.0 notification to send
+
+# Returns
+
+- `Ok(())`: Notification was sent successfully
+- `Err(A2AError)`: Transport error occurred
+
+```rust
+async fn health_check(&self) -> A2AResult<()>
+```
+
+Check if the transport is available and healthy
+
+This method verifies that the transport can communicate with remote
+agents. It's used for health checks, circuit breakers, and load
+balancing decisions.
+
+# Returns
+
+- `Ok(())`: Transport is healthy and available
+- `Err(A2AError)`: Transport is unavailable or unhealthy
+
+```rust
+fn get_metadata(&self) -> HashMap<String, Value>
+```
+
+Get transport-specific metadata
+
+This method returns metadata about the transport implementation,
+such as connection info, capabilities, or configuration details.
+
+# Returns
+
+A map of metadata key-value pairs
+
+```rust
+fn transport_type(&self) -> &''static str
+```
+
+Get the transport type identifier
+
+Returns a string identifying the transport type (e.g., "http", "websocket").
+This is used for logging, monitoring, and debugging.
+
+### `A2ATransportFactory`
+
+A2A Transport Factory trait
+
+Factory for creating transport instances for different agents or endpoints.
+This enables connection pooling, load balancing, and dynamic transport
+configuration.
+
+**Associated Types**
+
+- `type Transport` — Transport type created by this factory
+
+**Required / Provided Methods**
+
+```rust
+async fn create_transport(&self, agent_id: &str, endpoint: &str, config: Option<HashMap<String, Value>>) -> A2AResult<<Self as ?>::Transport>
+```
+
+Create a transport instance for the specified agent
+
+# Arguments
+
+- `agent_id`: Target agent identifier
+- `endpoint`: Agent endpoint URL or connection string
+- `config`: Optional transport-specific configuration
+
+# Returns
+
+- `Ok(Transport)`: Successfully created transport
+- `Err(A2AError)`: Failed to create transport
+
+```rust
+async fn get_transport(&self, agent_id: &str, endpoint: &str) -> A2AResult<<Self as ?>::Transport>
+```
+
+Get or create cached transport for agent
+
+This method may reuse existing connections for better performance.
+
+# Arguments
+
+- `agent_id`: Target agent identifier
+- `endpoint`: Agent endpoint URL or connection string
+
+# Returns
+
+- `Ok(Transport)`: Transport ready for use
+- `Err(A2AError)`: Failed to get/create transport
+
+```rust
+async fn remove_transport(&self, agent_id: &str) -> A2AResult<()>
+```
+
+Remove cached transport for agent
+
+Forces creation of a new transport on next request.
+Useful for handling connection failures or configuration changes.
+
+```rust
+fn get_config(&self) -> HashMap<String, Value>
+```
+
+Get factory configuration

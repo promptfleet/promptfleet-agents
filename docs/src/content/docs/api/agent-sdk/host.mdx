@@ -1,0 +1,42 @@
+---
+title: "host"
+description: "Compose protocol adapters (A2A, optional AG-UI) around a shared [`crate::Agent`]."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Compose protocol adapters (A2A, optional AG-UI) around a shared [`crate::Agent`].
+
+**When to use [`AgentHost`] vs [`crate::a2a::A2aApp`] alone:** use [`crate::a2a::A2aApp`] when you only
+expose A2A. Use [`AgentHostBuilder`] when you want **one HTTP router** that merges A2A routes
+with optional AG-UI routes (native + `event-stream`).
+
+## Structs
+
+### `AgentHostBuilder`
+
+Builder for [`AgentHost`] — enable A2A and/or AG-UI adapters before [`Self::build`].
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent: Agent) -> Self
+```
+
+Start from a fully built [`crate::Agent`].
+
+#### `build`
+
+```rust
+fn build(self) -> SdkResult<AgentHost>
+```
+
+Finish configuration. Fails if no adapter was enabled (A2A and/or AG-UI).
+
+### `AgentHost`
+
+Single host value combining the shared [`crate::Agent`] with enabled protocol adapters.

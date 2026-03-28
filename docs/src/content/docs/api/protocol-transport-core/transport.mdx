@@ -1,0 +1,110 @@
+---
+title: "transport"
+description: "Universal HTTP transport implementation"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Universal HTTP transport implementation
+
+## Structs
+
+### `HttpTransport`
+
+**HTTP Transport** - Common implementation for all protocols
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new HTTP transport
+
+#### `with_default_header`
+
+```rust
+fn with_default_header(self, key: String, value: String) -> Self
+```
+
+Add default header for all requests
+
+### `SseTransport`
+
+**SSE Transport** - For external MCP servers (web-standard)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(endpoint_url: &str) -> Self
+```
+
+Create new SSE transport for MCP external servers
+
+#### `with_auth_header`
+
+```rust
+fn with_auth_header(self, auth_header: String) -> Self
+```
+
+Add authentication header for SSE connection
+
+### `TransportFactory`
+
+**Transport Factory** - Easy creation of transports
+
+**Methods**
+
+#### `http`
+
+```rust
+fn http() -> HttpTransport
+```
+
+Create HTTP transport with common defaults
+
+#### `a2a_http`
+
+```rust
+fn a2a_http() -> HttpTransport
+```
+
+Create HTTP transport for A2A protocol
+
+#### `mcp_http`
+
+```rust
+fn mcp_http() -> HttpTransport
+```
+
+Create HTTP transport for MCP protocol (internal)
+
+#### `mcp_sse`
+
+```rust
+fn mcp_sse(endpoint_url: &str) -> SseTransport
+```
+
+Create SSE transport for external MCP servers (web-standard)
+
+#### `mcp_sse_auth`
+
+```rust
+fn mcp_sse_auth(endpoint_url: &str, auth_token: &str) -> SseTransport
+```
+
+Create SSE transport with authentication for external MCP servers
+
+#### `rest_http`
+
+```rust
+fn rest_http() -> HttpTransport
+```
+
+Create HTTP transport for REST

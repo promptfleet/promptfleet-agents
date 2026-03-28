@@ -1,0 +1,523 @@
+---
+title: "data"
+description: "A2A Protocol v1.0 Data Structures"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A Protocol v1.0 Data Structures
+
+## Structs
+
+### `Task`
+
+**Task**: Core A2A work unit (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `context_id` | `String` |  |
+| `status` | `TaskStatus` |  |
+| `history` | `Option&lt;Vec&lt;Message&gt;&gt;` |  |
+| `artifacts` | `Option&lt;Vec&lt;Artifact&gt;&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_id: String) -> Self
+```
+
+
+#### `with_id`
+
+```rust
+fn with_id(id: String, context_id: String) -> Self
+```
+
+
+#### `update_status`
+
+```rust
+fn update_status(&mut self, state: TaskState)
+```
+
+
+#### `update_status_with_message`
+
+```rust
+fn update_status_with_message(&mut self, state: TaskState, message: Message)
+```
+
+
+#### `add_artifact`
+
+```rust
+fn add_artifact(&mut self, artifact: Artifact)
+```
+
+
+#### `add_to_history`
+
+```rust
+fn add_to_history(&mut self, message: Message)
+```
+
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `is_terminal`
+
+```rust
+fn is_terminal(&self) -> bool
+```
+
+
+#### `is_active`
+
+```rust
+fn is_active(&self) -> bool
+```
+
+
+### `TaskStatus`
+
+**Task Status**: Current state with optional message.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | `TaskState` |  |
+| `message` | `Option&lt;Message&gt;` |  |
+| `timestamp` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(state: TaskState) -> Self
+```
+
+
+#### `update_timestamp`
+
+```rust
+fn update_timestamp(&mut self)
+```
+
+
+### `Message`
+
+**Message**: Core A2A communication object (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | `MessageRole` |  |
+| `parts` | `Vec&lt;Part&gt;` |  |
+| `message_id` | `String` |  |
+| `task_id` | `Option&lt;String&gt;` |  |
+| `context_id` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `extensions` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `reference_task_ids` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(role: MessageRole, parts: Vec<Part>, task_id: String) -> Self
+```
+
+
+#### `with_id`
+
+```rust
+fn with_id(message_id: String, role: MessageRole, parts: Vec<Part>) -> Self
+```
+
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(role: MessageRole, text: impl Into, task_id: String) -> Self
+```
+
+
+#### `status`
+
+```rust
+fn status<impl Into<String>>(text: impl Into, task_id: String) -> Self
+```
+
+
+#### `error`
+
+```rust
+fn error<impl Into<String>>(text: impl Into, task_id: String) -> Self
+```
+
+
+#### `add_part`
+
+```rust
+fn add_part(&mut self, part: Part)
+```
+
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `with_context`
+
+```rust
+fn with_context(self, context_id: String) -> Self
+```
+
+
+#### `add_extension`
+
+```rust
+fn add_extension(&mut self, extension: String)
+```
+
+
+#### `get_text_content`
+
+```rust
+fn get_text_content(&self) -> String
+```
+
+
+#### `is_text_only`
+
+```rust
+fn is_text_only(&self) -> bool
+```
+
+
+#### `get_data_parts`
+
+```rust
+fn get_data_parts(&self) -> Vec<&Part>
+```
+
+
+### `Part`
+
+**Part**: Flat multi-modal content container (v1.0)
+
+A Part carries exactly one of: text, raw (base64), url, or structured data.
+Additional fields (filename, media_type, metadata) annotate the content.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `Option&lt;String&gt;` |  |
+| `raw` | `Option&lt;String&gt;` |  |
+| `url` | `Option&lt;String&gt;` |  |
+| `data` | `Option&lt;serde_json::Value&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `filename` | `Option&lt;String&gt;` |  |
+| `media_type` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(text: impl Into) -> Self
+```
+
+Text-only part.
+
+#### `data`
+
+```rust
+fn data(value: Value) -> Self
+```
+
+Structured data part.
+
+#### `url`
+
+```rust
+fn url<impl Into<String>>(uri: impl Into) -> Self
+```
+
+URL reference part.
+
+#### `raw`
+
+```rust
+fn raw<impl Into<String>>(base64: impl Into) -> Self
+```
+
+Base64-encoded raw bytes part.
+
+#### `url_with_media`
+
+```rust
+fn url_with_media<impl Into<String>, impl Into<String>>(uri: impl Into, media_type: impl Into) -> Self
+```
+
+URL part with media type annotation.
+
+#### `is_text`
+
+```rust
+fn is_text(&self) -> bool
+```
+
+Check which content variant is populated.
+
+#### `is_data`
+
+```rust
+fn is_data(&self) -> bool
+```
+
+
+#### `is_url`
+
+```rust
+fn is_url(&self) -> bool
+```
+
+
+#### `is_raw`
+
+```rust
+fn is_raw(&self) -> bool
+```
+
+
+#### `get_text`
+
+```rust
+fn get_text(&self) -> Option<&str>
+```
+
+Extract text content (if present).
+
+### `Artifact`
+
+**Artifact**: Agent output (v1.0 shape)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `artifact_id` | `String` |  |
+| `name` | `Option&lt;String&gt;` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `parts` | `Vec&lt;Part&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `extensions` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(parts: Vec<Part>) -> Self
+```
+
+Create an artifact with a generated ID.
+
+#### `text`
+
+```rust
+fn text<impl Into<String>>(text: impl Into) -> Self
+```
+
+Create a simple text artifact.
+
+#### `data`
+
+```rust
+fn data(value: Value) -> Self
+```
+
+Create a data artifact.
+
+#### `with_name`
+
+```rust
+fn with_name<impl Into<String>>(self, name: impl Into) -> Self
+```
+
+Builder: set name.
+
+#### `with_description`
+
+```rust
+fn with_description<impl Into<String>>(self, description: impl Into) -> Self
+```
+
+Builder: set description.
+
+#### `with_id`
+
+```rust
+fn with_id<impl Into<String>>(self, id: impl Into) -> Self
+```
+
+Builder: set artifact_id explicitly.
+
+#### `set_metadata`
+
+```rust
+fn set_metadata(&mut self, key: String, value: Value)
+```
+
+
+#### `get_text_content`
+
+```rust
+fn get_text_content(&self) -> Option<&str>
+```
+
+Extract text from the first text part (convenience).
+
+#### `get_data_content`
+
+```rust
+fn get_data_content(&self) -> Option<&Value>
+```
+
+Extract data from the first data part (convenience).
+
+### `AuthenticationInfo`
+
+Authentication information for push notification delivery.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scheme` | `String` |  |
+| `credentials` | `String` |  |
+
+### `TaskPushNotificationConfig`
+
+Per-task push notification configuration (v1.0).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tenant` | `Option&lt;String&gt;` |  |
+| `id` | `String` |  |
+| `task_id` | `String` |  |
+| `url` | `String` |  |
+| `token` | `Option&lt;String&gt;` |  |
+| `authentication` | `Option&lt;AuthenticationInfo&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>, impl Into<String>, impl Into<String>>(id: impl Into, task_id: impl Into, url: impl Into) -> Self
+```
+
+
+#### `with_tenant`
+
+```rust
+fn with_tenant<impl Into<String>>(self, tenant: impl Into) -> Self
+```
+
+
+#### `with_token`
+
+```rust
+fn with_token<impl Into<String>>(self, token: impl Into) -> Self
+```
+
+
+#### `with_authentication`
+
+```rust
+fn with_authentication(self, auth: AuthenticationInfo) -> Self
+```
+
+
+## Enums
+
+### `TaskState`
+
+**Task State**: A2A v1.0 SCREAMING_SNAKE enum.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Unspecified` |  |
+| `Submitted` |  |
+| `Working` |  |
+| `InputRequired` |  |
+| `Completed` |  |
+| `Failed` |  |
+| `Canceled` |  |
+| `Rejected` |  |
+| `AuthRequired` |  |
+
+**Methods**
+
+#### `is_terminal`
+
+```rust
+fn is_terminal(&self) -> bool
+```
+
+Returns `true` for terminal states: Completed, Failed, Canceled, Rejected.
+
+#### `is_active`
+
+```rust
+fn is_active(&self) -> bool
+```
+
+Returns `true` for active states: Submitted, Working, InputRequired.
+
+#### `as_str`
+
+```rust
+fn as_str(&self) -> &''static str
+```
+
+Lowercase string for logging/display (not wire format).
+
+### `MessageRole`
+
+**Message Role** (v1.0 — SCREAMING_SNAKE serialization)
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Unspecified` |  |
+| `User` |  |
+| `Agent` |  |

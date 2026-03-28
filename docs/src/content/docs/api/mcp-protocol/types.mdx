@@ -1,0 +1,309 @@
+---
+title: "types"
+description: "# MCP Protocol Types"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Protocol Types
+
+**JSON-RPC 2.0 and MCP specification compliant** data structures
+- Fully compatible with FastMCP and other MCP implementations
+- Standard OAuth 2.1 Bearer token authentication support
+- Comprehensive tool, memory, and capability definitions
+
+## Structs
+
+### `JsonRpcRequest`
+
+**JSON-RPC 2.0 Request** - Standard wire format for MCP
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (always "2.0") |
+| `id` | `Option&lt;serde_json::Value&gt;` | Request ID (optional for notifications) |
+| `method` | `String` | Method name (e.g., "tools/list", "tools/call") |
+| `params` | `Option&lt;serde_json::Value&gt;` | Method parameters (optional) |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(method: &str, params: Option<serde_json::Value>, id: Option<serde_json::Value>) -> Self
+```
+
+Create new JSON-RPC request
+
+#### `notification`
+
+```rust
+fn notification(method: &str, params: Option<serde_json::Value>) -> Self
+```
+
+Create notification (no response expected)
+
+#### `with_id`
+
+```rust
+fn with_id(method: &str, params: Option<serde_json::Value>, id: &str) -> Self
+```
+
+Create request with string ID
+
+### `JsonRpcResponse`
+
+**JSON-RPC 2.0 Response** - Standard response format
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (always "2.0") |
+| `id` | `Option&lt;serde_json::Value&gt;` | Response ID (matches request ID) |
+| `result` | `Option&lt;serde_json::Value&gt;` | Success result (mutually exclusive with error) |
+| `error` | `Option&lt;JsonRpcError&gt;` | Error information (mutually exclusive with result) |
+
+**Methods**
+
+#### `success`
+
+```rust
+fn success(id: Option<serde_json::Value>, result: serde_json::Value) -> Self
+```
+
+Create success response
+
+#### `error`
+
+```rust
+fn error(id: Option<serde_json::Value>, error: JsonRpcError) -> Self
+```
+
+Create error response
+
+### `JsonRpcError`
+
+**JSON-RPC 2.0 Error** - Standard error format
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `i32` | Error code (standard JSON-RPC error codes) |
+| `message` | `String` | Error message |
+| `data` | `Option&lt;serde_json::Value&gt;` | Additional error data (optional) |
+
+**Methods**
+
+#### `method_not_found`
+
+```rust
+fn method_not_found(message: &str) -> Self
+```
+
+Method not found (-32601)
+
+#### `invalid_params`
+
+```rust
+fn invalid_params(message: &str) -> Self
+```
+
+Invalid params (-32602)
+
+#### `internal_error`
+
+```rust
+fn internal_error(message: &str) -> Self
+```
+
+Internal error (-32603)
+
+### `InitializeRequest`
+
+**Initialize Request** - MCP handshake
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol_version` | `String` | Protocol version requested by client |
+| `capabilities` | `ClientCapabilities` | Client capabilities |
+| `client_info` | `ClientInfo` | Client information |
+
+### `InitializeResult`
+
+**Initialize Result** - MCP handshake response
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol_version` | `String` | Protocol version supported by server |
+| `capabilities` | `ServerCapabilities` | Server capabilities |
+| `server_info` | `ServerInfo` | Server information |
+
+### `ClientInfo`
+
+**Client Information**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Client name |
+| `version` | `String` | Client version |
+| `description` | `Option&lt;String&gt;` | Client description (optional) |
+
+### `ServerInfo`
+
+**Server Information**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Server name |
+| `version` | `String` | Server version |
+| `description` | `Option&lt;String&gt;` | Server description (optional) |
+
+### `ClientCapabilities`
+
+**Client Capabilities**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tools` | `Option&lt;ToolCapabilities&gt;` | Tool execution support |
+
+### `ServerCapabilities`
+
+**Server Capabilities**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tools` | `Option&lt;ToolCapabilities&gt;` | Tool execution support |
+
+### `ToolCapabilities`
+
+**Tool Capabilities**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `supported` | `bool` | Tool listing support |
+
+### `ListToolsResult`
+
+**List Tools Result**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tools` | `Vec&lt;Tool&gt;` | Available tools |
+
+### `Tool`
+
+**Tool Definition**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Tool name |
+| `description` | `String` | Tool description |
+| `input_schema` | `serde_json::Value` | JSON Schema for tool parameters |
+
+**Methods**
+
+#### `simple`
+
+```rust
+fn simple(name: &str, description: &str, parameters: &[&str]) -> Self
+```
+
+Create simple tool with string parameters
+
+### `CallToolRequest`
+
+**Call Tool Request**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Tool name to execute |
+| `arguments` | `Option&lt;serde_json::Value&gt;` | Tool arguments |
+| `meta` | `Option&lt;serde_json::Value&gt;` | Optional MCP request metadata. |
+
+### `CallToolResult`
+
+**Call Tool Result**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `Vec&lt;Content&gt;` | Tool execution result content |
+| `is_error` | `Option&lt;bool&gt;` | Whether execution resulted in error |
+
+### `BearerToken`
+
+**Bearer Token Authentication**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `access_token` | `String` | OAuth 2.1 access token |
+| `token_type` | `String` | Token type (always "Bearer") |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(access_token: &str) -> Self
+```
+
+Create new bearer token
+
+#### `to_authorization_header`
+
+```rust
+fn to_authorization_header(&self) -> String
+```
+
+Format as Authorization header value
+
+## Enums
+
+### `Content`
+
+**Content** - Multi-modal content representation
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Text { ... }` |  |
+
+**Methods**
+
+#### `text`
+
+```rust
+fn text(text: &str) -> Self
+```
+
+Create text content

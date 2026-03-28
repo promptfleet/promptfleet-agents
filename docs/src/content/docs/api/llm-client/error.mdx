@@ -1,0 +1,34 @@
+---
+title: "error"
+description: "Unified error type for LLM HTTP, protocol, and serialization failures."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Unified error type for LLM HTTP, protocol, and serialization failures.
+
+## Type Aliases
+
+### `LlmResult`
+
+```rust
+type LlmResult = Result<T, LlmError>;
+```
+
+
+## Enums
+
+### `LlmError`
+
+Errors surfaced by [`crate::LlmClient`] and streaming helpers.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Transport(protocol_transport_core::TransportError)` |  |
+| `Protocol(protocol_transport_core::ProtocolError)` |  |
+| `Serialization(serde_json::Error)` |  |
+| `Config(String)` |  |

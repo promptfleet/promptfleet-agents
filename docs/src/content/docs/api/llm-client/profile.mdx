@@ -1,0 +1,105 @@
+---
+title: "profile"
+description: "profile module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Structs
+
+### `ModelCapabilities`
+
+Capability metadata for a specific model — context window, output limits,
+feature support, and optional cost information.
+
+Use [`ModelCapabilities::lookup`] to resolve capabilities from the built-in
+registry, or construct manually for custom/self-hosted models.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `context_window` | `u32` | Maximum input tokens the model can accept (context window size). |
+| `max_output_tokens` | `u32` | Maximum tokens the model can generate in a single response. |
+| `supports_tools` | `bool` | Whether the model supports function/tool calling. |
+| `supports_vision` | `bool` | Whether the model supports vision (image) inputs. |
+| `supports_streaming` | `bool` | Whether the model supports streaming responses. |
+| `cost_per_1k_input` | `Option&lt;f64&gt;` | Cost per 1K input tokens (USD), if known. Used for budget tracking. |
+| `cost_per_1k_output` | `Option&lt;f64&gt;` | Cost per 1K output tokens (USD), if known. |
+
+**Methods**
+
+#### `lookup`
+
+```rust
+fn lookup(model_id: &str) -> Self
+```
+
+Look up capabilities for a model by its ID string.
+
+Matches known model prefixes (e.g. "gpt-4o" matches "gpt-4o-2024-08-06").
+Returns [`UNKNOWN_DEFAULT`](Self::UNKNOWN_DEFAULT) if no match is found.
+
+#### `available_for_history`
+
+```rust
+fn available_for_history(&self, reserved_output: Option<u32>, system_tokens: u32, tools_tokens: u32) -> u32
+```
+
+Compute available budget for conversation history after reserving
+space for output, system prompt, and tool schemas.
+
+### `ModelConfig`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model_id` | `String` |  |
+| `family` | `ModelFamily` |  |
+| `profile` | `ModelProfile` |  |
+| `capabilities` | `Option&lt;ModelCapabilities&gt;` | Optional explicit capabilities override. When `None`, capabilities |
+| `extensions` | `BTreeMap&lt;String, serde_json::Value&gt;` |  |
+
+**Methods**
+
+#### `resolve_capabilities`
+
+```rust
+fn resolve_capabilities(&self) -> ModelCapabilities
+```
+
+Resolve capabilities — explicit override takes priority, then static
+registry lookup, then conservative defaults for unknown models.
+
+## Enums
+
+### `ModelFamily`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `OpenAI` |  |
+| `Gpt5` |  |
+| `Qwen3` |  |
+| `Claude` |  |
+| `Gemini` |  |
+| `DeepSeek` |  |
+| `Llama` |  |
+| `Mistral` |  |
+
+### `ModelProfile`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Generic` |  |
+| `Gpt5 { ... }` |  |
+| `Qwen3 { ... }` |  |

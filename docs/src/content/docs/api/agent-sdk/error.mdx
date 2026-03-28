@@ -1,0 +1,113 @@
+---
+title: "error"
+description: "Error types for the Agent SDK"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Error types for the Agent SDK
+
+This module provides unified error handling for the SDK, wrapping
+underlying A2A protocol errors and adding SDK-specific error types.
+
+## Type Aliases
+
+### `SdkResult`
+
+```rust
+type SdkResult = Result<T, SdkError>;
+```
+
+Result type for SDK operations
+
+## Enums
+
+### `SdkError`
+
+SDK-specific error types
+
+Wraps underlying A2A protocol errors and adds SDK-specific error cases
+for better error handling and user experience.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `A2AProtocol(error::A2AError)` | A2A protocol error |
+| `Configuration { ... }` | Configuration error |
+| `AgentInitialization { ... }` | Agent initialization error |
+| `SkillRegistration { ... }` | Skill registration error |
+| `MethodExecution { ... }` | Method execution error |
+| `Serialization(serde_json::Error)` | Serialization error |
+| `Io(Error)` | IO error |
+| `Generic(anyhow::Error)` | Generic error |
+| `FeatureNotEnabled { ... }` | Feature not enabled |
+| `InvalidInput { ... }` | Invalid input |
+
+**Methods**
+
+#### `configuration`
+
+```rust
+fn configuration<impl Into<String>>(details: impl Into) -> Self
+```
+
+Create a configuration error
+
+#### `agent_initialization`
+
+```rust
+fn agent_initialization<impl Into<String>>(reason: impl Into) -> Self
+```
+
+Create an agent initialization error
+
+#### `skill_registration`
+
+```rust
+fn skill_registration<impl Into<String>, impl Into<String>>(skill: impl Into, reason: impl Into) -> Self
+```
+
+Create a skill registration error
+
+#### `method_execution`
+
+```rust
+fn method_execution<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+Create a method execution error
+
+#### `feature_not_enabled`
+
+```rust
+fn feature_not_enabled<impl Into<String>>(feature: impl Into) -> Self
+```
+
+Create a feature not enabled error
+
+#### `invalid_input`
+
+```rust
+fn invalid_input<impl Into<String>>(details: impl Into) -> Self
+```
+
+Create an invalid input error
+
+#### `is_recoverable`
+
+```rust
+fn is_recoverable(&self) -> bool
+```
+
+Check if error is recoverable
+
+#### `category`
+
+```rust
+fn category(&self) -> &''static str
+```
+
+Get error category for monitoring/logging

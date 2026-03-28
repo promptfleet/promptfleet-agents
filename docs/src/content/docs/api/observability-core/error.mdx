@@ -1,0 +1,123 @@
+---
+title: "error"
+description: "Error types for the observability plugin system"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Error types for the observability plugin system
+
+## Type Aliases
+
+### `ObservabilityResult`
+
+```rust
+type ObservabilityResult = Result<T, ObservabilityError>;
+```
+
+Result type for observability operations
+
+## Enums
+
+### `ObservabilityError`
+
+Comprehensive error types for observability operations
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Configuration { ... }` | Configuration errors |
+| `Serialization { ... }` | Serialization/deserialization errors |
+| `Transport { ... }` | Network/transport errors |
+| `TraceContext { ... }` | Trace context propagation errors |
+| `Metric { ... }` | Metric collection errors |
+| `Logging { ... }` | Logging errors |
+| `Batching { ... }` | Batching system errors |
+| `Buffer { ... }` | Buffer overflow or memory errors |
+| `FeatureNotEnabled { ... }` | Feature not enabled |
+| `Generic { ... }` | Generic errors for compatibility |
+
+**Methods**
+
+#### `configuration`
+
+```rust
+fn configuration<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a configuration error
+
+#### `serialization`
+
+```rust
+fn serialization<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a serialization error
+
+#### `transport`
+
+```rust
+fn transport<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a transport error
+
+#### `trace_context`
+
+```rust
+fn trace_context<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a trace context error
+
+#### `metric`
+
+```rust
+fn metric<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a metric error
+
+#### `logging`
+
+```rust
+fn logging<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a logging error
+
+#### `batching`
+
+```rust
+fn batching<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a batching error
+
+#### `buffer`
+
+```rust
+fn buffer<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a buffer error
+
+#### `feature_not_enabled`
+
+```rust
+fn feature_not_enabled<impl Into<String>>(feature: impl Into) -> Self
+```
+
+Create a feature not enabled error
+
+#### `generic`
+
+```rust
+fn generic<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a generic error

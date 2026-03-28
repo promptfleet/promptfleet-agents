@@ -1,0 +1,257 @@
+---
+title: "jsonrpc"
+description: "Pure JSON-RPC 2.0 Protocol Implementation"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Pure JSON-RPC 2.0 Protocol Implementation
+
+This module provides a pure implementation of JSON-RPC 2.0 types and structures
+optimized for WebAssembly environments. It follows the JSON-RPC 2.0 specification
+exactly without any agent-specific extensions.
+
+# JSON-RPC 2.0 Overview
+
+JSON-RPC 2.0 is a stateless, light-weight remote procedure call (RPC) protocol.
+It defines two types of messages:
+
+## Request Messages
+Have an `id` field and expect a response:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "request-123",
+  "method": "ping",
+  "params": {"timestamp": "2024-01-01T00:00:00Z"}
+}
+```
+
+## Notification Messages  
+No `id` field, fire-and-forget:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "log.info",
+  "params": {"message": "Task completed", "level": "info"}
+}
+```
+
+## Constants
+
+### `JSONRPC_VERSION`
+
+```rust
+const JSONRPC_VERSION: &str = ;
+```
+
+JSON-RPC 2.0 version constant
+
+## Type Aliases
+
+### `JsonRpcId`
+
+```rust
+type JsonRpcId = serde_json::Value;
+```
+
+JSON-RPC 2.0 request ID type
+
+Can be a string, number, or null according to the JSON-RPC 2.0 specification.
+The ID is used to correlate requests with responses and must be echoed back
+in the response exactly as received.
+
+# Valid ID Types
+
+- **String**: `"request-123"`, `"abc-def-456"`
+- **Number**: `1`, `42`, `1234567890`
+- **Null**: `null` (though discouraged for traceability)
+
+## Structs
+
+### `JsonRpcRequest`
+
+JSON-RPC 2.0 Request structure
+
+Represents a JSON-RPC 2.0 request message that expects a response.
+All requests must include the `jsonrpc`, `id`, and `method` fields.
+The `params` field is optional and defaults to null.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (must be "2.0") |
+| `id` | `JsonRpcId` | Request ID (string, number, or null) |
+| `method` | `String` | Method name to invoke |
+| `params` | `serde_json::Value` | Method parameters (optional, defaults to null) |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(id: JsonRpcId, method: String, params: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 request
+
+#### `is_valid`
+
+```rust
+fn is_valid(&self) -> bool
+```
+
+Check if this is a valid JSON-RPC 2.0 request
+
+### `JsonRpcNotification`
+
+JSON-RPC 2.0 Notification structure
+
+Represents a JSON-RPC 2.0 notification message that does not expect a response.
+Notifications are "fire-and-forget" messages used for operations where the
+caller doesn't need to know the result.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (must be "2.0") |
+| `method` | `String` | Method name to invoke |
+| `params` | `serde_json::Value` | Method parameters (optional, defaults to null) |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(method: String, params: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 notification
+
+#### `is_valid`
+
+```rust
+fn is_valid(&self) -> bool
+```
+
+Check if this is a valid JSON-RPC 2.0 notification
+
+### `JsonRpcResponse`
+
+JSON-RPC 2.0 Response structure
+
+Represents a JSON-RPC 2.0 response message sent back to the client.
+A response must contain either a `result` (for success) or an `error`
+(for failure), but never both. The `id` field must match the request ID.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (always "2.0") |
+| `result` | `Option&lt;serde_json::Value&gt;` | Successful result (mutually exclusive with error) |
+| `error` | `Option&lt;JsonRpcError&gt;` | Error object (mutually exclusive with result) |
+| `id` | `JsonRpcId` | Request ID (copied from request) |
+
+**Methods**
+
+#### `success`
+
+```rust
+fn success(id: JsonRpcId, result: serde_json::Value) -> Self
+```
+
+Create a successful JSON-RPC 2.0 response
+
+#### `error`
+
+```rust
+fn error(id: JsonRpcId, code: i64, message: String) -> Self
+```
+
+Create an error JSON-RPC 2.0 response
+
+#### `error_with_data`
+
+```rust
+fn error_with_data(id: JsonRpcId, code: i64, message: String, data: serde_json::Value) -> Self
+```
+
+Create an error JSON-RPC 2.0 response with additional data
+
+#### `is_success`
+
+```rust
+fn is_success(&self) -> bool
+```
+
+Check if this is a success response
+
+#### `is_error`
+
+```rust
+fn is_error(&self) -> bool
+```
+
+Check if this is an error response
+
+### `JsonRpcError`
+
+JSON-RPC 2.0 Error Object structure
+
+Represents detailed error information in JSON-RPC 2.0 error responses.
+Includes a standard error code, human-readable message, and optional
+additional data for debugging and error handling.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `i64` | Error code (standard or application-defined) |
+| `message` | `String` | Error message |
+| `data` | `Option&lt;serde_json::Value&gt;` | Optional additional error data |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(code: i64, message: String) -> Self
+```
+
+Create a new JSON-RPC 2.0 error
+
+#### `with_data`
+
+```rust
+fn with_data(code: i64, message: String, data: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 error with additional data
+
+## Enums
+
+### `JsonRpcIncoming`
+
+Incoming JSON-RPC message types
+
+Represents all possible incoming JSON-RPC 2.0 messages that can be received
+and parsed. The enum uses serde's untagged feature to automatically detect
+the message type based on the presence of the `id` field.
+
+# Message Type Detection
+
+- **Request**: Has `id` field - expects a response
+- **Notification**: No `id` field - fire-and-forget
+- **Batch**: Array of requests/notifications (optional feature)
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Request(JsonRpcRequest)` | Standard JSON-RPC 2.0 request with ID |
+| `Notification(JsonRpcNotification)` | JSON-RPC 2.0 notification (no ID, no response expected) |

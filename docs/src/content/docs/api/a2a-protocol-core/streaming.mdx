@@ -1,0 +1,79 @@
+---
+title: "streaming"
+description: "A2A v1.0 Streaming Event Types"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Streaming Event Types
+
+## Structs
+
+### `TaskStatusUpdateEvent`
+
+Streaming status update event.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `serde_json::Value` |  |
+| `task_id` | `String` |  |
+| `context_id` | `String` |  |
+| `status` | `TaskStatus` |  |
+
+### `TaskArtifactUpdateEvent`
+
+Streaming artifact update event.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `serde_json::Value` |  |
+| `task_id` | `String` |  |
+| `context_id` | `String` |  |
+| `artifact` | `Artifact` |  |
+| `append` | `Option&lt;bool&gt;` |  |
+| `last_chunk` | `Option&lt;bool&gt;` |  |
+
+## Enums
+
+### `StreamResponse`
+
+Top-level SSE stream envelope (v1.0).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Task(Task)` |  |
+| `Message(Message)` |  |
+| `StatusUpdate(TaskStatusUpdateEvent)` |  |
+| `ArtifactUpdate(TaskArtifactUpdateEvent)` |  |
+
+**Methods**
+
+#### `event_name`
+
+```rust
+fn event_name(&self) -> &''static str
+```
+
+
+#### `to_jsonrpc_data`
+
+```rust
+fn to_jsonrpc_data(&self) -> Value
+```
+
+
+#### `is_terminal`
+
+```rust
+fn is_terminal(&self) -> bool
+```
+
+Check whether this event signals stream termination.

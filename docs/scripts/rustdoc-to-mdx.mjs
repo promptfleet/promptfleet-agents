@@ -276,7 +276,9 @@ function escapeHtml(s) {
 
 function renderDocs(item) {
   if (!item.docs) return "";
-  return item.docs + "\n";
+  let docs = item.docs;
+  docs = docs.replace(/```(?:rust,)?(?:ignore|no_run|compile_fail)/g, '```rust');
+  return docs + "\n";
 }
 
 function renderStruct(item) {

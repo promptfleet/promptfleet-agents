@@ -1,11 +1,13 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 
 export default defineConfig({
 	site: 'https://promptfleet.github.io',
 	base: '/promptfleet-agents',
 	integrations: [
+		mermaid(),
 		starlight({
 			title: 'PromptFleet Agents',
 			description: 'Rust library workspace: SDK, A2A, LLM, observability.',

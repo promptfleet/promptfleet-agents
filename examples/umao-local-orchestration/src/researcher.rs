@@ -13,6 +13,25 @@ struct Args {
     port: u16,
 }
 
+fn extract_topic(raw: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+        if let Some(t) = v.pointer("/__node_traits/task_prompt").and_then(|t| t.as_str()) {
+            return t.to_string();
+        }
+        for key in ["task_spec", "task_prompt", "delegation_context"] {
+            if let Some(t) = v.get(key).and_then(|t| t.as_str()) {
+                return t.to_string();
+            }
+        }
+    }
+    let trimmed = raw.trim();
+    if trimmed.len() > 120 {
+        format!("{}...", &trimmed[..trimmed.floor_char_boundary(120)])
+    } else {
+        trimmed.to_string()
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -21,16 +40,16 @@ async fn main() {
     info!(port = args.port, "Starting researcher agent");
 
     let handler = Arc::new(|message: Message| {
-        let text = message.get_text_content();
+        let raw = message.get_text_content();
+        let topic = extract_topic(&raw);
         let response_text = format!(
-            "## Research Report\n\n\
-             **Topic**: {}\n\n\
-             **Findings**: After thorough analysis, the key points are:\n\
-             1. The topic has significant implications for the field.\n\
-             2. Multiple perspectives exist in the current literature.\n\
-             3. Further investigation is recommended in specific sub-areas.\n\n\
-             **Confidence**: 0.85",
-            if text.len() > 200 { &text[..200] } else { &text }
+            "## Research Report: {topic}\n\n\
+             **Key findings**:\n\
+             1. {topic} has seen a 40% increase in academic publications since 2023.\n\
+             2. Three dominant approaches exist: rule-based, learning-based, and hybrid.\n\
+             3. The hybrid approach shows the best cost/performance trade-off in benchmarks.\n\n\
+             **Open questions**: Scalability beyond 10k concurrent users remains unproven.\n\n\
+             **Sources**: 12 papers, 3 industry reports | **Confidence**: 0.85",
         );
         Message::new(
             MessageRole::Agent,
@@ -72,7 +91,7 @@ async fn handle_connection(
             let method = rpc.get("method").and_then(|v| v.as_str()).unwrap_or("");
             let id = rpc.get("id").cloned().unwrap_or(serde_json::json!(null));
 
-            let result = if method == "message/send" {
+            let result = if method == "message/send" || method == "SendMessage" {
                 let params = rpc.get("params").cloned().unwrap_or_default();
                 let text = params
                     .get("message")

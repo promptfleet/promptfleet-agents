@@ -13,6 +13,33 @@ struct Args {
     port: u16,
 }
 
+fn extract_upstream_summary(raw: &str) -> String {
+    fn truncate(s: &str, max: usize) -> String {
+        let t = s.trim();
+        if t.len() > max {
+            format!("{}...", &t[..t.floor_char_boundary(max)])
+        } else {
+            t.to_string()
+        }
+    }
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+        for key in ["task_results", "task_spec", "delegation_context"] {
+            match v.get(key) {
+                Some(serde_json::Value::String(s)) => return truncate(s, 200),
+                Some(val) if !val.is_null() => {
+                    return truncate(&serde_json::to_string(val).unwrap_or_default(), 200);
+                }
+                _ => {}
+            }
+        }
+        if let Some(t) = v.pointer("/__node_traits/task_prompt").and_then(|t| t.as_str()) {
+            return truncate(t, 200);
+        }
+    }
+    truncate(raw, 200)
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -21,17 +48,17 @@ async fn main() {
     info!(port = args.port, "Starting synthesizer agent");
 
     let handler = Arc::new(|message: Message| {
-        let text = message.get_text_content();
+        let raw = message.get_text_content();
+        let upstream = extract_upstream_summary(&raw);
         let response_text = format!(
-            "## Synthesis Report\n\n\
-             **Input summary**: Received {} bytes of input data.\n\n\
-             **Synthesis**: Based on the combined inputs, the following conclusions emerge:\n\
-             - The evidence converges on a consistent narrative.\n\
-             - Key themes have been identified and cross-referenced.\n\
-             - Actionable recommendations are provided below.\n\n\
-             **Recommendations**: Continue with focused implementation.\n\n\
+            "## Synthesis\n\n\
+             **Upstream input**: {upstream}\n\n\
+             **Conclusions**:\n\
+             - The hybrid approach is the strongest candidate for production deployment.\n\
+             - Scalability gaps should be addressed with load-testing before launch.\n\
+             - Budget allocation: 60% implementation, 25% testing, 15% documentation.\n\n\
+             **Recommended next step**: Build a proof-of-concept targeting the hybrid approach.\n\n\
              **Confidence**: 0.92",
-            text.len()
         );
         Message::new(
             MessageRole::Agent,
@@ -72,7 +99,7 @@ async fn handle_connection(
             let method = rpc.get("method").and_then(|v| v.as_str()).unwrap_or("");
             let id = rpc.get("id").cloned().unwrap_or(serde_json::json!(null));
 
-            let result = if method == "message/send" {
+            let result = if method == "message/send" || method == "SendMessage" {
                 let params = rpc.get("params").cloned().unwrap_or_default();
                 let text = params
                     .get("message")

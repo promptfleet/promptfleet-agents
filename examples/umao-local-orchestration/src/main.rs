@@ -80,7 +80,7 @@ async fn main() {
         executor.register(name, endpoint);
     }
 
-    let event_sink = Arc::new(|event: UmaoEvent| {
+    let event_sink: Option<umao_core::events::EventSink> = Some(Arc::new(|event: UmaoEvent| {
         match &event {
             UmaoEvent::NodeStateChanged { fb_id, new_state, .. } => {
                 info!(node = %fb_id, state = %new_state, "Node state changed");
@@ -96,11 +96,11 @@ async fn main() {
             }
             _ => {}
         }
-    });
+    }));
 
     info!("Starting graph execution...");
 
-    let result = orchestrator::execute_async(&graph, &executor, Some(event_sink)).await;
+    let result = orchestrator::execute_async(&graph, &executor, &event_sink).await;
 
     match result {
         Ok(exec_result) => {

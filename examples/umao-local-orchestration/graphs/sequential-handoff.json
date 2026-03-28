@@ -18,10 +18,10 @@
     }
   ],
   "edges": [
-    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "task_spec" }, "kind": "DependsOn" }
+    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "task_spec" }, "kind": "depends_on" }
   ],
   "meta": {
-    "spec_version": "umao-v2",
+    "spec_version": "umao-1.0",
     "created_by": "manual",
     "description": "Sequential handoff: Researcher → Synthesizer"
   },

@@ -32,13 +32,13 @@
     }
   ],
   "edges": [
-    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_researcher", "port": "selected_agents" }, "kind": "DependsOn" },
-    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "selected_agents" }, "kind": "Parallel" },
-    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "DependsOn" },
-    { "from": { "fb_id": "DELEGATE_synthesizer", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "Parallel" }
+    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_researcher", "port": "selected_agents" }, "kind": "depends_on" },
+    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "selected_agents" }, "kind": "parallel" },
+    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "depends_on" },
+    { "from": { "fb_id": "DELEGATE_synthesizer", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "parallel" }
   ],
   "meta": {
-    "spec_version": "umao-v2",
+    "spec_version": "umao-1.0",
     "created_by": "manual",
     "description": "Research pipeline: Select → 2x Delegate (researcher + synthesizer) → Aggregate"
   },

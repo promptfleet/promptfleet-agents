@@ -1,5 +1,16 @@
 # 📋 AI Changelogs
 
+## 2026-03-28 — Docs: splash CardGrid alignment (remove stagger)
+
+### Changes
+- **`docs/src/content/docs/index.mdx`:** Removed `stagger` from the top `CardGrid`. Starlight’s stagger prop offsets alternate columns on purpose; it read as a broken 2×2 grid on the splash entry page.
+
+### Files modified
+- `docs/src/content/docs/index.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed** — 141 page(s) built; Pagefind index OK.
+
 ## 2026-03-28 — Docs: Starlight sidebar integration pass + build verify
 
 ### Changes

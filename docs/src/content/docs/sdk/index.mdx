@@ -3,6 +3,8 @@ title: SDK / Core overview
 description: Five crates that form the agent runtime foundation — domain types, SDK facade, proc macros, naming primitives, and config loading.
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 These crates build on each other:
 
 1. **`agent_core`** — protocol-agnostic domain types (messages, content parts, task phases, conversation context). Zero dependencies beyond `serde`.
@@ -12,3 +14,13 @@ These crates build on each other:
 5. **`pf_config`** — layered configuration loader (JSON files → `.env` → OS environment → optional `Cargo.toml` section) with typed deserialization.
 
 Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
+
+<CardGrid>
+  <LinkCard title="agent_sdk" description="Runtime-first SDK facade: AgentBuilder, skills, services, LLM engine, A2A/AG-UI adapters." href="/promptfleet-agents/sdk/agent-sdk/" />
+  <LinkCard title="agent_core" description="Protocol-agnostic domain types — messages, content parts, task phases, conversation context." href="/promptfleet-agents/sdk/agent-core/" />
+  <LinkCard title="pf_macros" description="Proc-macro: #[pf_agent] attribute for Spin/A2aApp wiring." href="/promptfleet-agents/sdk/pf-macros/" />
+  <LinkCard title="pf-types" description="Lightweight naming and validation primitives (AgentSlug, normalize_name)." href="/promptfleet-agents/sdk/pf-types/" />
+  <LinkCard title="pf_config" description="Layered configuration loader (JSON, env, dotenv, Cargo.toml section)." href="/promptfleet-agents/sdk/pf-config/" />
+</CardGrid>
+
+See also: [Guides](/promptfleet-agents/guides/) for step-by-step walkthroughs, and [Concepts](/promptfleet-agents/concepts/) for architectural background.

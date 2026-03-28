@@ -3,6 +3,10 @@ title: pf_test_harness
 description: Reusable native test harness for PromptFleet streaming and SSE seams.
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">Native only — this crate requires `tokio`, `axum`, and `reqwest` and does **not** compile to WASM. It is excluded from WASM builds via `#![cfg(not(target_arch = "wasm32"))]`.</Aside>
+
 **Crate:** `pf_test_harness` · **Path:** `crates/pf_test_harness`  
 **Description** (`Cargo.toml`): *Reusable native test harness for PromptFleet streaming and SSE seams*
 

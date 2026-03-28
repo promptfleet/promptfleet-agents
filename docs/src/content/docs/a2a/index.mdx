@@ -3,6 +3,8 @@ title: A2A Protocol overview
 description: Six crates implementing the Google A2A (Agent-to-Agent) protocol — domain types, transport, HTTP client/server, app ports, and proc-macros.
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 These crates build on each other:
 
 1. **`protocol_transport_core`** — universal transport foundation (JSON-RPC 2.0, streaming, headers, routing). Protocol-agnostic; used by A2A, MCP, and REST.
@@ -14,4 +16,15 @@ These crates build on each other:
 
 Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
 
-**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/getting-started/) for local `cargo doc`).
+<CardGrid>
+  <LinkCard title="protocol_transport_core" description="Universal transport foundation — JSON-RPC 2.0, streaming, header forwarding, protocol routing." href="/promptfleet-agents/a2a/protocol-transport-core/" />
+  <LinkCard title="a2a_protocol_core" description="Pure A2A domain layer — AgentCard, Task, Message, Artifact, security, discovery." href="/promptfleet-agents/a2a/a2a-protocol-core/" />
+  <LinkCard title="a2a_http_client" description="Target-adaptive A2A HTTP client (Spin SDK on WASM, Reqwest on native)." href="/promptfleet-agents/a2a/a2a-http-client/" />
+  <LinkCard title="a2a_http_server" description="Target-adaptive A2A HTTP server (Spin SDK on WASM, Axum on native)." href="/promptfleet-agents/a2a/a2a-http-server/" />
+  <LinkCard title="a2a_app_ports" description="Clean-architecture application ports (traits) for A2A server delegation." href="/promptfleet-agents/a2a/a2a-app-ports/" />
+  <LinkCard title="a2a_rpc_macros" description="[Experimental] Proc-macros for compile-time JSON-RPC command registration." href="/promptfleet-agents/a2a/a2a-rpc-macros/" />
+</CardGrid>
+
+See also: [A2A Capabilities](/promptfleet-agents/a2a/capabilities/) for supported A2A v1.0 methods and capabilities, [A2A Protocol concept](/promptfleet-agents/concepts/a2a-protocol/) for protocol background, and the [A2A Serving guide](/promptfleet-agents/guides/a2a-serving/) for step-by-step setup.
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/promptfleet-agents/getting-started/) for local `cargo doc`).

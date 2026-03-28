@@ -3,6 +3,10 @@ title: agent_sdk
 description: Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters.
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasi` and native targets.</Aside>
+
 **Crate:** `agent_sdk` · **Path:** `crates/agent_sdk`  
 **Description** (`Cargo.toml`): *Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters*
 
@@ -102,5 +106,29 @@ fn main() -> SdkResult<()> {
     Ok(())
 }
 ```
+
+### Capability bundles (presets)
+
+These bundle common feature combinations for convenience:
+
+| Preset | Includes | Use case |
+|--------|----------|----------|
+| `agui-agent` | `agent-core` + `llm-engine` + `agui-stream` | AG-UI streaming agent |
+| `a2a-agent` | `agent-core` + `llm-engine` + `a2a-server` + `a2a-client` + `event-stream` | A2A-only agent |
+| `dual-agent` | `agui-agent` + `a2a-agent` | Agent serving both A2A and AG-UI |
+| `pf-agent` | `dual-agent` + `mcp-client` + `agent-observability` | Full PromptFleet agent with MCP and observability |
+
+## Related guides
+
+- [LLM Client guide](/promptfleet-agents/guides/llm-client/) — using `llm-engine` and `context-window`
+- [LLM Tools guide](/promptfleet-agents/guides/llm-tools/) — registering tools with `#[llm_tool]`
+- [A2A Serving guide](/promptfleet-agents/guides/a2a-serving/) — setting up A2A server transport
+- [AG-UI Streaming guide](/promptfleet-agents/guides/agui-streaming/) — streaming with `agui-stream`
+- [Sub-Agents guide](/promptfleet-agents/guides/sub-agents/) — delegating to sub-agents
+- [MCP guide](/promptfleet-agents/guides/mcp/) — connecting to MCP servers
+- [Configuration guide](/promptfleet-agents/guides/config/) — using `config-loader`
+- [Observability guide](/promptfleet-agents/guides/observability/) — wiring `agent-observability`
+- [Interactive Tools guide](/promptfleet-agents/guides/interactive-tools/) — typed interaction contracts
+- [Skills guide](/promptfleet-agents/guides/skills/) — registering and composing skills
 
 **Full API reference:** `cargo doc -p agent_sdk --no-deps --all-features`

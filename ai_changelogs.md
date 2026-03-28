@@ -1,5 +1,75 @@
 # 📋 AI Changelogs
 
+## 2026-03-28 — Docs: Starlight sidebar integration pass + build verify
+
+### Changes
+- **`docs/astro.config.mjs`:** Replaced manual sidebar with full navigation: Getting Started → Quickstart → Capabilities Matrix → Architecture; **Concepts** (3); **Guides** (11); **SDK / Core**; **A2A Protocol** (badges: A2A v1.0 Compliance **New**, a2a_rpc_macros **Experimental**); **LLM**; **Observability**; **Support / Integration** (pf_test_harness **Native**); **API Reference** → structured_logging subtree. Fixed inconsistent indentation under `starlight({ … })`.
+- **`docs/src/content/docs/api/structured-logging/index.mdx`**, **`context-adapter.mdx`:** Replaced fenced language `rust,ignore` with `rust` so Expressive Code highlights correctly (avoids build-time `astro-expressive-code` warnings).
+
+### Files modified
+- `docs/astro.config.mjs`
+- `docs/src/content/docs/api/structured-logging/index.mdx`
+- `docs/src/content/docs/api/structured-logging/context-adapter.mdx`
+
+### Tests
+- `yarn build` (in `docs/`): **passed** — 58 page(s) built; Pagefind 58 HTML files; no `rust,ignore` highlighting warnings after fence fix.
+
+### Notes
+- Build may log `404.html` / Starlight 404 entry and a Vite unused-import notice from Astro internals; exit code clean.
+
+## 2026-03-28 — Docs (WS6): A2A compliance + capabilities matrix pages
+
+### Changes
+- **`docs/src/content/docs/a2a/capabilities.mdx`:** A2A v1.0 JSON-RPC method matrix grounded in `a2a_protocol_core::A2AProtocol::register_a2a_methods` and native `SendStreamingMessage` SSE interception in `a2a_http_server`.
+- **`docs/src/content/docs/capabilities.mdx`:** Workspace capability tables (runtime, LLM, A2A, serving, tools, observability, config, testing) with `agent_sdk` feature flags from `Cargo.toml`.
+- **`docs/astro.config.mjs`:** sidebar **Capabilities Matrix** → `/capabilities/`; A2A section **A2A v1.0 compliance** → `/a2a/capabilities/`.
+
+### Files modified
+- `docs/src/content/docs/a2a/capabilities.mdx` (new)
+- `docs/src/content/docs/capabilities.mdx` (new)
+- `docs/astro.config.mjs`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Internal links use `/promptfleet-agents/…` as required for GitHub Pages. `SendStreamingMessage`: protocol handler runs on WASM when `event-stream` is enabled; HTTP SSE path is native-only with `with_streaming_port`. `interactive-tools` is `agent-core`-only on `agent_sdk` (not `llm-engine`). Prometheus: enable `observability` crate feature `prometheus` separately from default `agent-observability` (OTEL-only).
+
+## 2026-03-28 — Docs (WS2): Quickstart tutorial (A2A echo agent)
+
+### Changes
+- **`quickstart.mdx`:** “Build your first A2A agent” tutorial with Starlight `Steps`, `Tabs`, `Aside`; native `main.rs` and WASM `lib.rs` copied verbatim from `examples/a2a-echo-native` and `examples/a2a-echo-wasm`; dependency blocks and `spin.toml` match the examples; curl `SendMessage` sample; “What just happened?” ties `Agent` / `A2aApp` / Spin `http_component` + `OnceLock`; next-step links use `/promptfleet-agents/…` base.
+- **`astro.config.mjs`:** sidebar entry **Quickstart** → `/quickstart/`.
+
+### Files modified
+- `docs/src/content/docs/quickstart.mdx` (new)
+- `docs/astro.config.mjs`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Next-step targets (`/guides/`, `/concepts/a2a-protocol/`, `/concepts/wasm-vs-native/`) are placeholders until those pages exist; SDK overview today is `/sdk/`.
+- WASM example `Cargo.toml` uses `workspace = true` like the repo; tutorial Asides point to path deps or copying `examples/a2a-echo-wasm`.
+
+## 2026-03-28 — Docs (WS1): splash landing, custom CSS, Starlight config polish
+
+### Changes
+- **`index.mdx`:** splash hero with CardGrid sections; hero actions use `/promptfleet-agents/` base for internal links per GitHub Pages deploy.
+- **`src/styles/custom.css`:** content width, card grid gap, hero tagline width.
+- **`astro.config.mjs`:** `customCss` and `lastUpdated: true` on Starlight integration.
+
+### Files modified
+- `docs/src/content/docs/index.mdx`
+- `docs/src/styles/custom.css` (new)
+- `docs/astro.config.mjs`
+
+### Tests
+- `yarn build` (in `docs/`): **passed**
+
+### Notes
+- Hero “Quickstart” links to `/promptfleet-agents/quickstart/`; add that page or repoint when quickstart content exists (sidebar still uses Getting Started).
+
 ## 2026-03-26 — Docs: document `alias yarn='yarn --non-interactive'` as Yarn 4 breaker
 
 ### Changes

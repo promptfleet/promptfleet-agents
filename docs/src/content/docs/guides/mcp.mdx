@@ -1,0 +1,178 @@
+---
+title: MCP Integration
+description: How to connect external MCP servers as LLM tools with agent_sdk.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `mcp-client`</Aside>
+
+## What it does
+
+The MCP (Model Context Protocol) integration connects external MCP-compatible servers and injects their tools into the agent's `ToolRegistry`. The LLM can then call these external tools the same way it calls local tools. The SDK uses `NativeMcpBackend` on native (via `rmcp`) and `WasmMcpBackend` on WASM (via `mcp_protocol` + Spin HTTP) — the correct backend is selected automatically by target architecture.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk", features = ["llm-engine", "mcp-client"] }
+```
+
+## How to use it
+
+<Steps>
+
+1. **Create an MCP servers config file**
+
+   The config format is compatible with the industry-standard `mcp.json` used by Cursor, Claude Desktop, VS Code, and other MCP clients.
+
+   <Tabs>
+   <TabItem label="Stdio (native only)">
+
+   ```json
+   {
+     "mcp_servers": {
+       "tavily": {
+         "command": "npx",
+         "args": ["-y", "tavily-mcp@latest"],
+         "env": { "TAVILY_API_KEY": "${TAVILY_API_KEY}" }
+       }
+     }
+   }
+   ```
+
+   </TabItem>
+   <TabItem label="Remote (WASM + native)">
+
+   ```json
+   {
+     "mcp_servers": {
+       "tavily": {
+         "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=...",
+         "tool_policy": {
+           "expose": ["search"],
+           "deny": []
+         }
+       }
+     }
+   }
+   ```
+
+   </TabItem>
+   </Tabs>
+
+2. **Load the config and connect**
+
+   ```rust
+   use agent_sdk::mcp_tools::{McpServersConfig, McpToolAdapter, NativeMcpBackend};
+   use agent_sdk::agent::tools::ToolRegistry;
+   use std::sync::Arc;
+
+   let config = McpServersConfig::from_file("mcp_servers.json")?;
+   let source = NativeMcpBackend::connect(&config).await?;
+
+   let mut tools = ToolRegistry::new();
+   McpToolAdapter::register_mcp_tools(&mut tools, Arc::new(source)).await?;
+   // tools now contains entries like mcp_tavily_search, mcp_tavily_extract
+   ```
+
+3. **Wire into the agent**
+
+   ```rust
+   agent.configure_llm_runtime(
+       llm_client,
+       "gpt-4o",
+       tools,
+       Some("You are a helpful assistant with web search.".into()),
+       None,
+       None,
+   )?;
+   ```
+
+</Steps>
+
+## Complete example
+
+```rust
+use agent_sdk::Agent;
+use agent_sdk::agent::tools::ToolRegistry;
+use agent_sdk::mcp_tools::{McpServersConfig, McpToolAdapter, NativeMcpBackend};
+use std::sync::Arc;
+
+async fn build_agent_with_mcp(
+    llm_client: impl agent_sdk::agent::llm_orchestrator::IntoLlmInvoker
+        + agent_sdk::agent::llm_orchestrator::IntoLlmStreamInvoker + Clone,
+) -> anyhow::Result<Agent> {
+    let mut agent = Agent::new("mcp-demo")?;
+
+    agent
+        .add_skill("research")
+        .description("Research topics using web search")
+        .register()?;
+
+    // Load MCP servers config
+    let config = McpServersConfig::from_file("mcp_servers.json")?;
+    let source = NativeMcpBackend::connect(&config).await?;
+
+    // Register MCP tools into the agent's tool registry
+    let mut tools = ToolRegistry::new();
+    McpToolAdapter::register_mcp_tools(&mut tools, Arc::new(source)).await?;
+
+    agent.configure_llm_runtime(
+        llm_client,
+        "gpt-4o",
+        tools,
+        Some("You are a research assistant with web search capabilities.".into()),
+        None,
+        None,
+    )?;
+
+    Ok(agent)
+}
+```
+
+## Config fields
+
+### `McpServerEntry`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `command` | `Option<String>` | Stdio transport: command to execute (e.g. `"npx"`) |
+| `args` | `Vec<String>` | Arguments to the command |
+| `env` | `HashMap<String, String>` | Environment variables (supports `${VAR}` interpolation) |
+| `url` | `Option<String>` | Remote transport: SSE / streamable HTTP URL |
+| `disabled` | `bool` | Skip this server without removing config |
+| `auth_token` | `Option<String>` | Bearer token (supports `${VAR}` interpolation) |
+| `forward_caller_auth` | `bool` | Forward inbound Authorization header to MCP server |
+| `tool_policy` | `Option<ToolPolicy>` | Tool exposure filtering |
+
+### `ToolPolicy`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `expose` | `Vec<String>` | Allowlist of tool names (empty = expose all) |
+| `deny` | `Vec<String>` | Denylist (takes precedence over `expose`) |
+
+## Transport types
+
+| Transport | Config trigger | WASM | Native | Backend |
+|-----------|---------------|------|--------|---------|
+| **Stdio** | `command` is set | No | Yes | `NativeMcpBackend` (spawns child process) |
+| **Remote** | `url` is set | Yes | Yes | `WasmMcpBackend` (WASM) / `NativeMcpBackend` (native) |
+
+## Tool naming convention
+
+MCP tools are registered with the naming pattern `mcp_<server_id>_<tool_name>`. Underscores are used instead of dots because LLM providers like OpenAI restrict tool names to `^[a-zA-Z0-9_-]+$`.
+
+## Key types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `McpToolAdapter` | `agent_sdk::mcp_tools::adapter` | Registers MCP server tools into a `ToolRegistry` |
+| `McpServersConfig` | `agent_sdk::mcp_tools::config` | Top-level config: `from_file()`, `from_json()`, `enabled_servers()` |
+| `McpServerEntry` | `agent_sdk::mcp_tools::config` | Single server config with `transport_type()` |
+| `McpTransportType` | `agent_sdk::mcp_tools::config` | `Stdio`, `Remote`, or `Unknown` |
+| `ToolPolicy` | `agent_sdk::mcp_tools::config` | Allowlist / denylist filtering with `is_exposed()` |
+| `NativeMcpBackend` | `agent_sdk::mcp_tools::native` | Native backend wrapping `rmcp` |
+| `WasmMcpBackend` | `agent_sdk::mcp_tools::wasm` | WASM backend wrapping `mcp_protocol` + Spin HTTP |
+| `McpToolSource` | `agent_sdk::mcp_tools::types` | Trait: `list_tools()`, `call_tool()`, `health_check()` |

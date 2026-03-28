@@ -3,6 +3,8 @@ title: Support / Integration overview
 description: Shared utilities, protocol integrations, test infrastructure, and multi-agent coordination.
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 These crates provide shared utilities and integration infrastructure:
 
 1. **`foundation_utils`** — Zero-dependency RAII guards, scoped operations, context management, and resource pools (WASM-compatible).
@@ -12,4 +14,11 @@ These crates provide shared utilities and integration infrastructure:
 
 Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
 
-**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/getting-started/) for local `cargo doc`).
+<CardGrid>
+  <LinkCard title="foundation_utils" description="Zero-dependency RAII guards, scoped operations, context management, and resource pools." href="/promptfleet-agents/support/foundation-utils/" />
+  <LinkCard title="mcp_protocol" description="Model Context Protocol (MCP) implementation — JSON-RPC 2.0, tool discovery, authentication, proxy." href="/promptfleet-agents/support/mcp-protocol/" />
+  <LinkCard title="pf_test_harness" description="Native-only test harness for deterministic LLM scenarios, SSE capture, and A2A route testing." href="/promptfleet-agents/support/pf-test-harness/" />
+  <LinkCard title="umao_agents" description="UMAO coordination bridge — dispatches graph nodes to real A2A agents." href="/promptfleet-agents/support/umao-agents/" />
+</CardGrid>
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/promptfleet-agents/getting-started/) for local `cargo doc`).

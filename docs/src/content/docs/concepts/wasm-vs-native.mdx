@@ -1,0 +1,164 @@
+---
+title: WASM vs Native
+description: When to use each target, what changes, and side-by-side code.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+PromptFleet agents compile to two targets from the same crate. This page explains when to pick each, what differs, and shows real code side by side.
+
+## When to use WASM
+
+Choose `wasm32-wasi` when you need:
+
+- **Serverless deployment** on SpinKube/Kubernetes — 4.8 ms cold start, ~0.6 MB memory per agent.
+- **Sandboxed execution** — WASM's capability model means no filesystem, no raw sockets, no ambient authority.
+- **Density** — run 2 000+ agents per node with fractional-CPU scheduling.
+- **Production workloads** where the agent serves A2A requests and doesn't need to call other agents or stream AG-UI events.
+
+The WASM target uses Spin SDK for HTTP handling and the Spin async executor. There is no Tokio, no threads, no background tasks.
+
+## When to use native
+
+Choose native (`x86_64` / `aarch64`) when you need:
+
+- **Local development and testing** — `cargo run`, attach a debugger, inspect with `curl`.
+- **Full async runtime** — Tokio provides multi-threaded scheduling, timers, channels.
+- **Sub-agent delegation** — call other A2A agents with streaming support.
+- **AG-UI streaming** — serve real-time UI event streams to frontends.
+- **Redis/Valkey storage** — shared task state across replicas.
+
+## What changes between targets
+
+The agent logic — skills, message handlers, LLM tool definitions — stays identical. Only the entry point and runtime wiring differ:
+
+<Tabs>
+  <TabItem label="WASM (SpinKube)">
+```rust
+use agent_sdk::{
+    a2a::A2aApp,
+    agent::{AgentConfig, Response},
+    Agent,
+};
+use spin_sdk::http_component;
+
+static APP: std::sync::OnceLock<A2aApp> = std::sync::OnceLock::new();
+
+#[http_component]
+async fn handle_request(
+    req: spin_sdk::http::Request,
+) -> anyhow::Result<spin_sdk::http::Response> {
+    let app = APP.get_or_init(|| {
+        let config = AgentConfig::new("a2a-echo-wasm", "A2A v1.0 echo agent (WASM)")
+            .with_base_url("http://127.0.0.1:3001");
+        let mut agent = Agent::new_with_config(config).expect("agent init");
+        agent
+            .add_skill("echo")
+            .description("Echoes back user messages")
+            .register()
+            .expect("register echo skill");
+        agent.set_message_handler(|msg_ctx, task_ctx| async move {
+            let input = msg_ctx.text_content.as_deref().unwrap_or("(empty)");
+            Response::message_text(
+                format!("Echo: {input}"),
+                None,
+                None,
+                task_ctx.and_then(|t| t.context_id),
+            )
+        });
+        A2aApp::from_agent(agent).expect("app init")
+    });
+    Ok(app.serve_async(req).await?)
+}
+```
+  </TabItem>
+  <TabItem label="Native (Tokio + Axum)">
+```rust
+use agent_sdk::{
+    a2a::A2aApp,
+    agent::{AgentConfig, MessageContext, Response, TaskContext},
+    Agent,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let mut config = AgentConfig::new("a2a-echo-native", "A2A v1.0 echo agent (native)")
+        .with_base_url("http://127.0.0.1:3000");
+    config.streaming = true;
+
+    let mut agent = Agent::new_with_config(config)?;
+    agent
+        .add_skill("echo")
+        .description("Echoes back user messages")
+        .register()?;
+    agent.set_message_handler(echo_handler);
+
+    let app = A2aApp::from_agent(agent)?;
+    println!("A2A echo agent (native) listening on http://127.0.0.1:3000");
+    app.serve("127.0.0.1:3000").await
+}
+
+async fn echo_handler(
+    msg_ctx: MessageContext,
+    task_ctx: Option<TaskContext>,
+) -> agent_sdk::SdkResult<agent_sdk::agent::RuntimeResponse> {
+    let input = msg_ctx.text_content.as_deref().unwrap_or("(empty)");
+    Response::message_text(
+        format!("Echo: {input}"),
+        None,
+        None,
+        task_ctx.and_then(|t| t.context_id),
+    )
+}
+```
+  </TabItem>
+</Tabs>
+
+Key differences:
+
+| Aspect | WASM | Native |
+|--------|------|--------|
+| Entry point | `#[http_component]` via Spin SDK | `#[tokio::main]` |
+| Agent init | `OnceLock` (Spin reuses the instance across requests) | Direct in `main` |
+| HTTP server | Spin runtime handles listening | `A2aApp::serve("addr")` starts Axum |
+| Async executor | Spin executor (single-threaded, cooperative) | Tokio (multi-threaded) |
+| Streaming | Request/response only (no SSE) | Full SSE via `event-stream` feature |
+
+## Feature availability matrix
+
+Not all SDK features work on both targets. Features that depend on Tokio, OS sockets, or background tasks are native-only.
+
+| Feature | Native | WASM | Notes |
+|---------|--------|------|-------|
+| `agent-core` | ✓ | ✓ | Protocol-agnostic types |
+| `a2a-server` | ✓ | ✓ | Axum on native, Spin SDK on WASM |
+| `a2a-client` | ✓ | ✓ | Reqwest on native, Spin SDK on WASM |
+| `llm-engine` | ✓ | ✓ | `llm_client` via `protocol_transport_core` |
+| `context-window` | ✓ | ✓ | Pure logic, no I/O |
+| `mcp-client` | ✓ | ✓ | `rmcp` on native, `mcp_protocol` on WASM |
+| `agent-observability` | ✓ | ✓ | Facade adapts to target |
+| `config-loader` | ✓ | ✓ | JSON + env vars |
+| `a2a-tools` | ✓ | ✓ | LLM tools wrapping A2A client |
+| `interactive-tools` | ✓ | ✓ | Pure agent-core types |
+| `event-stream` | ✓ | ✗ | Requires Tokio streams |
+| `agui-stream` | ✓ | ✗ | Built on `event-stream` |
+| `sub-agents` | ✓ | ✗ | Requires `event-stream` + streaming A2A client |
+| `redis-storage` | ✓ | ✗ | Requires `redis` crate (TCP sockets) |
+
+<Aside type="tip">
+On WASM, use Spin's built-in key-value store for task state instead of Redis. The SDK's `wasm_kv_task_storage` module handles this automatically when `a2a-server` is enabled.
+</Aside>
+
+## Choosing the right preset
+
+| Goal | Preset / features | Target |
+|------|-------------------|--------|
+| Minimal A2A responder | `a2a-server` + `llm-engine` | WASM or native |
+| Full interoperable agent | `a2a-agent` | Native (SSE streaming) |
+| User-facing UI agent | `agui-agent` | Native (AG-UI streaming) |
+| Both A2A + AG-UI | `dual-agent` | Native |
+| Everything + MCP + obs | `pf-agent` | Native |
+
+<Aside type="caution">
+The presets `a2a-agent`, `agui-agent`, `dual-agent`, and `pf-agent` include `event-stream` which is native-only. For WASM production builds, compose the primitive features you need: `a2a-server`, `llm-engine`, `mcp-client`, `agent-observability`.
+</Aside>

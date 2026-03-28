@@ -3,6 +3,10 @@ title: mcp_protocol
 description: "Model Context Protocol (MCP) implementation for PromptFleet — JSON-RPC 2.0 compatible."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasi` and native targets. Uses Spin SDK on WASM, Reqwest/Tokio on native.</Aside>
+
 **Crate:** `mcp_protocol` · **Path:** `crates/mcp_protocol`  
 **Description** (`Cargo.toml`): *Model Context Protocol (MCP) implementation for PromptFleet - JSON-RPC 2.0 compatible*
 
@@ -58,5 +62,7 @@ let handler = McpProtocolHandler::new()
     .with_capabilities(ServerCapabilities::default())
     .with_query_mode(mcp_protocol::QueryMode::Single);
 ```
+
+See the [MCP guide](/promptfleet-agents/guides/mcp/) for end-to-end examples of connecting to external MCP servers.
 
 **Full API reference:** `cargo doc -p mcp_protocol --no-deps --all-features`

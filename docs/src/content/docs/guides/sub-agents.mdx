@@ -1,0 +1,156 @@
+---
+title: Sub-Agent Delegation
+description: How to delegate work to remote agents with agent_sdk.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `sub-agents`</Aside>
+
+<Aside type="caution">Native only — sub-agent delegation requires tokio and is not available on WASM.</Aside>
+
+## What it does
+
+Sub-agent delegation lets an agent call other A2A agents as LLM tools. The `SubAgentToolBuilder` produces a `ToolSpec` that, when invoked by the LLM, sends an A2A `message/send` request to a remote agent and returns the result. Delegation can be streaming (SSE) or synchronous (request/response).
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk", features = ["llm-engine", "sub-agents"] }
+```
+
+## How to use it
+
+<Steps>
+
+1. **Build a sub-agent tool**
+
+   `SubAgentToolBuilder::new` takes the remote agent's name, URL, and a tool name for the LLM:
+
+   ```rust
+   use agent_sdk::sub_agent::{SubAgentToolBuilder, DelegationMode};
+
+   let planner_tool = SubAgentToolBuilder::new(
+       "planner",
+       "http://planner.default.svc.cluster.local:3000/jsonrpc",
+       "delegate_to_planner",
+   )
+   .description("Delegate planning tasks to the planner agent")
+   .schema(serde_json::json!({
+       "type": "object",
+       "properties": {
+           "task": { "type": "string", "description": "What to plan" }
+       },
+       "required": ["task"]
+   }))
+   .delegation_mode(DelegationMode::Streaming)
+   .build();
+   ```
+
+2. **Register the tool in the agent's LLM runtime**
+
+   The `.build()` call returns a `ToolSpec` — register it alongside any other tools:
+
+   ```rust
+   use agent_sdk::agent::tools::ToolRegistry;
+
+   let mut tools = ToolRegistry::new();
+   tools.register(planner_tool);
+   // Add more sub-agent tools or local tools...
+
+   agent.configure_llm_runtime(
+       llm_client,
+       "gpt-4o",
+       tools,
+       Some("You are a coordinator. Delegate to specialised agents.".into()),
+       None,
+       None,
+   )?;
+   ```
+
+3. **The LLM calls the tool at runtime**
+
+   When the LLM invokes `delegate_to_planner`, the SDK sends an A2A JSON-RPC request to the planner's URL. In `Streaming` mode, SSE events are relayed to the caller. In `Synchronous` mode, the full response is collected before returning.
+
+</Steps>
+
+## Complete example
+
+```rust
+use agent_sdk::Agent;
+use agent_sdk::agent::tools::ToolRegistry;
+use agent_sdk::sub_agent::{SubAgentToolBuilder, DelegationMode};
+
+fn build_coordinator(
+    llm_client: impl agent_sdk::agent::llm_orchestrator::IntoLlmInvoker
+        + agent_sdk::agent::llm_orchestrator::IntoLlmStreamInvoker + Clone,
+) -> agent_sdk::SdkResult<Agent> {
+    let mut agent = Agent::new("coordinator")?;
+
+    agent
+        .add_skill("coordinate")
+        .description("Breaks work into sub-tasks and delegates to specialist agents")
+        .register()?;
+
+    let planner = SubAgentToolBuilder::new(
+        "planner",
+        "http://planner.default.agentmesh:3000/jsonrpc",
+        "delegate_planner",
+    )
+    .description("Delegate planning and decomposition tasks")
+    .delegation_mode(DelegationMode::Streaming)
+    .emit_handoff(true)
+    .build();
+
+    let researcher = SubAgentToolBuilder::new(
+        "researcher",
+        "http://researcher.default.agentmesh:3000/jsonrpc",
+        "delegate_researcher",
+    )
+    .description("Delegate research and fact-finding tasks")
+    .delegation_mode(DelegationMode::Synchronous)
+    .header("X-Priority", "high")
+    .build();
+
+    let mut tools = ToolRegistry::new();
+    tools.register(planner);
+    tools.register(researcher);
+
+    agent.configure_llm_runtime(
+        llm_client,
+        "gpt-4o",
+        tools,
+        Some("You are a coordinator agent. Delegate work to specialist agents.".into()),
+        None,
+        None,
+    )?;
+
+    Ok(agent)
+}
+```
+
+## Builder methods
+
+| Method | Description | Default |
+|--------|-------------|---------|
+| `SubAgentToolBuilder::new(agent_name, agent_url, tool_name)` | Create a new builder | — |
+| `.description(s)` | Tool description for the LLM | `"Delegate work to a remote sub-agent"` |
+| `.schema(json)` | JSON Schema for the tool's input | `{"type":"object","additionalProperties":true}` |
+| `.delegation_mode(mode)` | `Streaming` or `Synchronous` | `Streaming` |
+| `.adapter(arc)` | Custom `SubAgentAdapter` implementation | `A2aSubAgentAdapter` |
+| `.result_transformer(fn)` | Post-process the sub-agent's response | None |
+| `.emit_handoff(bool)` | Emit handoff trace events | `true` |
+| `.header(key, value)` | Add a custom HTTP header to the A2A request | — |
+| `.build()` | Produce a `ToolSpec` ready for `ToolRegistry::register` | — |
+
+## Key types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `SubAgentToolBuilder` | `agent_sdk::sub_agent::tool` | Fluent builder for sub-agent delegation tools |
+| `DelegationMode` | `agent_sdk::sub_agent::tool` | `Streaming` (SSE relay) or `Synchronous` (collect full response) |
+| `SubAgentAdapter` | `agent_sdk::sub_agent::adapter` | Trait: `execute(mode, name, url, args, headers, emit_handoff, ctx) → Future<Result<Value>>` |
+| `SharedSubAgentAdapter` | `agent_sdk::sub_agent::adapter` | `Arc<dyn SubAgentAdapter>` |
+| `A2aSubAgentAdapter` | `agent_sdk::a2a::sub_agent` | Default adapter that sends A2A `message/send` over HTTP |
+| `SubAgentContext` | `agent_sdk::sub_agent::adapter` | Context struct: `agent_name`, `task_id`, `tool_call_id` |

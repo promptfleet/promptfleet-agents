@@ -1,0 +1,172 @@
+---
+title: LLM Tools
+description: How to register LLM-callable tools with agent_sdk.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `llm-engine`</Aside>
+
+## What it does
+
+LLM tools let the agent's language model call deterministic functions during a conversation. The SDK provides two layers: a low-level `ToolRegistry` / `ToolSpec` system inside `agent_sdk`, and a higher-level `#[llm_tool]` proc macro from `llm_tool_macros` that generates JSON Schema and executors from plain Rust functions.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk", features = ["llm-engine"] }
+llm_tools = { path = "../../crates/llm_tools" }
+llm_tool_macros = { path = "../../crates/llm_tool_macros" }
+```
+
+## How to use it
+
+<Steps>
+
+1. **Define tools with `#[llm_tool]`**
+
+   Annotate plain Rust functions. The macro generates `_llm_tool_info`, `_llm_tool_exec`, and schema companions automatically.
+
+   ```rust
+   use llm_tool_macros::llm_tool;
+
+   #[llm_tool(name = "get_weather", description = "Get current weather for a city")]
+   fn get_weather(city: String) -> String {
+       format!("Weather in {city}: 22°C, sunny")
+   }
+   ```
+
+   The macro derives a `GetWeatherParams` struct with `serde::Deserialize` and `schemars::JsonSchema`, so the LLM sees a proper JSON Schema.
+
+2. **Build a registry with `registry_from!`**
+
+   ```rust
+   use llm_tools::registry_from;
+
+   let tools = registry_from!(get_weather);
+   // tools.schemas() → Vec<ToolSchema> for the LLM request
+   // tools.exec("get_weather", args) → serde_json::Value
+   ```
+
+3. **Wire into the agent via `configure_llm_runtime`**
+
+   ```rust
+   agent.configure_llm_runtime(
+       llm_client,           // impl IntoLlmInvoker + IntoLlmStreamInvoker
+       "gpt-4o",             // model name
+       tools,                // impl IntoTools (ToolRegistry, Vec<ToolSpec>, or llm_tools::ToolRegistry)
+       Some("You are a helpful weather assistant.".into()), // system message
+       None,                 // LlmPolicy (default)
+       None,                 // LlmRequestDefaults (default)
+   )?;
+   ```
+
+   This installs the tool-loop handler: the agent automatically calls tools when the LLM requests them and feeds results back.
+
+</Steps>
+
+## Complete example
+
+```rust
+use agent_sdk::Agent;
+use llm_tool_macros::llm_tool;
+use llm_tools::registry_from;
+
+#[llm_tool(name = "calculate", description = "Evaluate a math expression")]
+fn calculate(expression: String) -> String {
+    // Simplified — real implementation would parse the expression
+    format!("Result of '{expression}': 42")
+}
+
+#[llm_tool(name = "lookup_user", description = "Look up a user by ID")]
+fn lookup_user(user_id: u64) -> String {
+    format!("User {user_id}: Alice (alice@example.com)")
+}
+
+fn build_agent(llm_client: impl agent_sdk::agent::llm_orchestrator::IntoLlmInvoker
+    + agent_sdk::agent::llm_orchestrator::IntoLlmStreamInvoker + Clone,
+) -> agent_sdk::SdkResult<Agent> {
+    let mut agent = Agent::new("tool-demo")?;
+
+    agent
+        .add_skill("math")
+        .description("Evaluate math expressions")
+        .register()?;
+
+    let tools = registry_from!(calculate, lookup_user);
+
+    agent.configure_llm_runtime(
+        llm_client,
+        "gpt-4o",
+        tools,
+        Some("You are a helpful assistant. Use tools when needed.".into()),
+        None,
+        None,
+    )?;
+
+    Ok(agent)
+}
+```
+
+## Manual `ToolSpec` registration
+
+For tools that need async I/O or custom executors, bypass the macro and build `ToolSpec` directly:
+
+```rust
+use agent_sdk::agent::tools::{ToolExecutor, ToolSpec, ToolRegistry};
+use std::sync::Arc;
+
+let mut registry = ToolRegistry::new();
+registry.register(ToolSpec {
+    name: "fetch_url".to_string(),
+    description: Some("Fetch content from a URL".to_string()),
+    parameters: serde_json::json!({
+        "type": "object",
+        "properties": {
+            "url": { "type": "string", "description": "The URL to fetch" }
+        },
+        "required": ["url"]
+    }),
+    strict: true,
+    parallel_ok: false,
+    executor: ToolExecutor::Simple(Arc::new(|args| {
+        Box::pin(async move {
+            let url = args["url"].as_str().unwrap_or("");
+            Ok(serde_json::json!({ "content": format!("Fetched: {url}") }))
+        })
+    })),
+});
+```
+
+## The `#[llm_tool]` macro
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `name = "…"` | `String` | Tool name exposed to the LLM (defaults to function name) |
+| `description = "…"` | `String` | Tool description for the LLM |
+| `context` | flag | Require a `ToolContext` parameter for access to request headers and trace emitter |
+
+When `context` is set, one of the function parameters must have type `ToolContext`:
+
+```rust
+use agent_sdk::agent::tool_context::ToolContext;
+
+#[llm_tool(name = "ctx_tool", description = "Tool with context", context)]
+fn ctx_tool(query: String, ctx: ToolContext) -> String {
+    // ctx.request_headers(), ctx.emit(event)
+    format!("Handled: {query}")
+}
+```
+
+## Key types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `ToolSpec` | `agent_sdk::agent::tools` | Tool definition: name, description, JSON Schema, executor |
+| `ToolRegistry` | `agent_sdk::agent::tools` | Name-indexed collection of `ToolSpec` entries |
+| `ToolExecutor` | `agent_sdk::agent::tools` | `Simple(fn)` or `WithContext(fn)` — the callable |
+| `ToolExecutionResult` | `agent_sdk::agent::tools` | Name + output value after execution |
+| `IntoTools` | `agent_sdk::agent::tools` | Trait for ergonomic conversion (accepts `ToolRegistry`, `Vec<ToolSpec>`, or `llm_tools::ToolRegistry`) |
+| `llm_tools::ToolRegistry` | `llm_tools` | Macro-generated registry with `schemas()`, `exec()`, `names()` |
+| `registry_from!` | `llm_tools` | Macro to collect `#[llm_tool]`-annotated functions into a `llm_tools::ToolRegistry` |

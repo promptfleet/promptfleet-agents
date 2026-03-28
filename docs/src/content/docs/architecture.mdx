@@ -3,9 +3,111 @@ title: Architecture
 description: High-level map of the promptfleet-agents workspace — all 25 crates across 5 areas.
 ---
 
-Workspace layout matches the root `Cargo.toml` `[workspace] members` list. Crates are grouped into five areas.
+import { Aside } from '@astrojs/starlight/components';
 
-## SDK / Core
+The `promptfleet-agents` workspace contains 25 Rust crates organized into five groups. At the center sits `agent_sdk`, a facade that re-exports and wires together the crates you need based on Cargo feature flags. The protocol layer (`protocol_transport_core`) is shared by A2A, MCP, and the LLM client, so each protocol speaks the same JSON-RPC 2.0 dialect. Observability and utilities form the foundation layer with zero coupling to any protocol.
+
+<Aside type="tip">
+Solid arrows below are **required** dependencies. Dashed arrows are **optional** (feature-gated). The diagram is generated from the actual `[dependencies]` sections in each crate's `Cargo.toml`.
+</Aside>
+
+## Dependency diagram
+
+```mermaid
+graph TD
+  subgraph SDK["SDK / Core"]
+    agent_sdk
+    agent_core
+    pf_macros
+    pf_types["pf-types"]
+    pf_config
+  end
+
+  subgraph A2A["A2A Protocol"]
+    protocol_transport_core
+    a2a_protocol_core
+    a2a_http_client
+    a2a_http_server
+    a2a_app_ports
+    a2a_rpc_macros
+  end
+
+  subgraph LLM["LLM"]
+    llm_client
+    llm_context_core
+    llm_tools
+    llm_tool_macros
+    tool_web_search
+  end
+
+  subgraph OBS["Observability"]
+    observability
+    observability_core
+    structured_logging
+    otel
+    obs_prometheus["prometheus"]
+  end
+
+  subgraph SUPPORT["Support / Integration"]
+    foundation_utils
+    mcp_protocol
+    pf_test_harness
+    umao_agents
+  end
+
+  %% agent_sdk required deps
+  agent_sdk --> agent_core
+  agent_sdk --> a2a_protocol_core
+  agent_sdk --> protocol_transport_core
+  agent_sdk --> a2a_app_ports
+
+  %% agent_sdk optional deps
+  agent_sdk -.-> a2a_http_client
+  agent_sdk -.-> a2a_http_server
+  agent_sdk -.-> pf_config
+  agent_sdk -.-> observability
+  agent_sdk -.-> llm_client
+  agent_sdk -.-> llm_context_core
+  agent_sdk -.-> llm_tools
+  agent_sdk -.-> mcp_protocol
+
+  %% A2A internal deps
+  a2a_protocol_core --> protocol_transport_core
+  a2a_http_client --> a2a_protocol_core
+  a2a_http_client --> protocol_transport_core
+  a2a_http_client -.-> observability
+  a2a_http_server --> a2a_protocol_core
+  a2a_http_server --> protocol_transport_core
+  a2a_http_server --> a2a_app_ports
+  a2a_http_server -.-> observability
+  a2a_app_ports --> a2a_protocol_core
+
+  %% LLM internal deps
+  llm_client --> protocol_transport_core
+  llm_tools --> llm_client
+  tool_web_search --> agent_sdk
+
+  %% Observability internal deps
+  observability --> observability_core
+  observability -.-> otel
+  observability -.-> obs_prometheus
+  otel --> observability_core
+  obs_prometheus --> observability_core
+  structured_logging --> observability_core
+  observability_core --> foundation_utils
+
+  %% Support deps
+  mcp_protocol --> protocol_transport_core
+  pf_test_harness --> llm_client
+  pf_test_harness -.-> agent_sdk
+  pf_test_harness -.-> a2a_protocol_core
+  pf_test_harness -.-> a2a_http_server
+  umao_agents --> agent_sdk
+```
+
+## Crate reference
+
+### SDK / Core
 
 | Crate | Path | Role |
 |-------|------|------|
@@ -15,7 +117,7 @@ Workspace layout matches the root `Cargo.toml` `[workspace] members` list. Crate
 | `pf-types` | `crates/commons/pf-types` | Lightweight naming primitives (`AgentSlug`, `normalize_name`) |
 | `pf_config` | `crates/config/pf_config` | Layered configuration loader (JSON, env, dotenv, optional Cargo.toml section) |
 
-## A2A Protocol
+### A2A Protocol
 
 | Crate | Path | Role |
 |-------|------|------|
@@ -26,7 +128,7 @@ Workspace layout matches the root `Cargo.toml` `[workspace] members` list. Crate
 | `a2a_app_ports` | `crates/a2a_app_ports` | Application-layer ports for A2A servers (clean architecture traits) |
 | `a2a_rpc_macros` | `crates/a2a_rpc_macros` | Proc-macro for automatic A2A JSON-RPC command registration |
 
-## LLM
+### LLM
 
 | Crate | Path | Role |
 |-------|------|------|
@@ -36,7 +138,7 @@ Workspace layout matches the root `Cargo.toml` `[workspace] members` list. Crate
 | `llm_tool_macros` | `crates/llm_tool_macros` | Attribute macro to register Rust functions as LLM tools with JSON Schema |
 | `tool_web_search` | `crates/llm_tools/tool_web_search` | Reusable LLM tool: web search via Tavily API |
 
-## Observability
+### Observability
 
 | Crate | Path | Role |
 |-------|------|------|
@@ -46,7 +148,7 @@ Workspace layout matches the root `Cargo.toml` `[workspace] members` list. Crate
 | `otel` | `crates/observability/otel` | OpenTelemetry helpers (OTLP, sampling, resource attributes) |
 | `prometheus` | `crates/observability/prometheus` | Prometheus metrics (feature-gated federation, push gateway, etc.) |
 
-## Support / Integration
+### Support / Integration
 
 | Crate | Path | Role |
 |-------|------|------|

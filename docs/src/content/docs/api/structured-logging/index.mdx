@@ -27,21 +27,21 @@ This crate builds on `observability_core`'s solid foundation:
 ## Usage Tiers
 
 ### Tier 1: Standard (90% of users)
-```rust,ignore
+```rust
 // Just use observability_core - works perfectly
 use observability_core::ObservabilityManager;
 log::info!("Standard structured logging");
 ```
 
 ### Tier 2: Enhanced (8% of users)  
-```rust,ignore
+```rust
 // Add convenience methods
 use structured_logging::convenience::*;
 log_llm_request("gpt-4", duration, tokens, "success")?;
 ```
 
 ### Tier 3: Performance (2% of users)
-```rust,ignore
+```rust
 // Full performance optimization
 use structured_logging::{EnhancedObservabilityConfig, PerformanceExtension};
 ```
@@ -894,7 +894,7 @@ When this guard is dropped, the LLM context is automatically cleared.
 This ensures exception-safe cleanup and prevents forgetting to clear context.
 
 # Example
-```rust,ignore
+```rust
 {
     let _guard = set_llm_context_scoped("gpt-4", "openai_client");
     log::info!("This will have LLM context");
@@ -1364,7 +1364,7 @@ Call this once during application startup to enable advanced RAII context
 management features in structured_logging.
 
 # Example
-```rust,ignore
+```rust
 use structured_logging::context_adapter::init_context_integration;
 init_context_integration();
 let _guard = set_llm_context_scoped("gpt-4", "my_component");
@@ -1404,7 +1404,7 @@ Returns a guard that will automatically clear the context when dropped.
 This is the safest way to set LLM context as cleanup is guaranteed.
 
 # Example
-```rust,ignore
+```rust
 let _guard = set_llm_context_scoped("gpt-4", "openai_client");
 log::info!("Processing LLM request");
 ```
@@ -1456,7 +1456,7 @@ This is the most secure pattern as it guarantees context cleanup
 even if the closure panics or returns early.
 
 # Example
-```rust,ignore
+```rust
 let result = with_llm_context("gpt-4", "openai_client", || {
     log::info!("This has LLM context");
     process_llm_request()
@@ -1538,7 +1538,7 @@ Convenience macros for structured logging
 Macro for easy scoped LLM context
 
 # Example
-```rust,ignore
+```rust
 with_llm_context_scoped!("gpt-4", "openai_client" => {
     log::info!("Processing with LLM context");
 });

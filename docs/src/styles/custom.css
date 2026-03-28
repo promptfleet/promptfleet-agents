@@ -1,0 +1,16 @@
+/* Brand polish for PromptFleet docs */
+
+:root {
+  --sl-content-width: 52rem;
+  --sl-text-h1: var(--sl-text-4xl);
+}
+
+/* Slightly reduce card padding density */
+.sl-card-grid {
+  gap: 1rem;
+}
+
+/* Tighten hero tagline */
+.hero .tagline {
+  max-width: 38ch;
+}

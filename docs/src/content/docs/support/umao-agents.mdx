@@ -3,6 +3,12 @@ title: umao_agents
 description: "UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">Native only — this crate requires `tokio` and `tracing` and does **not** compile to WASM.</Aside>
+
+<Aside type="note">External dependency — this crate depends on `umao_core` and `umao_executor` from the separate [`umao-rs`](https://github.com/promptfleet/umao-rs) repository via relative path deps (`../../../umao-rs/crates/...`). The UMAO crates must be available locally for compilation.</Aside>
+
 **Crate:** `umao_agents` · **Path:** `crates/umao_agents`  
 **Description** (`Cargo.toml`): *UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk.*
 

@@ -3,6 +3,10 @@ title: llm_tool_macros
 description: Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars.
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">Proc-macro crate — runs at compile time on the host. Generated code is WASM-compatible.</Aside>
+
 **Crate:** `llm_tool_macros` · **Path:** `crates/llm_tool_macros`  
 **Description** (`Cargo.toml`): *Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars*
 
@@ -62,5 +66,7 @@ fn search(query: String, ctx: ToolContext) -> String {
     format!("Searching for: {query}")
 }
 ```
+
+See the [LLM Tools guide](/promptfleet-agents/guides/llm-tools/) for end-to-end examples of defining, registering, and invoking LLM tools.
 
 **Full API reference:** `cargo doc -p llm_tool_macros --no-deps`

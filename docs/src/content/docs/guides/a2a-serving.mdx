@@ -1,0 +1,235 @@
+---
+title: A2A Serving
+description: How to expose an agent over HTTP with agent_sdk.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `a2a-server`</Aside>
+
+## What it does
+
+The A2A serving layer wraps a configured `Agent` as an HTTP application that speaks the A2A v1.0 protocol — JSON-RPC dispatch, `/.well-known/agent-card.json`, `/health`, and optional SSE streaming. Two entry points are provided: `A2aApp` for A2A-only serving, and `AgentHostBuilder` when you need merged routes (A2A + AG-UI on a single port).
+
+## Enable the feature
+
+<Tabs>
+<TabItem label="Native">
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk", features = ["a2a-server", "event-stream"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+```
+
+</TabItem>
+<TabItem label="WASM (Spin)">
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk", features = ["a2a-server"], default-features = false }
+spin-sdk = "5.2"
+```
+
+</TabItem>
+</Tabs>
+
+## How to use it
+
+<Steps>
+
+1. **Build an `Agent` with skills and/or an LLM runtime**
+
+   ```rust
+   let mut agent = Agent::new_with_config(
+       AgentConfig::new("my-agent", "My A2A agent")
+           .with_base_url("http://127.0.0.1:3000"),
+   )?;
+   agent
+       .add_skill("greet")
+       .description("Greet the user")
+       .register()?;
+   agent.set_message_handler(my_handler);
+   ```
+
+2. **Wrap in an A2A application and serve**
+
+   <Tabs>
+   <TabItem label="Native">
+
+   ```rust
+   use agent_sdk::a2a::A2aApp;
+
+   let app = A2aApp::from_agent(agent)?;
+   app.serve("127.0.0.1:3000").await?;
+   ```
+
+   Or extract the Axum router for custom middleware:
+
+   ```rust
+   let router = A2aApp::from_agent(agent)?.router();
+   let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+   axum::serve(listener, router).await?;
+   ```
+
+   </TabItem>
+   <TabItem label="WASM (Spin)">
+
+   ```rust
+   use agent_sdk::a2a::A2aApp;
+   use spin_sdk::http_component;
+
+   static APP: std::sync::OnceLock<A2aApp> = std::sync::OnceLock::new();
+
+   #[http_component]
+   async fn handle_request(
+       req: spin_sdk::http::Request,
+   ) -> anyhow::Result<spin_sdk::http::Response> {
+       let app = APP.get_or_init(|| {
+           let agent = build_agent().expect("agent init");
+           A2aApp::from_agent(agent).expect("app init")
+       });
+       Ok(app.serve_async(req).await?)
+   }
+   ```
+
+   Or use the `a2a_serve!` convenience macro:
+
+   ```rust
+   agent_sdk::a2a_serve!({
+       let agent = build_agent();
+       agent
+   });
+   ```
+
+   </TabItem>
+   </Tabs>
+
+3. **Test the agent**
+
+   ```bash
+   # Health check
+   curl http://127.0.0.1:3000/health
+
+   # Agent card
+   curl http://127.0.0.1:3000/.well-known/agent-card.json
+
+   # Send a message (JSON-RPC)
+   curl -X POST http://127.0.0.1:3000/jsonrpc \
+     -H "Content-Type: application/json" \
+     -d '{
+       "jsonrpc": "2.0",
+       "id": "1",
+       "method": "SendMessage",
+       "params": {
+         "message": {
+           "role": "user",
+           "parts": [{"text": "Hello!"}]
+         }
+       }
+     }'
+   ```
+
+</Steps>
+
+## Dual-protocol hosting with `AgentHostBuilder`
+
+Use `AgentHostBuilder` when you need A2A and AG-UI on one router (native only):
+
+```rust
+use agent_sdk::{Agent, AgentHostBuilder};
+use agent_sdk::agent::AgentConfig;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = AgentConfig::new("dual-agent", "Agent with A2A + AG-UI")
+        .with_base_url("http://127.0.0.1:3000");
+    let mut agent = Agent::new_with_config(config)?;
+
+    agent.add_skill("chat")
+        .description("General conversation")
+        .register()?;
+
+    let router = AgentHostBuilder::new(agent)
+        .with_a2a()
+        // .with_agui(agui_config)  // add AG-UI if needed
+        .build_router()?;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    axum::serve(listener, router).await?;
+    Ok(())
+}
+```
+
+## `A2aApp` methods
+
+<Tabs>
+<TabItem label="Native">
+
+| Method | Description |
+|--------|-------------|
+| `A2aApp::from_agent(agent)` | Wrap an owned `Agent` (boxed as `Arc` internally) |
+| `A2aApp::from_shared_agent(arc)` | Wrap an already-shared `Arc<Agent>` |
+| `.router() → axum::Router` | Extract the Axum router (JSON-RPC, agent card, health) |
+| `.serve(addr).await` | Bind and listen until shutdown |
+
+</TabItem>
+<TabItem label="WASM (Spin)">
+
+| Method | Description |
+|--------|-------------|
+| `A2aApp::from_agent(agent)` | Wrap an owned `Agent` |
+| `A2aApp::from_shared_agent(arc)` | Wrap a shared agent |
+| `.serve(req)` | Synchronous Spin request dispatch |
+| `.serve_async(req).await` | Async Spin dispatch (preferred) |
+| `.serve_async_flushed(req).await` | Async dispatch with observability flush |
+
+</TabItem>
+</Tabs>
+
+## `AgentHostBuilder` methods
+
+| Method | Description | Requires |
+|--------|-------------|----------|
+| `AgentHostBuilder::new(agent)` | Start from a built `Agent` | — |
+| `.with_a2a()` | Mount A2A HTTP surface | `a2a-server` |
+| `.with_agui(config)` | Mount AG-UI streaming routes | `event-stream`, native only |
+| `.build()` | Produce an `AgentHost` | At least one adapter enabled |
+| `.build_router()` | Shorthand: build then extract router | — |
+
+## The `a2a_serve!` macro (WASM only)
+
+`a2a_serve!` is a convenience for the common WASM pattern: `OnceLock<A2aApp>` + `#[http_component]`. It expands to:
+
+```rust
+static APP: std::sync::OnceLock<agent_sdk::a2a::A2aApp> = std::sync::OnceLock::new();
+
+#[spin_sdk::http_component]
+fn handle_request(req: spin_sdk::http::Request) -> anyhow::Result<spin_sdk::http::Response> {
+    let app = APP.get_or_init(|| {
+        let agent = (/* your expression */).expect("Failed to initialize agent");
+        agent_sdk::a2a::app(agent).expect("Failed to initialize A2A app")
+    });
+    Ok(app.serve(req)?)
+}
+```
+
+Pass any expression that returns `Result<Agent, _>`:
+
+```rust
+agent_sdk::a2a_serve!({
+    let config = AgentConfig::new("my-wasm-agent", "WASM agent");
+    Agent::new_with_config(config)
+});
+```
+
+## Key types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `A2aApp` | `agent_sdk::a2a_app` | A2A application facade: owns server wiring around a shared `Agent` |
+| `AgentHostBuilder` | `agent_sdk::host` | Builder for merged multi-protocol hosting |
+| `AgentHost` | `agent_sdk::host` | Runtime host combining agent with enabled protocol adapters |
+| `A2aServer` | `agent_sdk::server` | Low-level A2A JSON-RPC server (used internally by `A2aApp`) |
+| `AgentCard` | `a2a_protocol_core::agent` | Discovery card returned at `/.well-known/agent-card.json` |
+| `a2a_serve!` | `agent_sdk` | WASM convenience macro for `OnceLock<A2aApp>` + Spin handler |

@@ -1,0 +1,14 @@
+---
+title: SDK / Core overview
+description: Five crates that form the agent runtime foundation — domain types, SDK facade, proc macros, naming primitives, and config loading.
+---
+
+These crates build on each other:
+
+1. **`agent_core`** — protocol-agnostic domain types (messages, content parts, task phases, conversation context). Zero dependencies beyond `serde`.
+2. **`agent_sdk`** — runtime-first SDK facade: `AgentBuilder`, skills, services, LLM engine, A2A/AG-UI adapters, host composition. 25+ feature flags for granular opt-in.
+3. **`pf_macros`** — proc-macro crate: `#[pf_agent]` attribute that generates the Spin `#[http_component]` wiring for WASM agents.
+4. **`pf-types`** — lightweight naming and validation primitives (`AgentSlug`, `normalize_name`). Intentionally minimal for broad dependency use.
+5. **`pf_config`** — layered configuration loader (JSON files → `.env` → OS environment → optional `Cargo.toml` section) with typed deserialization.
+
+Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.

@@ -1,0 +1,66 @@
+---
+title: umao_agents
+description: "UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk."
+---
+
+**Crate:** `umao_agents` · **Path:** `crates/umao_agents`  
+**Description** (`Cargo.toml`): *UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk.*
+
+## Role
+
+Bridges the vendor-neutral UMAO orchestration engine with the promptfleet agent SDK. Provides `PromptFleetExecutor` — an `AsyncNodeExecutor` implementation that dispatches UMAO graph Delegate nodes to real A2A agents via `agent_sdk::A2aClient`. Non-delegate CFB types (Select, Aggregate, Monitor, FlowControl) use deterministic responses from `umao_core`.
+
+## Feature flags
+
+From `crates/umao_agents/Cargo.toml`:
+
+*No feature flags declared.*
+
+## Dependencies (notable)
+
+| Dependency | Role |
+|------------|------|
+| `umao_core` | UMAO graph IR, error types, deterministic node responses |
+| `umao_executor` | `AsyncNodeExecutor` trait and orchestrator runtime |
+| `agent_sdk` (feature: `a2a-client`) | `A2aClient` for dispatching to real A2A agents |
+
+## Public API (from `src/lib.rs`)
+
+- **`PromptFleetExecutor`** — main struct; implements `AsyncNodeExecutor` from `umao_executor`
+  - `new()` — create empty executor
+  - `register(name, endpoint)` — register an agent by name → endpoint URL
+  - `from_agents(iter)` — build from an iterator of `(String, String)` pairs
+  - Implements `Default`
+
+Re-exports:
+
+- **`umao_core`** — full re-export of the UMAO core crate
+- **`umao_executor`** — full re-export of the UMAO executor crate
+
+### CFB type dispatch
+
+`PromptFleetExecutor` handles all UMAO `CfbType` variants:
+
+| CfbType | Behavior |
+|---------|----------|
+| `Delegate` | Routes to registered A2A agent via `A2aClient::send_message` |
+| `Select` | Deterministic response via `umao_core::deterministic` |
+| `Aggregate` | Combines all input port values into a formatted summary |
+| `Monitor` | Deterministic response via `umao_core::deterministic` |
+| `FlowControl` | Deterministic response via `umao_core::deterministic` |
+
+## Example sketch
+
+```rust
+use umao_agents::PromptFleetExecutor;
+use umao_executor::orchestrator;
+
+let mut executor = PromptFleetExecutor::new();
+executor.register("researcher", "http://localhost:3001");
+executor.register("synthesizer", "http://localhost:3002");
+
+// Load a UMAO graph and execute
+// let result = orchestrator::execute_async(&graph, &executor, None).await;
+```
+
+**Full API reference:** `cargo doc -p umao_agents --no-deps`

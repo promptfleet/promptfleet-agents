@@ -1,0 +1,60 @@
+---
+title: pf_test_harness
+description: Reusable native test harness for PromptFleet streaming and SSE seams.
+---
+
+**Crate:** `pf_test_harness` · **Path:** `crates/pf_test_harness`  
+**Description** (`Cargo.toml`): *Reusable native test harness for PromptFleet streaming and SSE seams*
+
+> **Native-only.** This crate is gated with `#![cfg(not(target_arch = "wasm32"))]` — it does **not** compile to WASM. It uses `tokio`, `axum`, `reqwest`, and other native-only dependencies for test infrastructure.
+
+## Role
+
+Test harness for integration and seam testing of streaming pipelines, SSE wire format, and A2A JSON-RPC routes without mocks or real LLM calls. Provides deterministic LLM turn sequences, SSE frame capture and assertion helpers, end-to-end pipeline testing, and axum-based A2A route exercisers.
+
+## Feature flags
+
+From `crates/pf_test_harness/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | *(empty — no features enabled by default)* |
+| `scenario` | `LlmScenario` and `TurnScenarioBuilder` for deterministic LLM turns (enables `agent_sdk`, `axum`) |
+| `sse` | `SseFrame`, `SseCapture`, `SseCollector` for SSE frame capture and assertions |
+| `agent-sdk` | Full pipeline testing: `scenario` + `sse` + `agent_sdk` integration + `a2a_protocol_core` + `axum` |
+| `a2a-http` | A2A JSON-RPC body builders and route exercisers (`a2a_http_server`, `a2a_protocol_core`, `axum`, `tower`) |
+| `a2a-mock` | Mock A2A server for integration tests (`a2a_protocol_core`, `axum`, `tokio-stream`, `reqwest`) |
+
+## Public API (from `src/lib.rs`)
+
+All modules are feature-gated:
+
+- **`scenario`** (feature: `scenario`) — `LlmScenario`, `TurnScenarioBuilder` for deterministic LLM turn sequences (text, tool calls, errors, reasoning)
+- **`scenario_openai_http`** (feature: `scenario`) — OpenAI-format HTTP scenario helpers
+- **`sse`** (feature: `sse`) — `SseFrame`, `SseCapture` for collecting and asserting SSE frames (event names, JSON paths, terminal events)
+- **`pipeline`** (feature: `agent-sdk`) — `TestPipeline` for end-to-end: scenario → engine → mapper → SSE capture
+- **`perf`** (feature: `agent-sdk`) — Performance testing utilities
+- **`a2a_http`** (feature: `a2a-http`) — JSON-RPC body builders (`send_subscribe_body`, `message_send_body`, `tasks_get_body`, `tasks_cancel_body`, `tasks_list_body`) + `call_jsonrpc` / `collect_send_subscribe_sse` for axum router testing
+- **`a2a_mock`** (feature: `a2a-mock`) — Mock A2A server for integration testing
+
+## Example sketch
+
+```rust
+// Feature: scenario
+use pf_test_harness::scenario::LlmScenario;
+
+let scenario = LlmScenario::new()
+    .turn(|t| t.content("Hello!").done("stop"))
+    .turn(|t| t.tool_call("search", serde_json::json!({"q": "rust"})).done("tool_calls"));
+
+// Feature: sse
+use pf_test_harness::sse::SseCapture;
+
+let capture: SseCapture = /* ... collect from response ... */;
+capture.assert_sequence(&["message", "message", "done"]);
+
+// Feature: a2a-http
+use pf_test_harness::a2a_http::{send_subscribe_body, call_jsonrpc};
+```
+
+**Full API reference:** `cargo doc -p pf_test_harness --no-deps --all-features`

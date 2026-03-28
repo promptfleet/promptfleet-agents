@@ -18,11 +18,25 @@ cargo check
 
 WASM targets use `wasm32-wasi` (see repository `AGENTS.md`).
 
+## Crate groups
+
+The workspace contains 25 crates organized into five areas:
+
+- [**SDK / Core**](/sdk/) — `agent_sdk`, `agent_core`, `pf_macros`, `pf-types`, `pf_config`
+- [**A2A Protocol**](/a2a/) — `protocol_transport_core`, `a2a_protocol_core`, `a2a_http_client`, `a2a_http_server`, `a2a_app_ports`, `a2a_rpc_macros`
+- [**LLM**](/llm/) — `llm_client`, `llm_context_core`, `llm_tools`, `llm_tool_macros`, `tool_web_search`
+- [**Observability**](/observability/) — `observability`, `observability_core`, `structured_logging`, `otel`, `prometheus`
+- [**Support / Integration**](/support/) — `foundation_utils`, `mcp_protocol`, `pf_test_harness`, `umao_agents`
+
+See [Architecture](/architecture/) for the full crate map.
+
 ## API documentation
 
 ```bash
+cargo doc --no-deps -p agent_sdk
+cargo doc --no-deps -p a2a_protocol_core
+cargo doc --no-deps -p llm_client
 cargo doc --no-deps -p observability
-cargo doc --no-deps -p observability_core
 # …other crates as needed
 ```
 
@@ -37,33 +51,10 @@ yarn install
 yarn dev
 ```
 
-**Yarn version:** `docs/package.json` pins Yarn 4 via `packageManager`. **`corepack enable`** (once per machine) makes the `yarn` shim respect that. Without Corepack, **Yarn 1** may run and fail with **“Ambiguous Syntax Error”** on Berry-only flags.
+**Yarn version:** `docs/package.json` pins Yarn 4 via `packageManager`. **`corepack enable`** (once per machine) makes the `yarn` shim respect that. Without Corepack, **Yarn 1** may run and fail with **"Ambiguous Syntax Error"** on Berry-only flags.
 
 - **Local:** use `yarn install` (no `--immutable`).
 - **CI:** the repo workflow uses `yarn install --immutable` so the lockfile cannot change during the build.
-
-### Troubleshooting Yarn 4 (“Unknown Syntax” / “Ambiguous Syntax” / `While running --non-interactive …`)
-
-Yarn 4 builds its CLI with **Clipanion**. If the **first** token after `yarn` is a **global** `--non-interactive`, many subcommands break — for example **`yarn --non-interactive -v`** and **`yarn --non-interactive install`** fail (reproducible on Yarn 4.13.x). The error footer often says `While running --non-interactive …`.
-
-That usually means something is **not** running plain `yarn …` — it is injecting **`--non-interactive` before the subcommand**. A **very common** cause is a shell **alias**, e.g. zsh:
-
-```text
-yarn: aliased to yarn --non-interactive
-```
-
-That makes every `yarn` call become `yarn --non-interactive …`, which breaks Yarn 4’s CLI. **Fix:** remove the alias for this project — `unalias yarn` in the current session, or delete the line from `~/.zshrc` / your dotfiles — then open a new shell. Until then, use **`command yarn …`** (zsh/bash: runs `yarn` without alias) or the real binary, e.g. **`/usr/local/bin/yarn …`**, after `corepack enable`.
-
-**What to try**
-
-1. Inspect how `yarn` is resolved: `type yarn`, `alias yarn`, `which -a yarn` (zsh/bash).
-2. Bypass an alias: **`command yarn -v`**, **`command yarn install`**, **`command yarn dev`** (same for `build`).
-3. Run the same commands in **Terminal.app** / **iTerm** (outside the IDE) if that profile has no bad alias.
-4. Read the pinned toolchain without the version subcommand:  
-   `node -p "require('./package.json').packageManager"`  
-   (prints e.g. `yarn@4.13.0`).
-
-This repo’s **GitHub Actions** workflow calls **`yarn install --immutable`** with **no** leading global `--non-interactive`; that layout is valid.
 
 Build for production:
 

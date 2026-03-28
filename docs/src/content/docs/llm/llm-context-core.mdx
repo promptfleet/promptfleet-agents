@@ -1,0 +1,49 @@
+---
+title: llm_context_core
+description: WASM-compatible LLM context window management — token estimation, budget tracking, history strategies, and memory traits.
+---
+
+**Crate:** `llm_context_core` · **Path:** `crates/llm_context_core`  
+**Description** (`Cargo.toml`): *WASM-compatible LLM context window management — token estimation, budget tracking, history strategies, and memory traits*
+
+## Role
+
+WASM-compatible LLM context window management library. Provides token estimation, context budget computation, pluggable history management strategies, and trait ports for long-term memory backends. Three-tier architecture:
+
+- **Tier 1 (Working)** — current turn messages, bounded by token budget
+- **Tier 2 (Short-Term)** — conversation history with sliding window / summarization
+- **Tier 3 (Long-Term)** — cross-conversation semantic retrieval (Qdrant, etc.)
+
+## Feature flags
+
+From `crates/llm_context_core/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | Empty — no features enabled by default |
+
+## Public API (from `src/lib.rs`)
+
+**Modules:** `budget`, `history`, `memory`, `strategy`, `tokens`
+
+**Re-exports:**
+
+- **`ContextBudget`** — token budget computation
+- **`HistoryManager`**, **`HistoryManagerConfig`** — conversation history management
+- **`LongTermMemory`**, **`MemoryEntry`**, **`MemoryFilters`**, **`MemoryType`** — trait ports and types for long-term memory backends
+- **`ContextStrategy`**, **`ContextStrategyKind`** — pluggable context strategies
+- **`estimate_tokens`** — token count estimation
+
+## Example sketch
+
+```rust
+use llm_context_core::{ContextBudget, HistoryManager, HistoryManagerConfig, estimate_tokens};
+
+let budget = ContextBudget::new(128_000);
+let config = HistoryManagerConfig::default();
+let mut history = HistoryManager::new(config);
+
+let tokens = estimate_tokens("Hello, how are you?");
+```
+
+**Full API reference:** `cargo doc -p llm_context_core --no-deps`

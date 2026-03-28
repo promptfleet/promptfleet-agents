@@ -1,0 +1,17 @@
+---
+title: A2A Protocol overview
+description: Six crates implementing the Google A2A (Agent-to-Agent) protocol — domain types, transport, HTTP client/server, app ports, and proc-macros.
+---
+
+These crates build on each other:
+
+1. **`protocol_transport_core`** — universal transport foundation (JSON-RPC 2.0, streaming, headers, routing). Protocol-agnostic; used by A2A, MCP, and REST.
+2. **`a2a_protocol_core`** — pure A2A domain layer: AgentCard, Task, Message, Artifact, security schemes, method params, discovery, and in-memory task storage.
+3. **`a2a_http_client`** — A2A HTTP client with target-adaptive implementations (Spin SDK on WASM, Reqwest on native). Activation-aware retries for KEDA cold starts.
+4. **`a2a_http_server`** — A2A HTTP server with target-adaptive implementations (Spin SDK on WASM, Axum on native). JSON-RPC dispatch and SSE streaming.
+5. **`a2a_app_ports`** — clean-architecture application ports (traits) that decouple the HTTP server from the SDK/application layer.
+6. **`a2a_rpc_macros`** — *[Experimental]* proc-macros (`#[a2a_rpc]`, `#[extension]`, `generate_a2a_commands!`) for compile-time JSON-RPC command registration.
+
+Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/getting-started/) for local `cargo doc`).

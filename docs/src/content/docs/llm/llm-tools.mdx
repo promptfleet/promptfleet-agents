@@ -1,0 +1,60 @@
+---
+title: llm_tools
+description: Lightweight WASM-safe tool registry and macro to collect LLM tools and execute by name.
+---
+
+**Crate:** `llm_tools` · **Path:** `crates/llm_tools`  
+**Description** (`Cargo.toml`): *Lightweight WASM-safe tool registry and macro to collect LLM tools and execute by name*
+
+## Role
+
+Lightweight, WASM-safe tool registry for LLM function-calling. Provides `ToolRegistry` — a name-indexed collection of `RegisteredTool`s — together with the `registry_from!` macro that collects tools at compile time. Works with `#[llm_tool]` from `llm_tool_macros` to sweep generated companion functions into a registry.
+
+## Feature flags
+
+From `crates/llm_tools/Cargo.toml`:
+
+*No feature flags declared.*
+
+## Public API (from `src/lib.rs`)
+
+**Types:**
+
+- **`ToolRegistry`** — name-indexed tool collection with `schemas()`, `exec()`, `exec_call()`, `names()`
+- **`RegisteredTool`** — individual tool entry: name, description, parameters schema, exec function, optional context-aware executor
+- **`ContextExecFn`** — type-erased context-aware executor signature
+
+**Macros:**
+
+- **`registry_from!`** — collects `#[llm_tool]`-annotated functions into a `ToolRegistry`
+
+**Submodules:**
+
+- **`tool_choice`** — helpers for LLM API `tool_choice` field: `auto()`, `none()`, `function(name)`
+
+**Re-exports:**
+
+- **`paste`** — re-exported from the `paste` crate (used internally by `registry_from!`)
+
+## Example sketch
+
+```rust
+use llm_tools::{registry_from, ToolRegistry};
+
+// Assuming get_weather and web_search are annotated with #[llm_tool]
+let registry = registry_from!(get_weather, web_search);
+
+// Get JSON schemas for the LLM request
+let schemas = registry.schemas();
+
+// Execute a tool by name
+let result = registry.exec("get_weather", serde_json::json!({"city": "Berlin"}));
+
+// Or dispatch from a ToolCall directly
+let result = registry.exec_call(&tool_call);
+
+// Construct tool_choice for the API
+let choice = llm_tools::tool_choice::auto();
+```
+
+**Full API reference:** `cargo doc -p llm_tools --no-deps`

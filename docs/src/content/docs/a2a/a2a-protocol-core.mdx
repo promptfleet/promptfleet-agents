@@ -1,0 +1,72 @@
+---
+title: a2a_protocol_core
+description: Pure A2A (Agent-to-Agent) protocol domain logic — WASM optimized
+---
+
+**Crate:** `a2a_protocol_core` · **Path:** `crates/a2a_protocol_core`  
+**Description** (`Cargo.toml`): *Pure A2A (Agent-to-Agent) protocol domain logic - WASM optimized*
+
+## Role
+
+Pure A2A v1.0.0 domain layer, completely transport-agnostic. Defines all protocol types (AgentCard, Task, Message, Artifact), JSON-RPC method params, security schemes, agent discovery, the method registry, and in-memory task storage. No HTTP, no Spin SDK — just domain logic that compiles everywhere.
+
+## Feature flags
+
+From `crates/a2a_protocol_core/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | Enables `protocol-core` |
+| `protocol-core` | Base Task + Message + AgentCard types (`data`, `methods`, `services` modules) |
+| `event-stream` | SSE streaming support (`streaming` module); requires `protocol-core` |
+| `file-handling` | File upload/download support; requires `protocol-core` |
+| `time-stamps` | Timestamp support for Task/Message via `chrono` |
+| `all-features` | Enables `event-stream`, `file-handling`, `time-stamps` |
+| `spec-compliant` | Core A2A spec features (`protocol-core` + `event-stream`) |
+| `wasm-optimized` | Minimal features for WASM targets (`protocol-core` only) |
+| `core` | Backward-compat alias for `protocol-core` |
+| `streaming` | Backward-compat alias for `event-stream` |
+| `timestamps` | Backward-compat alias for `time-stamps` |
+| `push-notifications` | Push notification support; requires `protocol-core` |
+| `extended-discovery` | Extended agent discovery; requires `protocol-core` |
+
+## Public API (from `src/lib.rs`)
+
+**Modules:** `agent`, `error`, `protocol`, `registry`, `security`, `transport`, `data` (feature `protocol-core`), `methods` (feature `protocol-core`), `streaming` (feature `event-stream`), `services` (feature `protocol-core`)
+
+**Always-available types:**
+
+- **`AgentCard`**, **`AgentCapabilities`**, **`AgentCardSignature`**, **`AgentExtension`**, **`AgentInterface`**, **`AgentProvider`**, **`AgentSkill`**
+- **`A2AError`**, **`A2AResult`**, **`a2a_error_codes`**
+- **`A2AProtocol`**
+- **`A2AMethodRegistry`**, **`A2AMethodHandler`**, **`A2ANotificationHandler`**, **`MethodMetadata`**, **`RegistryStats`**
+- Security: **`SecurityScheme`**, **`SecurityRequirement`**, **`ApiKeySecurityScheme`**, **`HttpAuthSecurityScheme`**, **`OAuth2SecurityScheme`**, **`OAuthFlows`**, **`OpenIdConnectSecurityScheme`**, **`MutualTlsSecurityScheme`**, and OAuth flow types
+- **`A2ATransport`**, **`A2ATransportFactory`** traits
+
+**Feature-gated types** (`protocol-core`):
+
+- **`Task`**, **`TaskState`**, **`TaskStatus`**, **`TaskPushNotificationConfig`**
+- **`Message`**, **`MessageRole`**, **`Part`**, **`Artifact`**, **`AuthenticationInfo`**
+- **`SendMessageRequest`**, **`SendMessageResponse`**, **`MessageSendParams`**, **`TaskGetParams`**, **`TaskListParams`**, **`TaskCancelParams`**, and related param/response types
+- **`AgentDiscovery`**, **`DefaultAgentDiscovery`**
+- **`TaskStorage`**, **`InMemoryTaskStorage`**, **`ConversationContext`**
+
+**Re-exports from `protocol_transport_core`:** `JsonRpcError`, `JsonRpcId`, `JsonRpcIncoming`, `JsonRpcRequest`, `JsonRpcResponse`, `JSONRPC_VERSION`, `jsonrpc_error_codes`
+
+**Constant:** `A2A_PROTOCOL_VERSION` (`"1.0"`)
+
+## Example sketch
+
+```rust
+use a2a_protocol_core::{AgentCard, AgentSkill, Task, TaskState, Message, MessageRole, Part};
+
+let card = AgentCard::new("my-agent".to_string());
+
+let message = Message {
+    role: MessageRole::User,
+    parts: vec![Part::text("Hello, agent!")],
+    ..Default::default()
+};
+```
+
+**Full API reference:** `cargo doc -p a2a_protocol_core --no-deps --all-features`

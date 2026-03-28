@@ -1,0 +1,15 @@
+---
+title: Support / Integration overview
+description: Shared utilities, protocol integrations, test infrastructure, and multi-agent coordination.
+---
+
+These crates provide shared utilities and integration infrastructure:
+
+1. **`foundation_utils`** — Zero-dependency RAII guards, scoped operations, context management, and resource pools (WASM-compatible).
+2. **`mcp_protocol`** — Model Context Protocol (MCP) implementation: JSON-RPC 2.0, tool discovery/execution, authentication, and proxy support.
+3. **`pf_test_harness`** — Native-only test harness for deterministic LLM scenarios, SSE capture, streaming pipeline validation, and A2A route testing.
+4. **`umao_agents`** — UMAO coordination bridge: dispatches UMAO graph nodes to real A2A agents via `agent_sdk`.
+
+Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/getting-started/) for local `cargo doc`).

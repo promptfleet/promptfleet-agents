@@ -1,0 +1,66 @@
+---
+title: llm_tool_macros
+description: Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars.
+---
+
+**Crate:** `llm_tool_macros` · **Path:** `crates/llm_tool_macros`  
+**Description** (`Cargo.toml`): *Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars*
+
+## Role
+
+Proc-macro crate that provides the `#[llm_tool]` attribute. Annotating a plain Rust function generates companion functions that expose the tool's JSON Schema (via `schemars`) and an executor, ready to be collected by `llm_tools::registry_from!`.
+
+## Feature flags
+
+From `crates/llm_tool_macros/Cargo.toml`:
+
+*No feature flags declared.*
+
+## Macro: `#[llm_tool]`
+
+### Attributes
+
+| Attribute | Type | Required | Purpose |
+|-----------|------|----------|---------|
+| `name` | `String` | No | Override the tool name (defaults to function name) |
+| `description` | `String` | No | Tool description sent to the LLM |
+| `context` | flag | No | Marks the tool as context-aware (requires a `ToolContext` parameter) |
+
+### Generated items
+
+For a function `my_func`, the macro generates:
+
+| Generated item | Signature | Purpose |
+|----------------|-----------|---------|
+| `my_funcParams` | `struct` | Serde + JsonSchema struct derived from function parameters |
+| `my_func_llm_tool_info()` | `() -> (String, String, Value)` | Returns `(name, description, json_schema)` |
+| `my_func_llm_tool_exec(args)` | `(Value) -> Value` | Deserializes args and calls the original function |
+| `my_func_llm_tool_needs_context()` | `() -> bool` | Whether the tool needs a `ToolContext` |
+| `my_func_llm_tool_exec_ctx(args, ctx)` | `(Value, Box<dyn Any + Send>) -> Value` | Context-aware executor |
+
+## Example sketch
+
+```rust
+use llm_tool_macros::llm_tool;
+
+#[llm_tool(name = "get_weather", description = "Get current weather for a city")]
+fn get_weather(city: String, units: String) -> String {
+    format!("Weather in {city} ({units}): sunny, 22°C")
+}
+
+// The macro generates get_weather_llm_tool_info, get_weather_llm_tool_exec, etc.
+// Collect into a registry:
+let registry = llm_tools::registry_from!(get_weather);
+```
+
+### Context-aware tools
+
+```rust
+#[llm_tool(name = "search", description = "Search with context", context)]
+fn search(query: String, ctx: ToolContext) -> String {
+    // ctx is injected at runtime via the context executor
+    format!("Searching for: {query}")
+}
+```
+
+**Full API reference:** `cargo doc -p llm_tool_macros --no-deps`

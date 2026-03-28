@@ -1,0 +1,117 @@
+---
+title: a2a_rpc_macros
+description: "[Experimental] Proc-macro for automatic A2A JSON-RPC command registration — WASM optimized"
+---
+
+**Crate:** `a2a_rpc_macros` · **Path:** `crates/a2a_rpc_macros`  
+**Description** (`Cargo.toml`): *[Experimental] Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support*
+
+> **Warning:** This crate is experimental and not yet integrated into the SDK pipeline. The API is unstable and may change significantly.
+
+## Role
+
+WASM-native proc-macros that eliminate manual JSON-RPC command registration. Generates compile-time registration code with zero runtime overhead — no `linkme` required. Supports both sync and async handlers with WASM-compatible async wrapping, plus extension auto-discovery.
+
+## Feature flags
+
+From `crates/a2a_rpc_macros/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | No features enabled by default |
+| `build-script-gen` | Generate build scripts automatically |
+
+## Macros
+
+### `#[a2a_rpc("method")]` — attribute macro
+
+Registers a JSON-RPC command handler at compile time. Supports both sync and async functions.
+
+**Signature requirements:**
+- Exactly one parameter of type `Value`
+- Must return `Result<Value, RpcError>`
+- Optional second argument: `request` (default) or `notification`
+
+```rust
+use a2a_rpc_macros::a2a_rpc;
+
+// Sync handler
+#[a2a_rpc("ping")]
+fn ping_handler(_params: Value) -> Result<Value, RpcError> {
+    Ok(json!({"pong": true}))
+}
+
+// Async handler (WASM-compatible)
+#[a2a_rpc("openai.chat")]
+async fn chat_handler(params: Value) -> Result<Value, RpcError> {
+    Ok(json!({"response": "done"}))
+}
+
+// Explicit notification
+#[a2a_rpc("log.info", notification)]
+async fn log_handler(params: Value) -> Result<Value, RpcError> {
+    Ok(Value::Null)
+}
+```
+
+### `#[extension("name")]` — attribute macro
+
+Registers a struct as an extension for compile-time discovery. Generates a factory function.
+
+```rust
+use a2a_rpc_macros::extension;
+
+#[extension("openai")]
+pub struct OpenAIExtension {
+    // fields...
+}
+```
+
+### `generate_a2a_commands!()` — function-like macro
+
+Call once at the end of `lib.rs` to generate final registration code for all `#[a2a_rpc]` handlers.
+
+**Generated functions:**
+- `get_generated_commands()` — returns `Vec<(&str, Handler)>`
+- `get_generated_commands_with_types()` — returns `Vec<(&str, Handler, MethodType)>`
+- `init()` — convenience: initialize agent with generated commands
+- `init_with_info(agent_info, capabilities)` — initialize with custom metadata
+- `get_command_count()` / `get_async_command_count()` — diagnostics
+- `get_command_names()` — list registered method names
+
+### `generate_extensions!()` — function-like macro
+
+Call once at the end of `lib.rs` to generate extension discovery code for all `#[extension]` structs.
+
+**Generated functions:**
+- `get_generated_extensions()` — returns `Vec<(&str, factory_fn)>`
+- `init_generated_extensions()` — create all extensions
+- `get_extension_count()` / `get_extension_names()` — diagnostics
+
+## Example sketch
+
+```rust
+use a2a_rpc_macros::{a2a_rpc, extension, generate_a2a_commands, generate_extensions};
+
+#[a2a_rpc("ping")]
+fn ping(_params: Value) -> Result<Value, RpcError> {
+    Ok(json!({"pong": true}))
+}
+
+#[a2a_rpc("chat.complete")]
+async fn chat(params: Value) -> Result<Value, RpcError> {
+    Ok(json!({"response": "hello"}))
+}
+
+#[extension("my_ext")]
+pub struct MyExtension;
+
+generate_a2a_commands!();
+generate_extensions!();
+
+// Later:
+let commands = get_generated_commands();
+let extensions = get_generated_extensions();
+```
+
+**Full API reference:** `cargo doc -p a2a_rpc_macros --no-deps`

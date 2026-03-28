@@ -14,7 +14,7 @@ Solid arrows below are **required** dependencies. Dashed arrows are **optional**
 ## Dependency diagram
 
 ```mermaid
-graph TD
+graph LR
   subgraph SDK["SDK / Core"]
     agent_sdk
     agent_core
@@ -74,12 +74,8 @@ graph TD
   %% A2A internal deps
   a2a_protocol_core --> protocol_transport_core
   a2a_http_client --> a2a_protocol_core
-  a2a_http_client --> protocol_transport_core
-  a2a_http_client -.-> observability
   a2a_http_server --> a2a_protocol_core
-  a2a_http_server --> protocol_transport_core
   a2a_http_server --> a2a_app_ports
-  a2a_http_server -.-> observability
   a2a_app_ports --> a2a_protocol_core
 
   %% LLM internal deps
@@ -98,10 +94,7 @@ graph TD
 
   %% Support deps
   mcp_protocol --> protocol_transport_core
-  pf_test_harness --> llm_client
   pf_test_harness -.-> agent_sdk
-  pf_test_harness -.-> a2a_protocol_core
-  pf_test_harness -.-> a2a_http_server
   umao_agents --> agent_sdk
 ```
 

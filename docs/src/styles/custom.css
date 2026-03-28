@@ -14,3 +14,20 @@
 .hero .tagline {
   max-width: 38ch;
 }
+
+/* Mermaid diagrams: break out of content column, scroll if needed */
+.mermaid-container,
+pre.mermaid,
+.mermaid {
+  max-width: none;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mermaid svg {
+  min-width: 900px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}

@@ -150,4 +150,4 @@ graph LR
 | `pf_test_harness` | `crates/pf_test_harness` | Native-only test harness for streaming, SSE, and A2A route testing |
 | `umao_agents` | `crates/umao_agents` | UMAO coordination for A2A agents — `AsyncNodeExecutor` backed by `agent_sdk` |
 
-All crates compile to `wasm32-wasi` except `pf_test_harness` (native-only, uses tokio/axum).
+All crates compile to `wasm32-wasip1` (WASI Preview 1) except `pf_test_harness` (native-only, uses tokio/axum).

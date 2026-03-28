@@ -9,9 +9,9 @@ PromptFleet agents compile to two targets from the same crate. This page explain
 
 ## When to use WASM
 
-Choose `wasm32-wasi` when you need:
+Choose `wasm32-wasip1` (WASI Preview 1) when you need:
 
-- **Serverless deployment** on SpinKube/Kubernetes — 4.8 ms cold start, ~0.6 MB memory per agent.
+- **Spin runtime** — local runs with `spin up`, plus production serverless on SpinKube/Kubernetes using the same WASM; ~4.8 ms cold start, ~0.6 MB memory per agent on the serverless path.
 - **Sandboxed execution** — WASM's capability model means no filesystem, no raw sockets, no ambient authority.
 - **Density** — run 2 000+ agents per node with fractional-CPU scheduling.
 - **Production workloads** where the agent serves A2A requests and doesn't need to call other agents or stream AG-UI events.
@@ -33,7 +33,7 @@ Choose native (`x86_64` / `aarch64`) when you need:
 The agent logic — skills, message handlers, LLM tool definitions — stays identical. Only the entry point and runtime wiring differ:
 
 <Tabs>
-  <TabItem label="WASM (SpinKube)">
+  <TabItem label="WASM (Spin)">
 ```rust
 use agent_sdk::{
     a2a::A2aApp,

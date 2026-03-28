@@ -33,11 +33,11 @@ d) Use Tavily/Fetch/context7 for third-party library grounding before formalizin
 
 ## WASM Compatibility (MANDATORY)
 
-All crates in this repo (except `pf_test_harness` and `examples/`) **must** compile to `wasm32-wasi`.
+All crates in this repo (except `pf_test_harness` and `examples/`) **must** compile to `wasm32-wasip1` (WASI Preview 1).
 
 Quick check:
 ```bash
-cargo check --target wasm32-wasi -p <crate-name>
+cargo check --target wasm32-wasip1 -p <crate-name>
 ```
 
 Exceptions:

@@ -13,10 +13,10 @@ Every agent you build from `agent_sdk` can compile to two targets from the same 
 
 | Target | Runtime | Use case |
 |--------|---------|----------|
-| `wasm32-wasi` | SpinKube serverless (4.8 ms cold start, ~0.6 MB/agent) | Production deployment on Kubernetes |
+| `wasm32-wasip1` (WASI Preview 1) | Spin locally or SpinKube on Kubernetes (serverless; ~4.8 ms cold start, ~0.6 MB/agent) | Run `spin up` for dev/CI; deploy the same WASM to SpinKube in production |
 | Native (`x86_64` / `aarch64`) | Tokio + Axum | Local development, testing, sub-agent delegation, AG-UI streaming |
 
-The SDK uses `cfg(target_arch = "wasm32")` gates internally so your agent code stays the same — only the entry point and async runtime change. On WASM, Spin SDK provides the HTTP listener and async executor. On native, Tokio and Axum take over.
+The SDK uses `cfg(target_arch = "wasm32")` gates internally so your agent code stays the same — only the entry point and async runtime change. On WASM (`wasm32-wasip1`), Spin SDK provides the HTTP listener and async executor. On native, Tokio and Axum take over.
 
 <Aside type="tip">
 You never need to write `#[cfg(...)]` in your own agent code. The SDK handles target differences for you. See [WASM vs Native](/promptfleet-agents/concepts/wasm-vs-native/) for the full comparison.
@@ -109,5 +109,5 @@ agent_sdk = { version = "0.1", features = ["pf-agent"] }
 ```
 
 <Aside type="caution">
-Some features are **native-only**: `event-stream`, `agui-stream`, `sub-agents`, and `redis-storage` require Tokio and will not compile on `wasm32-wasi`. The presets that include them (`a2a-agent`, `dual-agent`, `pf-agent`) work on native; on WASM, use `a2a-server` + `llm-engine` directly.
+Some features are **native-only**: `event-stream`, `agui-stream`, `sub-agents`, and `redis-storage` require Tokio and will not compile for `wasm32-wasip1`. The presets that include them (`a2a-agent`, `dual-agent`, `pf-agent`) work on native; on WASM, use `a2a-server` + `llm-engine` directly.
 </Aside>

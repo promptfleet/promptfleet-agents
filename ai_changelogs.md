@@ -1,5 +1,26 @@
 # 📋 AI Changelogs
 
+## 2026-03-28 — Docs: dual-target accuracy (wasm32-wasip1, local Spin + SpinKube)
+
+### Changes
+- **Dual-target philosophy** (`concepts/index.mdx`): Rust triple is `wasm32-wasip1` (WASI Preview 1), not the vague `wasm32-wasi` wording; runtime covers **local Spin** and **SpinKube on Kubernetes**; use cases include `spin up` / CI and production on K8s.
+- **Splash** (`index.mdx`), **WASM vs Native** (`concepts/wasm-vs-native.mdx`): Align messaging and code-tab label with Spin locally + SpinKube.
+- **`architecture.mdx`:** Workspace compile target named as `wasm32-wasip1`.
+- **`AGENTS.md`:** WASM check command and requirement use `wasm32-wasip1` so docs cross-references stay accurate.
+- **Crate overview asides** (A2A, LLM, observability, SDK, support): Tip lines now say `wasm32-wasip1` for consistency with Spin/`cargo build --target`.
+
+### Files modified
+- `docs/src/content/docs/concepts/index.mdx`
+- `docs/src/content/docs/index.mdx`
+- `docs/src/content/docs/concepts/wasm-vs-native.mdx`
+- `docs/src/content/docs/architecture.mdx`
+- `docs/src/content/docs/getting-started.mdx`
+- `AGENTS.md`
+- `docs/src/content/docs/a2a/*.mdx` (5), `docs/src/content/docs/llm/*.mdx` (4), `docs/src/content/docs/observability/*.mdx` (5), `docs/src/content/docs/sdk/*.mdx` (4), `docs/src/content/docs/support/*.mdx` (2) — `wasm32-wasi` → `wasm32-wasip1` in tips where applicable
+
+### Tests
+- `yarn build` (in `docs/`): **passed** — 141 page(s) built; Pagefind index OK.
+
 ## 2026-03-28 — Docs: splash CardGrid alignment (remove stagger)
 
 ### Changes

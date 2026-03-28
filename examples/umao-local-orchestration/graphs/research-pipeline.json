@@ -1,0 +1,46 @@
+{
+  "graph_id": "research-pipeline-demo",
+  "version": 1,
+  "nodes": [
+    {
+      "fb_id": "SELECT_1",
+      "cfb_type": "Select",
+      "ports": { "inputs": ["task_spec"], "outputs": ["selected_agents"] },
+      "guard": { "retry": 1, "budget_usd": 0.01, "timeout_ms": 5000 },
+      "traits": {}
+    },
+    {
+      "fb_id": "DELEGATE_researcher",
+      "cfb_type": "Delegate",
+      "ports": { "inputs": ["selected_agents", "task_spec", "delegation_context"], "outputs": ["task_results"] },
+      "guard": { "retry": 2, "budget_usd": 0.1, "timeout_ms": 30000 },
+      "traits": { "target_agent": "researcher", "task_prompt": "Research the given topic thoroughly." }
+    },
+    {
+      "fb_id": "DELEGATE_synthesizer",
+      "cfb_type": "Delegate",
+      "ports": { "inputs": ["selected_agents", "task_spec", "delegation_context"], "outputs": ["task_results"] },
+      "guard": { "retry": 2, "budget_usd": 0.1, "timeout_ms": 30000 },
+      "traits": { "target_agent": "synthesizer", "task_prompt": "Synthesize the research findings into a summary." }
+    },
+    {
+      "fb_id": "AGGREGATE_1",
+      "cfb_type": "Aggregate",
+      "ports": { "inputs": ["task_results"], "outputs": ["aggregate_result"] },
+      "guard": { "retry": 1, "budget_usd": 0.01, "timeout_ms": 5000 },
+      "traits": {}
+    }
+  ],
+  "edges": [
+    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_researcher", "port": "selected_agents" }, "kind": "DependsOn" },
+    { "from": { "fb_id": "SELECT_1", "port": "selected_agents" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "selected_agents" }, "kind": "Parallel" },
+    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "DependsOn" },
+    { "from": { "fb_id": "DELEGATE_synthesizer", "port": "task_results" }, "to": { "fb_id": "AGGREGATE_1", "port": "task_results" }, "kind": "Parallel" }
+  ],
+  "meta": {
+    "spec_version": "umao-v2",
+    "created_by": "manual",
+    "description": "Research pipeline: Select → 2x Delegate (researcher + synthesizer) → Aggregate"
+  },
+  "outputs": []
+}

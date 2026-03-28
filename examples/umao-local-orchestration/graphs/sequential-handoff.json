@@ -1,0 +1,29 @@
+{
+  "graph_id": "sequential-handoff-demo",
+  "version": 1,
+  "nodes": [
+    {
+      "fb_id": "DELEGATE_researcher",
+      "cfb_type": "Delegate",
+      "ports": { "inputs": ["selected_agents", "task_spec", "delegation_context"], "outputs": ["task_results"] },
+      "guard": { "retry": 2, "budget_usd": 0.1, "timeout_ms": 30000 },
+      "traits": { "target_agent": "researcher", "task_prompt": "Research the topic." }
+    },
+    {
+      "fb_id": "DELEGATE_synthesizer",
+      "cfb_type": "Delegate",
+      "ports": { "inputs": ["selected_agents", "task_spec", "delegation_context"], "outputs": ["task_results"] },
+      "guard": { "retry": 2, "budget_usd": 0.1, "timeout_ms": 30000 },
+      "traits": { "target_agent": "synthesizer", "task_prompt": "Synthesize from the research." }
+    }
+  ],
+  "edges": [
+    { "from": { "fb_id": "DELEGATE_researcher", "port": "task_results" }, "to": { "fb_id": "DELEGATE_synthesizer", "port": "task_spec" }, "kind": "DependsOn" }
+  ],
+  "meta": {
+    "spec_version": "umao-v2",
+    "created_by": "manual",
+    "description": "Sequential handoff: Researcher → Synthesizer"
+  },
+  "outputs": []
+}

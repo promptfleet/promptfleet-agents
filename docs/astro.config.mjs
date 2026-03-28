@@ -11,6 +11,10 @@ export default defineConfig({
 		starlight({
 			title: 'PromptFleet Agents',
 			description: 'Rust library workspace: SDK, A2A, LLM, observability.',
+			favicon: '/favicon.svg',
+			components: {
+				SiteTitle: './src/components/SiteTitle.astro',
+			},
 			customCss: [
 				'./src/styles/brand.css',
 				'./src/styles/custom.css',

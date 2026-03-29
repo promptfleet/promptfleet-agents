@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 #[cfg(feature = "sse-client")]
+use crate::ToolProvider;
+#[cfg(feature = "sse-client")]
 use protocol_transport_core::{SseTransport, Transport, TransportFactory, UniversalRequest};
 
 const CONTENT_TYPE_JSON: &str = "application/json";

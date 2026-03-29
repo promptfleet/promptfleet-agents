@@ -114,6 +114,9 @@ impl A2AProtocol {
                 self.handle_notification(notification)?;
                 Ok(None)
             }
+            _ => Err(A2AError::unsupported_operation(
+                "This JSON-RPC incoming message variant is not supported by A2AProtocol",
+            )),
         }
     }
 

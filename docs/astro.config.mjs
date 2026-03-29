@@ -41,6 +41,7 @@ export default defineConfig({
 						{ label: 'Thinking in PromptFleet', link: '/concepts/' },
 						{ label: 'WASM vs Native', link: '/concepts/wasm-vs-native/' },
 						{ label: 'A2A Protocol', link: '/concepts/a2a-protocol/' },
+						{ label: 'UMAO Orchestration', link: '/concepts/umao/' },
 					],
 				},
 				{

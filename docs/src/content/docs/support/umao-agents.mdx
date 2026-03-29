@@ -9,8 +9,22 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note">External dependency — this crate depends on `umao_core` and `umao_executor` from the separate [`umao-rs`](https://github.com/promptfleet/umao-rs) repository via relative path deps (`../../../umao-rs/crates/...`). The UMAO crates must be available locally for compilation.</Aside>
 
-**Crate:** `umao_agents` · **Path:** `crates/umao_agents`  
+**Crate:** `umao_agents` · **Path:** `crates/umao_agents`
 **Description** (`Cargo.toml`): *UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk.*
+
+## Specification lineage
+
+This crate is the downstream application of a three-layer stack:
+
+| Layer | Project | License |
+|-------|---------|---------|
+| Specification | [UMAO spec](https://github.com/umao-spec/umao-spec) | Community Specification License 1.0 |
+| Reference impl | [umao-rs](https://github.com/umao-spec/umao-rs) | Apache 2.0 |
+| Application | `umao_agents` (this crate) | Apache 2.0 |
+
+`promptfleet-agents` is listed as a [reference implementation](https://github.com/umao-spec/umao-spec#reference-implementations) in the UMAO specification.
+
+For conceptual background see [UMAO Orchestration](/promptfleet-agents/concepts/umao/).
 
 ## Role
 

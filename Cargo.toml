@@ -45,16 +45,17 @@ members = [
     # Test Harness
     "crates/pf_test_harness",
 
-    # UMAO Agents (native-only integration)
-    "crates/umao_agents",
-
     # Examples
     "examples/a2a-echo-native",
-    "examples/umao-local-orchestration",
 ]
 
-# WASM-only examples can't compile on host — exclude from default workspace check
+# Excluded from workspace: these depend on sibling repos (umao-rs) via path deps
+# and cannot be resolved without that repo present. Build locally with:
+#   cargo build -p umao_agents
+#   cargo build -p umao-local-orchestration
 exclude = [
+    "crates/umao_agents",
+    "examples/umao-local-orchestration",
     "examples/a2a-echo-wasm",
 ]
 

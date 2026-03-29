@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -61,7 +62,7 @@ jobs:
   fmt:
     name: Format
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: always() && (needs.changes.outputs.rust == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +74,7 @@ jobs:
   clippy:
     name: Clippy
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: always() && (needs.changes.outputs.rust == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +87,7 @@ jobs:
   test:
     name: Tests
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: always() && (needs.changes.outputs.rust == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -97,7 +98,7 @@ jobs:
   wasm-check:
     name: WASM check
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: always() && (needs.changes.outputs.rust == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +118,7 @@ jobs:
   publish-dry-run:
     name: Publish dry-run
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: always() && (needs.changes.outputs.rust == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -128,7 +129,7 @@ jobs:
   docs-build:
     name: Docs build
     needs: changes
-    if: needs.changes.outputs.docs == 'true'
+    if: always() && (needs.changes.outputs.docs == 'true' || needs.changes.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,7 +1,7 @@
 //! # Provider-Agnostic Web Search Abstraction
 //!
 //! Defines a common contract for web search and content extraction that
-//! any provider (Tavily, Exa, Brave, SearXNG, …) can implement.
+//! any provider (Tavily, Exa, Brave, SearXNG, ...) can implement.
 //!
 //! ## Design Principles
 //!
@@ -13,13 +13,13 @@
 //!
 //! ## Usage (future)
 //!
-//! ```rust,ignore
+//! ```text
 //! // In an extension crate (e.g. ext_web_search_tavily):
 //! struct TavilyProvider { api_key: String }
 //!
 //! impl WebSearchProvider for TavilyProvider {
-//!     async fn search(&self, query: &str, opts: SearchOptions) -> Result<SearchResponse, WebSearchError> { … }
-//!     async fn extract(&self, urls: &[String], opts: ExtractOptions) -> Result<Vec<ExtractedContent>, WebSearchError> { … }
+//!     async fn search(...) -> Result<SearchResponse, WebSearchError> { ... }
+//!     async fn extract(...) -> Result<Vec<ExtractedContent>, WebSearchError> { ... }
 //! }
 //!
 //! // In user code:

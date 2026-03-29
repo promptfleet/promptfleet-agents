@@ -1,0 +1,140 @@
+---
+title: "error"
+description: "A2A v1.0 Error Types"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Error Types
+
+## Type Aliases
+
+### `A2AResult`
+
+```rust
+type A2AResult = Result<T, A2AError>;
+```
+
+
+## Enums
+
+### `A2AError`
+
+A2A Protocol Error
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `MethodNotFound { ... }` |  |
+| `InvalidParams { ... }` |  |
+| `AgentUnavailable { ... }` |  |
+| `CapabilityValidationFailed { ... }` |  |
+| `MethodExecutionFailed { ... }` |  |
+| `RegistryError { ... }` |  |
+| `ProtocolValidationError { ... }` |  |
+| `JsonRpcError(anyhow::Error)` |  |
+| `SerializationError(serde_json::Error)` |  |
+| `Internal { ... }` |  |
+| `TaskNotFound { ... }` |  |
+| `TaskNotCancelable { ... }` |  |
+| `PushNotificationNotSupported` |  |
+| `UnsupportedOperation { ... }` |  |
+| `ContentTypeNotSupported { ... }` |  |
+| `InvalidAgentResponse { ... }` |  |
+| `VersionNotSupported { ... }` |  |
+
+**Methods**
+
+#### `to_jsonrpc_error`
+
+```rust
+fn to_jsonrpc_error(&self) -> JsonRpcError
+```
+
+
+#### `method_not_found`
+
+```rust
+fn method_not_found<impl Into<String>>(method: impl Into) -> Self
+```
+
+
+#### `invalid_params`
+
+```rust
+fn invalid_params<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+
+#### `agent_unavailable`
+
+```rust
+fn agent_unavailable<impl Into<String>, impl Into<String>>(agent_id: impl Into, reason: impl Into) -> Self
+```
+
+
+#### `capability_validation_failed`
+
+```rust
+fn capability_validation_failed<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `method_execution_failed`
+
+```rust
+fn method_execution_failed<impl Into<String>, impl Into<String>>(method: impl Into, details: impl Into) -> Self
+```
+
+
+#### `registry_error`
+
+```rust
+fn registry_error<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `protocol_validation_error`
+
+```rust
+fn protocol_validation_error<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `internal`
+
+```rust
+fn internal<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `task_not_found`
+
+```rust
+fn task_not_found<impl Into<String>>(task_id: impl Into) -> Self
+```
+
+
+#### `task_not_cancelable`
+
+```rust
+fn task_not_cancelable<impl Into<String>>(task_id: impl Into) -> Self
+```
+
+
+#### `unsupported_operation`
+
+```rust
+fn unsupported_operation<impl Into<String>>(details: impl Into) -> Self
+```
+
+
+#### `version_not_supported`
+
+```rust
+fn version_not_supported<impl Into<String>>(version: impl Into) -> Self
+```
+

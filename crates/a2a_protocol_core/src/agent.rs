@@ -179,10 +179,11 @@ impl AgentCard {
         }
     }
 
-    // ── Backward-compat shim methods ────────────────────────────────
-
-    /// Retained for downstream code that calls `with_capability(method, desc)`.
-    /// Stores method in metadata under `pf:methods`.
+    /// Register a method capability on this agent card.
+    ///
+    /// Stores the method name and description in the card's `pf:methods`
+    /// metadata map. Used by `A2AProtocol::register_method` to keep the
+    /// agent card in sync with the method registry.
     pub fn with_capability(
         mut self,
         method: impl Into<String>,

@@ -146,6 +146,12 @@ impl ContextEnricher {
     }
 }
 
+impl Default for ContextEnricher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogProcessor for ContextEnricher {
     fn process(&self, mut entry: LogEntry) -> ObservabilityResult<LogEntry> {
         // Add additional context fields

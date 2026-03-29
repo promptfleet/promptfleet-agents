@@ -1,0 +1,65 @@
+---
+title: Getting started
+description: Clone the workspace, build, and open rustdoc.
+---
+
+## Requirements
+
+- **Rust** toolchain (edition 2024 per workspace `Cargo.toml`).
+- **Node.js** 20+ for this documentation site (`docs/`).
+
+## Library workspace
+
+```bash
+git clone https://github.com/promptfleet/promptfleet-agents.git
+cd promptfleet-agents
+cargo check
+```
+
+WASM targets use `wasm32-wasip1` (see repository `AGENTS.md`).
+
+## Crate groups
+
+The workspace contains 25 crates organized into five areas:
+
+- [**SDK / Core**](/sdk/) — `agent_sdk`, `agent_core`, `pf_macros`, `pf-types`, `pf_config`
+- [**A2A Protocol**](/a2a/) — `protocol_transport_core`, `a2a_protocol_core`, `a2a_http_client`, `a2a_http_server`, `a2a_app_ports`, `a2a_rpc_macros`
+- [**LLM**](/llm/) — `llm_client`, `llm_context_core`, `llm_tools`, `llm_tool_macros`, `tool_web_search`
+- [**Observability**](/observability/) — `observability`, `observability_core`, `structured_logging`, `otel`, `prometheus`
+- [**Support / Integration**](/support/) — `foundation_utils`, `mcp_protocol`, `pf_test_harness`, `umao_agents`
+
+See [Architecture](/architecture/) for the full crate map.
+
+## API documentation
+
+```bash
+cargo doc --no-deps -p agent_sdk
+cargo doc --no-deps -p a2a_protocol_core
+cargo doc --no-deps -p llm_client
+cargo doc --no-deps -p observability
+# …other crates as needed
+```
+
+## This documentation site
+
+**Always `cd docs` first.** Only `docs/package.json` exists; the repository root is Rust-only. Running `yarn` at the root uses **Yarn 1** (e.g. Homebrew) and can create stray `yarn.lock` / `node_modules` at the root.
+
+```bash
+cd docs
+corepack enable
+yarn install
+yarn dev
+```
+
+**Yarn version:** `docs/package.json` pins Yarn 4 via `packageManager`. **`corepack enable`** (once per machine) makes the `yarn` shim respect that. Without Corepack, **Yarn 1** may run and fail with **"Ambiguous Syntax Error"** on Berry-only flags.
+
+- **Local:** use `yarn install` (no `--immutable`).
+- **CI:** the repo workflow uses `yarn install --immutable` so the lockfile cannot change during the build.
+
+Build for production:
+
+```bash
+yarn build
+```
+
+Output is written to `docs/dist/` (with `base` set for GitHub Pages).

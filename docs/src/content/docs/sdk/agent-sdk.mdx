@@ -1,0 +1,134 @@
+---
+title: agent_sdk
+description: Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets.</Aside>
+
+**Crate:** `agent_sdk` · **Path:** `crates/agent_sdk`  
+**Description** (`Cargo.toml`): *Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters*
+
+## Role
+
+The public foundation of the PromptFleet agent platform. Provides the agent runtime — skills, tools, services, protocol-neutral message types, and runtime event streams. Protocol adapters (A2A, AG-UI) are enabled through explicit features rather than defining the identity of the crate. The canonical model: build one `Agent`, compose A2A support with `crate::a2a`, compose AG-UI support with `crate::agui`.
+
+## Feature flags
+
+From `crates/agent_sdk/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `agent-core` |
+| `agent-core` | Runtime-first base; enables `a2a_protocol_core/core` |
+| `a2a-server` | A2A HTTP server transport (Spin on WASM, axum on native) |
+| `a2a-client` | A2A HTTP client transport |
+| `full` | Both `a2a-server` and `a2a-client` with complete testing support |
+| `spec-compliant` | A2A specification compliance mode via `a2a_protocol_core/spec-compliant` |
+| `wasm-optimized` | WASM optimization via `a2a_protocol_core/wasm-optimized` |
+| `file-handling` | File handling support via `a2a_protocol_core/file-handling` |
+| `llm-engine` | LLM tools-first orchestrator with `llm_client` and `llm_tools` |
+| `context-window` | LLM context window management (token budgeting, history strategies); requires `llm-engine` |
+| `a2a-tools` | A2A-native tools (agent/card/get + message/send exposed as LLM tools) |
+| `mcp-client` | MCP tools: connect to external MCP servers. Native: `rmcp` (stdio + streamable HTTP). WASM: `mcp_protocol` (Streamable HTTP via spin-sdk) |
+| `mcp-e2e` | Live E2E tests against real MCP servers (never in default/CI) |
+| `config-loader` | Config loading via `pf_config` (JSON + env) |
+| `agent-observability` | Observability facade wiring; allows `AgentBuilder` to init observability |
+| `redis-storage` | Redis/Valkey task storage for native multi-replica agents |
+| `event-stream` | Native streaming adapters for Agent I/O and A2A SSE |
+| `agui-stream` | Public AG-UI stream surface; built on top of `event-stream` |
+| `sub-agents` | Sub-agent delegation tools (native-only in v1) |
+| `test-support` | Test-only engine seam accessors for cross-crate harnesses |
+| `auto-observability` | Convenience: `config-loader` + `agent-observability` |
+| `interactive-tools` | Typed interaction contracts for reusable ask-question/confirmation flows |
+| `agui-agent` | Capability bundle: `agent-core` + `llm-engine` + `agui-stream` |
+| `a2a-agent` | Capability bundle: `agent-core` + `llm-engine` + `a2a-server` + `a2a-client` + `event-stream` |
+| `dual-agent` | Capability bundle: `agui-agent` + `a2a-agent` |
+| `pf-agent` | Full PromptFleet bundle: `dual-agent` + `mcp-client` + `agent-observability` |
+
+## Public API (from `src/lib.rs`)
+
+**Core re-exports from `agent_core`:**
+- **`AgentMessage`**, **`ContentPart`**, **`ConversationContext`**, **`Role`**, **`TaskPhase`**
+
+**Agent runtime:**
+- **`Agent`** (aliased as `AgentRuntime`), **`AgentConfig`** (aliased as `RuntimeConfig`)
+- **`AgentBuilder`** — primary entrypoint: `AgentBuilder::new("name")` or `AgentBuilder::from_config_path("agent.json")`
+- **`AgentHost`**, **`AgentHostBuilder`** — native host composition for serving A2A + AG-UI
+- **`SkillEntryBuilder`**, **`SkillCall`**, **`SkillDefinition`**, **`SkillContext`**
+- **`HistoryPolicyConfig`**, **`HistoryPolicyMode`**, **`HistoryStrategyKind`**, **`MessageType`**
+
+**Services and utilities:**
+- **`ServiceContainer`** — type-erased dependency injection
+- **`CallableSkill`** — trait for skill handlers
+- **`SdkError`**, **`SdkResult`** — error types
+- **`TimeoutPolicy`** — configurable timeout handling
+- **`InteractionKind`**, **`InteractionOption`**, **`InteractionRequest`**, **`InteractionResponse`**
+
+**Feature-gated modules:**
+- `a2a` — A2A-specific types and composition helpers
+- `agui` — AG-UI streaming/composition helpers
+- `streaming` — native streaming adapters (feature: `event-stream`)
+- `sub_agent` — sub-agent delegation (feature: `sub-agents`)
+- `mcp_tools` — MCP tools integration (feature: `mcp-client`)
+- `a2a_tools` — A2A-native tool helpers (feature: `a2a-tools`)
+- `observability_runtime` — SDK observability flush/runtime helpers (feature: `agent-observability`)
+- `wasm_kv_task_storage` — WASM key-value task storage (feature: `a2a-server`)
+- `redis_task_storage` — Redis/Valkey task storage (feature: `redis-storage`, native-only)
+
+**Macros:**
+- **`a2a_serve!`** — zero-boilerplate macro that generates the complete `#[http_component]` function (WASM only, feature: `a2a-server`)
+
+**Prelude:**
+- `agent_sdk::prelude` re-exports the most common types
+
+**Constant:**
+- **`SDK_VERSION`** — crate version from `Cargo.toml`
+
+## Example sketch
+
+```rust
+use agent_sdk::{AgentBuilder, SdkResult};
+use serde_json::json;
+
+fn main() -> SdkResult<()> {
+    let mut agent = AgentBuilder::new("weather-agent")?.build()?;
+
+    agent
+        .add_skill("get_weather")
+        .handler(|params| async move {
+            let location = params["location"].as_str().unwrap_or("unknown");
+            Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
+        })
+        .register()?;
+
+    Ok(())
+}
+```
+
+### Capability bundles (presets)
+
+These bundle common feature combinations for convenience:
+
+| Preset | Includes | Use case |
+|--------|----------|----------|
+| `agui-agent` | `agent-core` + `llm-engine` + `agui-stream` | AG-UI streaming agent |
+| `a2a-agent` | `agent-core` + `llm-engine` + `a2a-server` + `a2a-client` + `event-stream` | A2A-only agent |
+| `dual-agent` | `agui-agent` + `a2a-agent` | Agent serving both A2A and AG-UI |
+| `pf-agent` | `dual-agent` + `mcp-client` + `agent-observability` | Full PromptFleet agent with MCP and observability |
+
+## Related guides
+
+- [LLM Client guide](/promptfleet-agents/guides/llm-client/) — using `llm-engine` and `context-window`
+- [LLM Tools guide](/promptfleet-agents/guides/llm-tools/) — registering tools with `#[llm_tool]`
+- [A2A Serving guide](/promptfleet-agents/guides/a2a-serving/) — setting up A2A server transport
+- [AG-UI Streaming guide](/promptfleet-agents/guides/agui-streaming/) — streaming with `agui-stream`
+- [Sub-Agents guide](/promptfleet-agents/guides/sub-agents/) — delegating to sub-agents
+- [MCP guide](/promptfleet-agents/guides/mcp/) — connecting to MCP servers
+- [Configuration guide](/promptfleet-agents/guides/config/) — using `config-loader`
+- [Observability guide](/promptfleet-agents/guides/observability/) — wiring `agent-observability`
+- [Interactive Tools guide](/promptfleet-agents/guides/interactive-tools/) — typed interaction contracts
+- [Skills guide](/promptfleet-agents/guides/skills/) — registering and composing skills
+
+**Full API reference:** `cargo doc -p agent_sdk --no-deps --all-features`

@@ -1,0 +1,51 @@
+---
+title: observability (facade)
+description: PromptFleet observability facade — Obs, ObservabilityConfig, optional OTEL and Prometheus.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets.</Aside>
+
+**Crate:** `observability` · **Path:** `crates/observability/observability`  
+**Package description** (`Cargo.toml`): *PromptFleet observability facade (happy path)*.
+
+## Role
+
+From `src/lib.rs`: single happy-path entrypoint that installs global structured logging (via `observability_core`) and exposes a shareable **`Obs`** handle as **`Arc<dyn ObsHandle>`** for subcomponents.
+
+## Feature flags
+
+Defined in `crates/observability/observability/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `logging`, `config` |
+| `serde` | Serde on config types |
+| `logging` | `serde` + `log` — global structured logging |
+| `config` | JSON value parsing for config without requiring logging |
+| `otel` | Optional `otel` workspace crate |
+| `prometheus` | Optional `prometheus` workspace crate + federation + structured-logging on that crate |
+| `prometheus-pushgateway` | `prometheus` + push gateway client |
+| `full` | `otel` + `prometheus` |
+
+## Key types (from `src/lib.rs` re-exports)
+
+- **`Obs`**, **`SharedObs`**, trait **`ObsHandle`**
+- **`ObservabilityConfig`**, **`OtelConfig`**, **`PrometheusConfig`**, **`OtelSampling`**
+- **`ObsResult`**, **`ObsHealth`**
+- Re-exports from **`observability_core`**: context helpers (`set_current_context`, `with_context`, …), **`TraceContext`**, **`W3CTraceContext`**, **`SpanGuard`**, **`LogLevel`**, etc.
+
+`Obs` provides **`init`**, **`init_from_env`**, and related helpers — see `src/types.rs`.
+
+## Example sketch
+
+```rust
+use observability::{Obs, ObservabilityConfig};
+
+let obs = Obs::init(ObservabilityConfig::default())?;
+```
+
+Adjust `ObservabilityConfig` fields (service name, logging, optional `otel` / `prometheus` sections) per your deployment.
+
+**Full API reference:** use `cargo doc -p observability --no-deps` (and enable features you need).

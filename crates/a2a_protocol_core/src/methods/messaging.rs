@@ -233,6 +233,183 @@ mod tests {
         assert_eq!(updated_task.status.state, TaskState::Working);
     }
 
+    #[test]
+    fn test_utility_keywords_return_direct_message() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        for keyword in &["ping", "health", "status", "ok", "ack", "acknowledgment"] {
+            let message = Message::new(
+                MessageRole::User,
+                vec![Part::text(*keyword)],
+                "ctx".to_string(),
+            );
+            let request = JsonRpcRequest::new(
+                json!(format!("req-{}", keyword)),
+                "SendMessage".to_string(),
+                json!({"message": message}),
+            );
+            let response = handle_message_send(request, storage.clone()).unwrap();
+            assert!(response.is_success());
+            let result = response.result.unwrap();
+            assert!(
+                result.get("message").is_some(),
+                "keyword '{keyword}' should return direct Message"
+            );
+            assert!(
+                result.get("task").is_none(),
+                "keyword '{keyword}' should NOT create a Task"
+            );
+        }
+        assert_eq!(
+            storage.task_count(),
+            0,
+            "no tasks should be stored for utility keywords"
+        );
+    }
+
+    #[test]
+    fn test_ping_keyword_returns_pong_text() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::text("ping")],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("r1"),
+            "SendMessage".to_string(),
+            json!({"message": message}),
+        );
+        let response = handle_message_send(request, storage).unwrap();
+        let result = response.result.unwrap();
+        assert_eq!(result["message"]["parts"][0]["text"], "pong");
+    }
+
+    #[test]
+    fn test_data_part_creates_task() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::data(json!({"key": "val"}))],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message}),
+        );
+        let response = handle_message_send(request, storage.clone()).unwrap();
+        assert!(response.is_success());
+        assert_eq!(storage.task_count(), 1);
+        assert!(response.result.unwrap().get("task").is_some());
+    }
+
+    #[test]
+    fn test_multiple_text_parts_creates_task() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::text("hello"), Part::text("world")],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message}),
+        );
+        let response = handle_message_send(request, storage.clone()).unwrap();
+        assert!(response.is_success());
+        assert_eq!(storage.task_count(), 1);
+    }
+
+    #[test]
+    fn test_empty_parts_returns_validation_error() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": {"role": "ROLE_USER", "parts": [], "messageId": "m-1"}}),
+        );
+        assert!(handle_message_send(request, storage).is_err());
+    }
+
+    #[test]
+    fn test_context_id_auto_generated() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::with_id(
+            "msg-1".to_string(),
+            MessageRole::User,
+            vec![Part::text("do work")],
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message}),
+        );
+        handle_message_send(request, storage.clone()).unwrap();
+        let tasks = storage.list_tasks().unwrap();
+        assert!(!tasks[0].context_id.is_empty());
+    }
+
+    #[test]
+    fn test_metadata_applied_to_task() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::text("do work")],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message, "metadata": {"source": "test-suite"}}),
+        );
+        handle_message_send(request, storage.clone()).unwrap();
+        let tasks = storage.list_tasks().unwrap();
+        assert_eq!(tasks[0].metadata.as_ref().unwrap()["source"], "test-suite");
+    }
+
+    #[test]
+    fn test_history_length_zero_strips_history_from_response() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::text("do work")],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message, "configuration": {"historyLength": 0}}),
+        );
+        let response = handle_message_send(request, storage).unwrap();
+        let result = response.result.unwrap();
+        assert!(
+            result["task"].get("history").is_none(),
+            "historyLength=0 should strip history from response"
+        );
+    }
+
+    #[test]
+    fn test_history_length_nonzero_keeps_history_in_response() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let message = Message::new(
+            MessageRole::User,
+            vec![Part::text("do work")],
+            "ctx".to_string(),
+        );
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "SendMessage".to_string(),
+            json!({"message": message, "configuration": {"historyLength": 5}}),
+        );
+        let response = handle_message_send(request, storage).unwrap();
+        let result = response.result.unwrap();
+        assert!(
+            result["task"].get("history").is_some(),
+            "historyLength=5 should keep history in response"
+        );
+    }
+
     #[cfg(feature = "event-stream")]
     #[test]
     fn test_send_subscribe_creates_streaming_task() {

@@ -1,7 +1,10 @@
 [package]
 name = "llm_client"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Simplified, provider-agnostic LLM client built on protocol_transport_core"
 
 [dependencies]
@@ -26,6 +29,9 @@ tokio = { workspace = true, features = ["sync", "rt"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 futures = { workspace = true }
 axum = { version = "0.7" }
+http = { workspace = true }
+bytes = { workspace = true }
+pf_test_harness = { path = "../../pf_test_harness", features = ["scenario"] }
 
 [lib]
 name = "llm_client"

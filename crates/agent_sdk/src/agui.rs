@@ -1,4 +1,17 @@
 //! AG-UI adapter surface for composing user-facing streaming around [`crate::Agent`].
+//!
+//! ## Platform
+//!
+//! - **Native only** (`not(target_arch = "wasm32")`): HTTP routes and SSE streaming require Tokio
+//!   and Axum. Enable the **`event-stream`** feature (and typically **`llm-engine`** on the agent).
+//! - **WASM**: this module is not built for `wasm32`; use A2A hosting from [`crate::host`] or
+//!   `a2a_serve!` instead.
+//!
+//! ## Usage
+//!
+//! - Configure [`crate::agui::AgUiConfig`] (route path) and build [`crate::agui::AgUiApp`] from an [`crate::Agent`] that has a
+//!   **stream-capable** LLM runtime ([`crate::Agent::configure_llm_runtime`] on native).
+//! - Combine with [`crate::AgentHostBuilder::with_agui`] to serve AG-UI alongside A2A on one router.
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use std::collections::HashMap;
@@ -33,9 +46,9 @@ use crate::{Agent, SdkError, SdkResult};
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 pub use crate::streaming::{
-    ag_ui_sse_response, ag_ui_sse_response_with_summary, agent_io_sse_stream,
-    map_trace_to_agent_io, AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent,
-    IoEventContext, RunStatus, RunSummary, StreamEnricher, SummaryHandle,
+    AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent, IoEventContext, RunStatus,
+    RunSummary, StreamEnricher, SummaryHandle, ag_ui_sse_response, ag_ui_sse_response_with_summary,
+    agent_io_sse_stream, map_trace_to_agent_io,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -70,7 +83,7 @@ impl AgUiApp {
         #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
         if !agent.can_run_stream() {
             return Err(SdkError::configuration(
-                "AG-UI app requires a stream-capable LLM runtime; configure the agent with set_llm_tools_message_handler_with/configured",
+                "AG-UI app requires a stream-capable LLM runtime; configure the agent with configure_llm_runtime",
             ));
         }
 

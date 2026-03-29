@@ -1,6 +1,8 @@
 //! Universal server abstractions for all protocols
 
 use crate::ProtocolRouter;
+#[cfg(target_arch = "wasm32")]
+use crate::{UniversalRequest, UniversalResponse};
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -285,7 +287,7 @@ impl Default for UniversalServer {
 /// The key insight: Spin http_component functions are sync, but can call async operations internally
 #[macro_export]
 macro_rules! create_universal_server {
-    ($(($protocol:literal, $handler:expr)),*) => {
+    ($(($protocol:literal, $handler:expr_2021)),*) => {
         #[spin_sdk::http_component]
         fn handle_universal_request(req: spin_sdk::http::Request) -> anyhow::Result<spin_sdk::http::Response> {
             let mut server = $crate::UniversalServer::new();

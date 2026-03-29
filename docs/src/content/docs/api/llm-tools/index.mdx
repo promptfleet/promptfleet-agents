@@ -1,0 +1,111 @@
+---
+title: "llm_tools"
+description: "# llm_tools"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# llm_tools
+
+Lightweight, WASM-safe tool registry for LLM function-calling.
+
+This crate provides [`ToolRegistry`] — a name-indexed collection of
+[`RegisteredTool`]s — together with the [`registry_from!`] macro that
+collects tools at compile time.
+
+## How it works
+
+1. Annotate a plain Rust function with `#[llm_tool]` (from the
+   [`llm_tool_macros`] crate). The proc macro generates companion
+   functions (`<fn>_llm_tool_info`, `<fn>_llm_tool_exec`, etc.) that
+   expose the tool's JSON Schema and executor.
+
+2. Use [`registry_from!`] to sweep those generated functions into a
+   [`ToolRegistry`]:
+
+   ```rust
+   use llm_tools::registry_from;
+
+   let registry = registry_from!(get_weather, web_search);
+   let schemas  = registry.schemas();   // Vec<ToolSchema> for the LLM
+   let result   = registry.exec("get_weather", args);
+   ```
+
+3. Pass `registry.schemas()` to the LLM request and route tool calls
+   back through `registry.exec()` or `registry.exec_call()`.
+
+The `tool_choice` submodule provides helpers for constructing the
+`tool_choice` field accepted by most LLM APIs.
+
+## Type Aliases
+
+### `ContextExecFn`
+
+```rust
+type ContextExecFn = dyn Fn + Send + Sync;
+```
+
+Type-erased context-aware executor.
+The `Box<dyn Any + Send>` carries a `ToolContext` at runtime.
+
+## Structs
+
+### `RegisteredTool`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `parameters` | `serde_json::Value` |  |
+| `exec` | `fn(_: serde_json::Value) -&gt; serde_json::Value` |  |
+| `needs_context` | `bool` |  |
+| `context_exec` | `Option&lt;Arc&lt;ContextExecFn&gt;&gt;` |  |
+
+### `ToolRegistry`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `by_name` | `HashMap&lt;String, RegisteredTool&gt;` |  |
+
+**Methods**
+
+#### `schemas`
+
+```rust
+fn schemas(&self) -> Vec<types::ToolSchema>
+```
+
+
+#### `exec`
+
+```rust
+fn exec(&self, name: &str, args: serde_json::Value) -> serde_json::Value
+```
+
+
+#### `exec_call`
+
+```rust
+fn exec_call(&self, call: &types::ToolCall) -> serde_json::Value
+```
+
+
+#### `names`
+
+```rust
+fn names(&self) -> Vec<String>
+```
+
+
+## Macros
+
+### `registry_from!`
+

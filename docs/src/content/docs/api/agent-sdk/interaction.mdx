@@ -1,0 +1,74 @@
+---
+title: "interaction"
+description: "Typed interaction payloads for human-in-the-loop flows (questions, confirmations)."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Typed interaction payloads for human-in-the-loop flows (questions, confirmations).
+
+See [`InteractionRequest`] and [`InteractionResponse`] for the wire shape consumed by adapters.
+
+## Structs
+
+### `InteractionOption`
+
+A selectable option for interaction prompts.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Stable id for this option (used in `selected_option_id` on the response). |
+| `label` | `String` | Short label shown in the UI. |
+| `description` | `Option&lt;String&gt;` | Optional longer description. |
+
+### `InteractionRequest`
+
+Request payload emitted by agents to ask for user input.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `interaction_id` | `String` | Correlates the request with [`InteractionResponse::interaction_id`]. |
+| `kind` | `InteractionKind` | Question vs confirmation flow. |
+| `question` | `String` | Prompt text shown to the user. |
+| `options` | `Vec&lt;InteractionOption&gt;` | For choice-style prompts; empty if free-text only. |
+| `allow_free_text` | `bool` | Whether the user may type an answer instead of picking an option. |
+| `allow_cancel` | `bool` | Whether the user may dismiss without resolving (cancel). |
+| `default_option_id` | `Option&lt;String&gt;` | Pre-selected option id when `options` is non-empty. |
+| `timeout_ms` | `Option&lt;u64&gt;` | Optional auto-expiry for the interaction (milliseconds). |
+| `continuation_id` | `Option&lt;String&gt;` | Optional id for multi-step / resumed flows. |
+| `source_node` | `Option&lt;String&gt;` | Optional coordination graph node id (if applicable). |
+| `metadata` | `Option&lt;serde_json::Value&gt;` | Arbitrary extension payload. |
+
+### `InteractionResponse`
+
+Response payload for resolving a pending interaction.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `interaction_id` | `String` | Must match the pending [`InteractionRequest::interaction_id`]. |
+| `selected_option_id` | `Option&lt;String&gt;` | Chosen option when the user picked from `options`. |
+| `free_text` | `Option&lt;String&gt;` | Free-text answer when `allow_free_text` was true. |
+| `confirmed` | `Option&lt;bool&gt;` | For confirmations: explicit true/false when applicable. |
+| `cancelled` | `bool` | True when the user cancelled instead of resolving. |
+| `metadata` | `Option&lt;serde_json::Value&gt;` | Arbitrary extension payload. |
+
+## Enums
+
+### `InteractionKind`
+
+Interaction kinds supported by the typed interaction contract.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Question` |  |
+| `Confirmation` |  |

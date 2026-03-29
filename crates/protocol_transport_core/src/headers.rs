@@ -103,7 +103,7 @@ mod tests {
 
         assert_eq!(protocol_headers.protocol, "UNKNOWN"); // Default value
         assert_eq!(protocol_headers.version, "1.0"); // Default value
-                                                     // correlation_id should be a UUID v4, so just check it's not empty
+        // correlation_id should be a UUID v4, so just check it's not empty
         assert!(!protocol_headers.correlation_id.is_empty());
         assert!(protocol_headers.correlation_id.contains('-')); // UUIDs have dashes
         assert_eq!(protocol_headers.client_agent_id, None);

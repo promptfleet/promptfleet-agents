@@ -137,8 +137,59 @@ mod tests {
             scope: None,
             metadata: None,
         };
-        assert!(discovery
-            .agent_authenticated_extended_card(params_with_token)
-            .is_ok());
+        assert!(
+            discovery
+                .agent_authenticated_extended_card(params_with_token)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_discovery_result_contains_metadata() {
+        let card = AgentCard::new("test-agent");
+        let discovery = DefaultAgentDiscovery::new(card);
+        let result = discovery
+            .agent_authenticated_extended_card(AuthenticatedExtendedCardParams::default())
+            .unwrap();
+        let meta = result.discovery_metadata.as_ref().unwrap();
+        assert_eq!(meta["method"], "GetExtendedAgentCard");
+    }
+
+    #[test]
+    fn test_discovery_supports_authentication_flag() {
+        let card = AgentCard::new("test-agent");
+        let discovery = DefaultAgentDiscovery::new(card).with_authentication_required(true);
+        let params = AuthenticatedExtendedCardParams {
+            auth_token: Some("token".to_string()),
+            scope: None,
+            metadata: None,
+        };
+        let result = discovery.agent_authenticated_extended_card(params).unwrap();
+        let meta = result.discovery_metadata.as_ref().unwrap();
+        assert_eq!(meta["supportsAuthentication"], true);
+    }
+
+    #[test]
+    fn test_discovery_agent_card_preserved() {
+        let card = AgentCard::new("my-agent");
+        let discovery = DefaultAgentDiscovery::new(card);
+        let result = discovery
+            .agent_authenticated_extended_card(AuthenticatedExtendedCardParams::default())
+            .unwrap();
+        assert_eq!(result.agent_card.name, "my-agent");
+    }
+
+    #[cfg(feature = "time-stamps")]
+    #[test]
+    fn test_discovery_timestamp_present_with_feature() {
+        let card = AgentCard::new("test-agent");
+        let discovery = DefaultAgentDiscovery::new(card);
+        let result = discovery
+            .agent_authenticated_extended_card(AuthenticatedExtendedCardParams::default())
+            .unwrap();
+        assert!(
+            result.timestamp.is_some(),
+            "timestamp should be set when time-stamps feature is enabled"
+        );
     }
 }

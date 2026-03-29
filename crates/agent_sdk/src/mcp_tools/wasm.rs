@@ -24,10 +24,10 @@ use std::collections::HashMap;
 
 use mcp_protocol::McpClient;
 
-use crate::mcp_tools::config::{resolve_env_vars, McpServersConfig, McpTransportType};
+use crate::mcp_tools::config::{McpServersConfig, McpTransportType, resolve_env_vars};
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{
-    build_forwarded_headers_meta, McpCallResult, McpContent, McpToolDescriptor, McpToolSource,
+    McpCallResult, McpContent, McpToolDescriptor, McpToolSource, build_forwarded_headers_meta,
 };
 
 /// Handle wrapping a single `McpClient` connection.

@@ -1,0 +1,24 @@
+---
+title: "a2a"
+description: "A2A-specific types and composition helpers."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A-specific types and composition helpers.
+A2A adapter surface for composing protocol support around [`crate::Agent`].
+
+## Functions
+
+### `agent_card`
+
+```rust
+fn agent_card(agent: &crate::Agent) -> AgentCard
+```
+
+Build an A2A `AgentCard` from the runtime agent state.
+
+Produces a v1.0-compliant card with default `supportedInterfaces`,
+`defaultInputModes`, and `defaultOutputModes`.

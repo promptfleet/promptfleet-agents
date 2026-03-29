@@ -1,19 +1,18 @@
 [package]
 name = "pf-types"
-version = "0.1.0"
-edition = "2021"
-description = "PromptFleet shared identifier and naming types (AgentId, TenantId, SpaceId, AgentSlug), labels and key builders."
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Lightweight naming and validation primitives for the PromptFleet agent ecosystem (AgentSlug, normalize_name)."
 
 [features]
 default = ["serde"]
 serde = ["dep:serde"]
-schemars = ["dep:schemars"]
 
 [dependencies]
-ulid = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
-schemars = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

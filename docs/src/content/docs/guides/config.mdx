@@ -1,0 +1,206 @@
+---
+title: Configuration
+description: How to load agent configuration from JSON, environment variables, and dotenv with pf_config.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `config-loader`</Aside>
+
+## What it does
+
+The `pf_config` crate provides layered configuration loading — JSON files, `.env` files, and OS environment variables are merged in precedence order, giving you a single unified config value. The `config-loader` feature on `agent_sdk` integrates this into `AgentBuilder::from_config_path()`.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { workspace = true, features = ["config-loader"] }
+```
+
+Optional `pf_config` sub-features:
+
+| Feature | What it enables |
+|---|---|
+| `dotenv` | Load `.env` files via `dotenvy` |
+| `cargo-toml` | Read config from `[package.metadata]` in `Cargo.toml` |
+
+## How to use it
+
+<Steps>
+
+1. **Create an `agent-config.json`** file with your agent settings.
+
+2. **Call `AgentBuilder::from_config_path("agent-config.json")`** — this loads JSON, overlays env vars, and returns a configured builder.
+
+3. **Optionally chain builder methods** to override specific settings.
+
+4. **Call `.build()`** to get the agent.
+
+</Steps>
+
+```rust
+use agent_sdk::AgentBuilder;
+
+let agent = AgentBuilder::from_config_path("agent-config.json")?
+    .build()?;
+
+assert_eq!(agent.config().name, "my-agent");
+```
+
+## Complete config example
+
+```json
+{
+  "agent": {
+    "name": "my-agent",
+    "description": "A helpful assistant agent",
+    "version": "1.0.0",
+    "max_message_size": 1048576,
+    "streaming": true,
+    "batch_processing": false,
+    "concurrent_tasks": 10,
+    "stateless_methods": false,
+    "base_url": "https://my-agent.example.com",
+    "history_policy": {
+      "mode": "sliding_window",
+      "strategy": "sliding_window",
+      "context_window_tokens": 128000,
+      "max_output_tokens": 16384,
+      "enable_summarization": false,
+      "enable_long_term_memory": false,
+      "recall_top_k": 5,
+      "memory_token_budget": 2000
+    }
+  },
+  "observability": {
+    "service_name": "my-agent",
+    "service_version": "1.0.0",
+    "otel": { "enabled": true },
+    "prometheus": { "enabled": false }
+  }
+}
+```
+
+## AgentConfig fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | `String` | `"sdk-agent"` | Agent name (used in agent card) |
+| `description` | `String` | `"Agent built with SDK"` | Human-readable description |
+| `version` | `String` | `"1.0.0"` | Semantic version |
+| `max_message_size` | `u64` | `1048576` (1 MB) | Maximum incoming message size in bytes |
+| `streaming` | `bool` | `false` | Whether the agent advertises streaming support |
+| `batch_processing` | `bool` | `false` | Whether the agent supports batch processing |
+| `concurrent_tasks` | `Option<u32>` | `Some(10)` | Max concurrent tasks (`None` = unlimited) |
+| `stateless_methods` | `bool` | `false` | Prefer lightweight Message responses over Task |
+| `base_url` | `Option<String>` | `None` | Base URL for absolute agent card interface URLs |
+| `history_policy` | `Option<HistoryPolicyConfig>` | `None` | History management strategy for durable continuation |
+
+## Layered precedence
+
+Sources are merged in order (later wins):
+
+<Steps>
+
+1. **Cargo.toml section** (lowest, requires `cargo-toml` feature)
+
+2. **JSON files** — in order; later files override earlier
+
+3. **`.env` file** (requires `dotenv` feature)
+
+4. **OS environment variables** (highest precedence)
+
+</Steps>
+
+## Environment variable overlay
+
+Environment variables with the prefix `AGENT_` are automatically merged into the config tree. Double underscores (`__`) denote nesting:
+
+| Env var | JSON path |
+|---|---|
+| `AGENT_AGENT__NAME=bot` | `{ "agent": { "name": "bot" } }` |
+| `AGENT_AGENT__STREAMING=true` | `{ "agent": { "streaming": true } }` |
+| `AGENT_OBSERVABILITY__SERVICE_NAME=x` | `{ "observability": { "service_name": "x" } }` |
+
+This means you can override any JSON config value at deploy time without changing files:
+
+```bash
+AGENT_AGENT__NAME=production-bot \
+AGENT_AGENT__STREAMING=true \
+  ./my-agent
+```
+
+## Using pf_config directly
+
+For custom config structures outside of `AgentBuilder`:
+
+<Tabs>
+<TabItem label="Untyped">
+
+```rust
+use pf_config::{load_config_untyped, LoadOptions};
+use std::path::PathBuf;
+
+let opts = LoadOptions {
+    json_paths: vec![PathBuf::from("./config.json")],
+    enable_dotenv: true,
+    env_prefix: Some("AGENT_"),
+    ..Default::default()
+};
+
+let value: serde_json::Value = load_config_untyped(opts)?;
+println!("agent.name = {}", value["agent"]["name"]);
+```
+
+</TabItem>
+<TabItem label="Typed">
+
+```rust
+use pf_config::{load_config, LoadOptions};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct MyConfig {
+    host: String,
+    port: u16,
+}
+
+let opts = LoadOptions {
+    json_paths: vec!["./app-config.json".into()],
+    enable_dotenv: false,
+    env_prefix: Some("APP_"),
+    ..Default::default()
+};
+
+let cfg: MyConfig = load_config(opts)?;
+```
+
+</TabItem>
+</Tabs>
+
+## LoadOptions fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `json_paths` | `Vec<PathBuf>` | `["./config.json"]` | JSON files to load (in order, later wins) |
+| `enable_dotenv` | `bool` | `true` | Whether to load `.env` file |
+| `env_prefix` | `Option<&'static str>` | `Some("AGENT_")` | Prefix for env var matching |
+| `env_key_transform` | `EnvKeyTransform` | `DoubleUnderscoreToNested` | How env var keys map to nested JSON |
+| `required` | `bool` | `false` | Error if no config sources found |
+| `cargo` | `Option<CargoTomlOptions>` | `None` | Cargo.toml section config (requires `cargo-toml` feature) |
+
+## Key types reference
+
+| Type | Module | Description |
+|---|---|---|
+| `AgentBuilder::from_config_path()` | `agent_sdk` | Load config and build an agent in one step |
+| `AgentConfig` | `agent_sdk::agent::config` | Deserialized agent configuration |
+| `HistoryPolicyConfig` | `agent_sdk::agent::config` | History management settings |
+| `HistoryPolicyMode` | `agent_sdk::agent::config` | `PassThrough` or `HistoryManager` |
+| `HistoryStrategyKind` | `agent_sdk::agent::config` | `SlidingWindow`, `SlidingWindowWithSummary`, `PriorityBased` |
+| `load_config_untyped()` | `pf_config` | Returns `serde_json::Value` |
+| `load_config::<T>()` | `pf_config` | Deserializes into `T: DeserializeOwned` |
+| `LoadOptions` | `pf_config` | All loading options: paths, env prefix, dotenv, required |
+| `EnvKeyTransform` | `pf_config` | `DoubleUnderscoreToNested` — env key nesting strategy |
+| `ConfigError` | `pf_config` | `NotFound`, `TypeMismatch`, parse errors |

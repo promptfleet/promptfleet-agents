@@ -1,37 +1,123 @@
 use crate::{
-    model_client::{
-        ApiMode, ClientCapabilities, ClientConfig, ClientError, HttpModelClient, ModelClient,
-    },
+    auth::AuthProvider,
+    error::LlmError,
+    model_client::{ApiMode, ClientCapabilities, HttpModelClient},
+    provider::LlmProvider,
     types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
 };
+use protocol_transport_core::StreamingPolicy;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct OpenAIClient {
+pub(crate) struct OpenAIClient {
     inner: HttpModelClient,
+    api_mode: Option<ApiMode>,
+    chat_path: String,
+    responses_path: String,
 }
 
 impl OpenAIClient {
-    pub fn new(config: ClientConfig) -> Self {
-        log::debug!("OpenAIClient::new api_mode={:?}", config.api_mode);
+    pub(crate) fn new(
+        base_url: String,
+        default_headers: HashMap<String, String>,
+        streaming: Option<StreamingPolicy>,
+        auth: Arc<dyn AuthProvider>,
+        api_mode: Option<ApiMode>,
+        chat_path: String,
+        responses_path: String,
+    ) -> Self {
+        log::debug!("OpenAIClient::new api_mode={:?}", api_mode);
         Self {
-            inner: HttpModelClient::new(config),
+            inner: HttpModelClient::new(base_url, default_headers, streaming, auth),
+            api_mode,
+            chat_path,
+            responses_path,
         }
+    }
+
+    fn map_openai_chat_message(m: &ChatMessage) -> serde_json::Value {
+        if m.role == "tool" {
+            return serde_json::json!({
+                "role": "tool",
+                "tool_call_id": m.tool_call_id,
+                "content": m.content,
+            });
+        }
+        if m.role == "assistant"
+            && m.tool_calls
+                .as_ref()
+                .map(|t| !t.is_empty())
+                .unwrap_or(false)
+        {
+            let tool_calls: Vec<serde_json::Value> = m
+                .tool_calls
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|tc| {
+                    let args_str = match &tc.arguments {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    serde_json::json!({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": args_str
+                        }
+                    })
+                })
+                .collect();
+            let mut obj = serde_json::Map::new();
+            obj.insert(
+                "role".to_string(),
+                serde_json::Value::String("assistant".into()),
+            );
+            if let Some(c) = &m.content {
+                if !c.is_empty() {
+                    obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+                }
+            }
+            obj.insert(
+                "tool_calls".to_string(),
+                serde_json::Value::Array(tool_calls),
+            );
+            return serde_json::Value::Object(obj);
+        }
+        let mut obj = serde_json::Map::new();
+        obj.insert(
+            "role".to_string(),
+            serde_json::Value::String(m.role.clone()),
+        );
+        if let Some(c) = &m.content {
+            obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+        }
+        serde_json::Value::Object(obj)
+    }
+
+    fn map_messages_openai_chat(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
+        messages.iter().map(Self::map_openai_chat_message).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::LlmRequest;
+    use crate::auth::ApiKeyAuth;
+    use crate::types::{LlmRequest, ToolSchema};
 
     fn mk_client(api_mode: ApiMode) -> OpenAIClient {
-        OpenAIClient::new(ClientConfig {
-            base_url: "http://localhost:1234".to_string(),
-            api_key: None,
-            default_headers: Default::default(),
-            api_mode: Some(api_mode),
-            ..ClientConfig::default()
-        })
+        OpenAIClient::new(
+            "http://localhost:1234".to_string(),
+            Default::default(),
+            None,
+            Arc::new(ApiKeyAuth::new("")),
+            Some(api_mode),
+            "/v1/chat/completions".to_string(),
+            "/v1/responses".to_string(),
+        )
     }
 
     #[test]
@@ -51,11 +137,13 @@ mod tests {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: "be concise".to_string(),
+                    content: Some("be concise".to_string()),
+                    ..Default::default()
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: "hello".to_string(),
+                    content: Some("hello".to_string()),
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -68,24 +156,353 @@ mod tests {
         assert_eq!(payload["input"][0]["role"], "user");
         assert_eq!(payload["input"][0]["content"], "hello");
     }
-}
 
-impl ModelClient for OpenAIClient {
-    fn capabilities(&self) -> ClientCapabilities {
-        self.inner.capabilities()
+    #[test]
+    fn test_to_chat_payload_basic() {
+        let request = LlmRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("hello".to_string()),
+                ..Default::default()
+            }],
+            temperature: Some(0.7),
+            max_tokens: Some(100),
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_chat_payload(&request);
+        assert_eq!(payload["model"], "gpt-4o");
+        assert_eq!(payload["messages"][0]["role"], "user");
+        assert_eq!(payload["messages"][0]["content"], "hello");
+        let temp = payload["temperature"].as_f64().expect("temperature");
+        assert!((temp - 0.7_f64).abs() < 1e-5);
+        assert_eq!(payload["max_tokens"], 100);
     }
 
-    async fn llm_request(
-        &self,
-        request: serde_json::Value,
-    ) -> Result<serde_json::Value, ClientError> {
-        self.inner.llm_request(request).await
+    #[test]
+    fn test_to_chat_payload_with_tools() {
+        let request = LlmRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("hi".to_string()),
+                ..Default::default()
+            }],
+            tools: Some(vec![ToolSchema {
+                name: "get_weather".to_string(),
+                description: Some("Get weather".to_string()),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+                strict: None,
+            }]),
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_chat_payload(&request);
+        let tools = payload["tools"].as_array().expect("tools array");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(tools[0]["function"]["name"], "get_weather");
+        assert_eq!(tools[0]["function"]["description"], "Get weather");
+    }
+
+    #[test]
+    fn test_to_chat_payload_with_extensions() {
+        let mut ext = serde_json::Map::new();
+        ext.insert("metadata".to_string(), serde_json::json!({"k": "v"}));
+        ext.insert("top_bool".to_string(), serde_json::json!(true));
+        let request = LlmRequest {
+            model: "m".to_string(),
+            messages: vec![],
+            extensions: Some(ext),
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_chat_payload(&request);
+        assert_eq!(payload["metadata"], serde_json::json!({"k": "v"}));
+        assert_eq!(payload["top_bool"], true);
+    }
+
+    #[test]
+    fn test_to_responses_payload_with_tools() {
+        let request = LlmRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("x".to_string()),
+                ..Default::default()
+            }],
+            tools: Some(vec![ToolSchema {
+                name: "fn1".to_string(),
+                description: Some("d".to_string()),
+                parameters: serde_json::json!({}),
+                strict: Some(true),
+            }]),
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let tools = payload["tools"].as_array().expect("tools");
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(tools[0]["name"], "fn1");
+        assert_eq!(tools[0]["strict"], true);
+    }
+
+    #[test]
+    fn test_to_responses_payload_max_tokens_to_max_output_tokens() {
+        let request = LlmRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("u".to_string()),
+                ..Default::default()
+            }],
+            max_tokens: Some(512),
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_responses_payload(&request);
+        assert_eq!(payload["max_output_tokens"], 512);
+        assert!(payload.get("max_tokens").is_none());
+    }
+
+    #[test]
+    fn test_to_responses_payload_no_system() {
+        let request = LlmRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("only user".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_responses_payload(&request);
+        assert!(payload.get("instructions").is_none());
+        assert_eq!(payload["input"].as_array().map(|a| a.len()), Some(1));
+    }
+
+    #[test]
+    fn test_split_no_system() {
+        let msgs = vec![ChatMessage {
+            role: "user".to_string(),
+            content: Some("a".to_string()),
+            ..Default::default()
+        }];
+        let (instr, rest) = OpenAIClient::split_instructions_and_messages(&msgs);
+        assert!(instr.is_none());
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0].role, "user");
+    }
+
+    #[test]
+    fn test_split_multiple_system() {
+        let msgs = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some("first".to_string()),
+                ..Default::default()
+            },
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some("second".to_string()),
+                ..Default::default()
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some("u".to_string()),
+                ..Default::default()
+            },
+        ];
+        let (instr, rest) = OpenAIClient::split_instructions_and_messages(&msgs);
+        assert_eq!(instr.as_deref(), Some("first\nsecond"));
+        assert_eq!(rest.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_tool_calls_single() {
+        let raw = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {"name": "foo", "arguments": "{\"a\":1}"}
+                    }]
+                }
+            }]
+        });
+        let tcs = OpenAIClient::extract_tool_calls_from_chat(&raw).expect("tool calls");
+        assert_eq!(tcs.len(), 1);
+        assert_eq!(tcs[0].id.as_deref(), Some("call_1"));
+        assert_eq!(tcs[0].name, "foo");
+        assert_eq!(tcs[0].arguments, serde_json::json!({"a": 1}));
+    }
+
+    #[test]
+    fn test_extract_tool_calls_multiple() {
+        let raw = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"id": "1", "function": {"name": "a", "arguments": "{}"}},
+                        {"id": "2", "function": {"name": "b", "arguments": "{\"x\":true}"}}
+                    ]
+                }
+            }]
+        });
+        let tcs = OpenAIClient::extract_tool_calls_from_chat(&raw).expect("tool calls");
+        assert_eq!(tcs.len(), 2);
+        assert_eq!(tcs[0].name, "a");
+        assert_eq!(tcs[1].name, "b");
+    }
+
+    #[test]
+    fn test_extract_tool_calls_empty_name_filtered() {
+        let raw = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"id": "1", "function": {"name": "", "arguments": "{}"}},
+                        {"id": "2", "function": {"name": "ok", "arguments": "{}"}}
+                    ]
+                }
+            }]
+        });
+        let tcs = OpenAIClient::extract_tool_calls_from_chat(&raw).expect("tool calls");
+        assert_eq!(tcs.len(), 1);
+        assert_eq!(tcs[0].name, "ok");
+    }
+
+    #[test]
+    fn test_extract_tool_calls_malformed_arguments() {
+        let raw = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "x",
+                        "function": {"name": "f", "arguments": "not-json"}
+                    }]
+                }
+            }]
+        });
+        let tcs = OpenAIClient::extract_tool_calls_from_chat(&raw).expect("tool calls");
+        assert_eq!(tcs[0].arguments, serde_json::json!({"_raw": "not-json"}));
+    }
+
+    #[test]
+    fn test_normalize_chat_json_normal() {
+        let raw = serde_json::json!({
+            "id": "chatcmpl-1",
+            "model": "gpt-4",
+            "choices": [{
+                "message": {"role": "assistant", "content": "Hello!"}
+            }]
+        });
+        let resp = OpenAIClient::normalize_chat_json(raw).expect("ok");
+        assert_eq!(resp.choices[0].message.content.as_deref(), Some("Hello!"));
+        assert_eq!(resp.choices[0].message.role, "assistant");
+        assert_eq!(resp.id.as_deref(), Some("chatcmpl-1"));
+    }
+
+    #[test]
+    fn test_normalize_chat_json_null_content_with_tool_calls() {
+        let raw = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "tc_1",
+                        "function": {"name": "w", "arguments": "{}"}
+                    }]
+                }
+            }]
+        });
+        let resp = OpenAIClient::normalize_chat_json(raw).expect("ok");
+        assert!(resp.choices[0].message.content.is_none());
+        let reqs = resp.choices[0].message.tool_calls.as_ref().expect("reqs");
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].id, "tc_1");
+        assert_eq!(reqs[0].name, "w");
+    }
+
+    #[test]
+    fn test_normalize_chat_json_missing_fields() {
+        let raw = serde_json::json!({});
+        let resp = OpenAIClient::normalize_chat_json(raw).expect("ok");
+        assert_eq!(resp.choices[0].message.role, "assistant");
+        assert!(resp.choices[0].message.content.is_none());
+        assert!(resp.choices[0].message.tool_calls.is_none());
+    }
+
+    #[test]
+    fn test_normalize_responses_json_output_text() {
+        let raw = serde_json::json!({
+            "id": "resp-1",
+            "output_text": "shortcut text",
+            "model": "gpt-5"
+        });
+        let resp = OpenAIClient::normalize_responses_json(raw).expect("ok");
+        assert_eq!(
+            resp.choices[0].message.content.as_deref(),
+            Some("shortcut text")
+        );
+    }
+
+    #[test]
+    fn test_normalize_responses_json_output_items() {
+        let raw = serde_json::json!({
+            "output": [
+                {"type": "output_text", "text": "part1"},
+                {"type": "output_text", "text": "part2"}
+            ]
+        });
+        let resp = OpenAIClient::normalize_responses_json(raw).expect("ok");
+        assert_eq!(
+            resp.choices[0].message.content.as_deref(),
+            Some("part1part2")
+        );
+    }
+
+    #[test]
+    fn test_normalize_responses_json_with_tool_calls() {
+        let raw = serde_json::json!({
+            "output": [
+                {
+                    "type": "function_call",
+                    "name": "todo",
+                    "arguments": "{\"q\":\"x\"}",
+                    "call_id": "fc_1",
+                    "id": "item-1"
+                }
+            ]
+        });
+        let resp = OpenAIClient::normalize_responses_json(raw).expect("ok");
+        let tcs = resp.tool_calls.as_ref().expect("tool_calls");
+        assert_eq!(tcs.len(), 1);
+        assert_eq!(tcs[0].name, "todo");
+        assert_eq!(tcs[0].arguments, serde_json::json!({"q": "x"}));
+        let reqs = resp.choices[0].message.tool_calls.as_ref().expect("reqs");
+        assert_eq!(reqs[0].name, "todo");
+        assert_eq!(reqs[0].id, "fc_1");
+    }
+
+    #[test]
+    fn test_decide_mode_explicit_chat() {
+        let client = mk_client(ApiMode::Chat);
+        assert!(matches!(client.decide_mode("gpt-5-mini"), ApiMode::Chat));
+        assert!(matches!(client.decide_mode("gpt-4o"), ApiMode::Chat));
+    }
+
+    #[test]
+    fn test_decide_mode_explicit_responses() {
+        let client = mk_client(ApiMode::Responses);
+        assert!(matches!(client.decide_mode("gpt-5"), ApiMode::Responses));
+        assert!(matches!(
+            client.decide_mode("gpt-4o-mini"),
+            ApiMode::Responses
+        ));
     }
 }
 
 impl OpenAIClient {
     fn decide_mode(&self, model: &str) -> ApiMode {
-        let decided = match self.inner.config().api_mode.unwrap_or(ApiMode::Chat) {
+        let decided = match self.api_mode.unwrap_or(ApiMode::Chat) {
             ApiMode::Chat => ApiMode::Chat,
             ApiMode::Responses => ApiMode::Responses,
             ApiMode::Auto => {
@@ -135,13 +552,13 @@ impl OpenAIClient {
         );
         obj.insert(
             "messages".to_string(),
-            serde_json::to_value(&req.messages).unwrap_or(serde_json::Value::Null),
+            serde_json::Value::Array(Self::map_messages_openai_chat(&req.messages)),
         );
         if let Some(tools) = Self::map_tools_for_chat(&req.tools) {
             obj.insert("tools".to_string(), tools);
         }
         if let Some(choice) = &req.tool_choice {
-            obj.insert("tool_choice".to_string(), choice.clone());
+            obj.insert("tool_choice".to_string(), choice.to_openai_value());
         }
         if let Some(temp) = req.temperature {
             obj.insert("temperature".to_string(), serde_json::Value::from(temp));
@@ -169,12 +586,9 @@ impl OpenAIClient {
         let mut rest: Vec<ChatMessage> = Vec::new();
         for m in messages {
             if m.role == "system" {
-                instructions_segments.push(m.content.clone());
+                instructions_segments.push(m.content.clone().unwrap_or_default());
             } else {
-                rest.push(ChatMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
-                });
+                rest.push(m.clone());
             }
         }
         let instructions = if instructions_segments.is_empty() {
@@ -242,13 +656,13 @@ impl OpenAIClient {
         }
         obj.insert(
             "input".to_string(),
-            serde_json::to_value(inputs).unwrap_or(serde_json::Value::Null),
+            serde_json::Value::Array(Self::map_messages_openai_chat(&inputs)),
         );
         if let Some(t) = tools {
             obj.insert("tools".to_string(), t);
         }
         if let Some(choice) = &req.tool_choice {
-            obj.insert("tool_choice".to_string(), choice.clone());
+            obj.insert("tool_choice".to_string(), choice.to_openai_value());
         }
         if let Some(temp) = req.temperature {
             obj.insert("temperature".to_string(), serde_json::Value::from(temp));
@@ -313,6 +727,93 @@ impl OpenAIClient {
         }
     }
 
+    fn extract_tool_call_requests_from_chat(
+        raw: &serde_json::Value,
+    ) -> Option<Vec<crate::types::ToolCallRequest>> {
+        let mut requests = Vec::new();
+        if let Some(choices) = raw.get("choices").and_then(|v| v.as_array()) {
+            for ch in choices {
+                if let Some(msg) = ch.get("message") {
+                    if let Some(tc_arr) = msg.get("tool_calls").and_then(|v| v.as_array()) {
+                        for tc in tc_arr {
+                            let id = tc
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let name = tc
+                                .get("function")
+                                .and_then(|f| f.get("name"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let args_str = tc
+                                .get("function")
+                                .and_then(|f| f.get("arguments"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("{}");
+                            let arguments = serde_json::from_str::<serde_json::Value>(args_str)
+                                .unwrap_or(serde_json::json!({"_raw": args_str}));
+                            if !name.is_empty() && !id.is_empty() {
+                                requests.push(crate::types::ToolCallRequest {
+                                    id,
+                                    name,
+                                    arguments,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if requests.is_empty() {
+            None
+        } else {
+            Some(requests)
+        }
+    }
+
+    fn extract_tool_call_requests_from_responses(
+        raw: &serde_json::Value,
+    ) -> Option<Vec<crate::types::ToolCallRequest>> {
+        let mut requests = Vec::new();
+        if let Some(items) = raw.get("output").and_then(|v| v.as_array()) {
+            for item in items {
+                if item.get("type").and_then(|t| t.as_str()) == Some("function_call") {
+                    let name = item
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let args_str = item
+                        .get("arguments")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("{}");
+                    let arguments = serde_json::from_str::<serde_json::Value>(args_str)
+                        .unwrap_or(serde_json::json!({"_raw": args_str}));
+                    let id = item
+                        .get("call_id")
+                        .or_else(|| item.get("id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !name.is_empty() && !id.is_empty() {
+                        requests.push(crate::types::ToolCallRequest {
+                            id,
+                            name,
+                            arguments,
+                        });
+                    }
+                }
+            }
+        }
+        if requests.is_empty() {
+            None
+        } else {
+            Some(requests)
+        }
+    }
+
     fn extract_tool_calls_from_responses(
         raw: &serde_json::Value,
     ) -> Option<Vec<crate::types::ToolCall>> {
@@ -357,7 +858,7 @@ impl OpenAIClient {
         }
     }
 
-    fn normalize_responses_json(raw: serde_json::Value) -> Result<LlmResponse, ClientError> {
+    fn normalize_responses_json(raw: serde_json::Value) -> Result<LlmResponse, LlmError> {
         let output_text = raw
             .get("output_text")
             .and_then(|v| v.as_str().map(|s| s.to_string()))
@@ -372,21 +873,23 @@ impl OpenAIClient {
                         }
                     }
                 }
-                if buf.is_empty() {
-                    None
-                } else {
-                    Some(buf)
-                }
+                if buf.is_empty() { None } else { Some(buf) }
             });
-        let content = output_text.unwrap_or_default();
+        let content = output_text;
         log::debug!(
             "OpenAIClient::normalize_responses_json content_len={}",
-            content.len()
+            content.as_ref().map(|s| s.len()).unwrap_or(0)
         );
-        let role = "assistant".to_string();
+        let tool_calls = Self::extract_tool_calls_from_responses(&raw);
+        let tool_call_requests = Self::extract_tool_call_requests_from_responses(&raw);
         let choice = LlmChoice {
             index: 0,
-            message: ChatMessage { role, content },
+            message: ChatMessage {
+                role: "assistant".to_string(),
+                content,
+                tool_calls: tool_call_requests,
+                ..Default::default()
+            },
             finish_reason: None,
         };
         let id = raw
@@ -400,7 +903,6 @@ impl OpenAIClient {
         let usage = raw
             .get("usage")
             .and_then(|u| serde_json::from_value::<Usage>(u.clone()).ok());
-        let tool_calls = Self::extract_tool_calls_from_responses(&raw);
         Ok(LlmResponse {
             id,
             created: None,
@@ -411,8 +913,7 @@ impl OpenAIClient {
         })
     }
 
-    fn normalize_chat_json(raw: serde_json::Value) -> Result<LlmResponse, ClientError> {
-        // Content may be null when tool_calls are present. Coerce to empty string.
+    fn normalize_chat_json(raw: serde_json::Value) -> Result<LlmResponse, LlmError> {
         let content = raw
             .get("choices")
             .and_then(|v| v.as_array())
@@ -420,8 +921,7 @@ impl OpenAIClient {
             .and_then(|ch| ch.get("message"))
             .and_then(|msg| msg.get("content"))
             .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+            .map(|s| s.to_string());
         let role = raw
             .get("choices")
             .and_then(|v| v.as_array())
@@ -431,9 +931,16 @@ impl OpenAIClient {
             .and_then(|v| v.as_str())
             .unwrap_or("assistant")
             .to_string();
+        let tool_calls = Self::extract_tool_calls_from_chat(&raw);
+        let tool_call_requests = Self::extract_tool_call_requests_from_chat(&raw);
         let choice = LlmChoice {
             index: 0,
-            message: ChatMessage { role, content },
+            message: ChatMessage {
+                role,
+                content,
+                tool_calls: tool_call_requests,
+                ..Default::default()
+            },
             finish_reason: None,
         };
         let id = raw
@@ -448,7 +955,6 @@ impl OpenAIClient {
         let usage = raw
             .get("usage")
             .and_then(|u| serde_json::from_value::<Usage>(u.clone()).ok());
-        let tool_calls = Self::extract_tool_calls_from_chat(&raw);
         Ok(LlmResponse {
             id,
             created,
@@ -482,24 +988,23 @@ impl OpenAIClient {
     ///
     /// ```rust,no_run
     /// use futures::StreamExt;
-    /// use llm_client::providers::OpenAIClient;
+    /// use llm_client::auth::ApiKeyAuth;
+    /// use llm_client::client::{LlmClient, WireFormat};
     /// use llm_client::{LlmRequest, ChatMessage, StreamEvent};
-    /// use llm_client::model_client::ClientConfig;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = OpenAIClient::new(ClientConfig {
-    ///     base_url: "https://api.openai.com".into(),
-    ///     api_key: Some("sk-...".into()),
-    ///     ..Default::default()
-    /// });
+    /// let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    ///     .base_url("https://api.openai.com")
+    ///     .auth(ApiKeyAuth::new("sk-..."))
+    ///     .build()?;
     ///
     /// let req = LlmRequest {
     ///     model: "gpt-4".into(),
-    ///     messages: vec![ChatMessage { role: "user".into(), content: "Hello".into() }],
+    ///     messages: vec![ChatMessage { role: "user".into(), content: Some("Hello".into()), ..Default::default() }],
     ///     ..Default::default()
     /// };
     ///
-    /// let mut stream = client.llm_stream(req).await?;
+    /// let mut stream = client.chat_stream(req).await?;
     /// while let Some(event) = stream.next().await {
     ///     match event? {
     ///         StreamEvent::ContentDelta { delta } => print!("{}", delta),
@@ -513,13 +1018,14 @@ impl OpenAIClient {
     pub async fn llm_stream(
         &self,
         req: LlmRequest,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
         let (path, mut payload) = match mode {
-            ApiMode::Chat => ("/v1/chat/completions", Self::to_chat_payload(&req)),
-            ApiMode::Responses | ApiMode::Auto => {
-                ("/v1/responses", Self::to_responses_payload(&req))
-            }
+            ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
+            ApiMode::Responses | ApiMode::Auto => (
+                self.responses_path.as_str(),
+                Self::to_responses_payload(&req),
+            ),
         };
 
         // Inject streaming flags
@@ -538,19 +1044,27 @@ impl OpenAIClient {
 
         Ok(crate::stream::sse_event_stream(response))
     }
+}
 
-    /// Stream from a pre-built JSON payload, bypassing `LlmRequest` deserialization.
+#[cfg(target_arch = "wasm32")]
+impl OpenAIClient {
+    /// Buffer-then-parse SSE streaming for WASM targets.
     ///
-    /// Use this when the caller already has a fully-formed OpenAI-compatible
-    /// request body (e.g. from the tool-calling orchestrator where messages
-    /// contain `tool_calls`, `tool_call_id`, and nullable `content` fields
-    /// that `ChatMessage` cannot represent).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub async fn llm_stream_raw(
+    /// Uses [`HttpModelClient::post_sse_buffered`] to get the complete response,
+    /// then parses all SSE events at once. No incremental token delivery.
+    pub async fn llm_stream(
         &self,
-        mut payload: serde_json::Value,
-    ) -> Result<crate::stream::LlmEventStream, ClientError> {
-        // Inject streaming flags
+        req: LlmRequest,
+    ) -> Result<crate::stream::LlmEventStream, LlmError> {
+        let mode = self.decide_mode(&req.model);
+        let (path, mut payload) = match mode {
+            ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
+            ApiMode::Responses | ApiMode::Auto => (
+                self.responses_path.as_str(),
+                Self::to_responses_payload(&req),
+            ),
+        };
+
         if let Some(obj) = payload.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
             obj.insert(
@@ -559,23 +1073,26 @@ impl OpenAIClient {
             );
         }
 
-        let path = "/v1/chat/completions";
-        log::info!("OpenAIClient::llm_stream_raw endpoint={}", path);
+        log::info!(
+            "OpenAIClient::llm_stream (wasm) mode={:?} endpoint={}",
+            mode,
+            path
+        );
 
-        let response = self.inner.post_sse(path, payload).await?;
-
-        Ok(crate::stream::sse_event_stream(response))
+        let body = self.inner.post_sse_buffered(path, payload).await?;
+        Ok(crate::stream::sse_event_stream_from_buffer(body))
     }
 }
 
 impl OpenAIClient {
-    pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, ClientError> {
+    pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         let mode = self.decide_mode(&req.model);
         match mode {
             ApiMode::Chat => {
+                let path = self.chat_path.clone();
                 let value = Self::to_chat_payload(&req);
-                log::info!("OpenAIClient::llm mode=chat endpoint=/v1/chat/completions");
-                let raw = self.inner.post_json("/v1/chat/completions", value).await?;
+                log::info!("OpenAIClient::llm mode=chat endpoint={}", path);
+                let raw = self.inner.post_json(&path, value).await?;
                 // Normalize chat response to handle null content when tool_calls are present
                 let mut parsed = Self::normalize_chat_json(raw.clone())?;
                 // Enrich with tool calls if present (already included by normalize, but keep to ensure)
@@ -583,12 +1100,29 @@ impl OpenAIClient {
                 Ok(parsed)
             }
             ApiMode::Responses | ApiMode::Auto => {
+                let path = self.responses_path.clone();
                 let value = Self::to_responses_payload(&req);
-                log::info!("OpenAIClient::llm mode=responses endpoint=/v1/responses");
-                let raw = self.inner.post_json("/v1/responses", value).await?;
+                log::info!("OpenAIClient::llm mode=responses endpoint={}", path);
+                let raw = self.inner.post_json(&path, value).await?;
                 let normalized = Self::normalize_responses_json(raw)?;
                 Ok(normalized)
             }
         }
+    }
+}
+
+impl LlmProvider for OpenAIClient {
+    fn capabilities(&self) -> ClientCapabilities {
+        self.inner.capabilities()
+    }
+
+    fn chat<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm(req).await })
+    }
+
+    fn chat_stream<'a>(&'a self, req: LlmRequest) -> crate::provider::ChatStreamFuture<'a> {
+        let this = self.clone();
+        Box::pin(async move { this.llm_stream(req).await })
     }
 }

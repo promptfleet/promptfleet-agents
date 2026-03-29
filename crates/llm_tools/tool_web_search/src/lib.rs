@@ -235,11 +235,7 @@ fn truncate(s: &str, max: usize) -> &str {
     if s.len() <= max {
         s
     } else {
-        let mut end = max.min(s.len());
-        while end > 0 && !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        &s[..end]
+        &s[..s.floor_char_boundary(max)]
     }
 }
 

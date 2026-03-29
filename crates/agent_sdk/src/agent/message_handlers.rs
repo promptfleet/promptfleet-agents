@@ -17,7 +17,7 @@ use crate::error::{SdkError, SdkResult};
 #[cfg(feature = "llm-engine")]
 use crate::agent::{
     history_policy::HistoryPolicyRuntime,
-    llm_orchestrator::{execute_runtime, LlmInvoker, LlmPolicy, LlmRequestDefaults},
+    llm_orchestrator::{LlmInvoker, LlmPolicy, LlmRequestDefaults, execute_runtime},
     tools::{ToolExecutor, ToolRegistry, ToolSpec},
 };
 #[cfg(feature = "llm-engine")]
@@ -115,27 +115,6 @@ impl MessageHandlerManager {
             Box::pin(handler(msg_ctx, task_ctx))
         }));
         info!("Activated Custom message handler");
-    }
-
-    #[cfg(feature = "llm-engine")]
-    pub(crate) fn set_llm_tools_handler(
-        &mut self,
-        llm: Arc<dyn LlmInvoker>,
-        model: &str,
-        tools: ToolRegistry,
-        policy: Option<LlmPolicy>,
-        system_message: Option<String>,
-        history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
-    ) -> SdkResult<()> {
-        self.set_llm_tools_handler_configured(
-            llm,
-            model,
-            tools,
-            policy,
-            system_message,
-            None,
-            history_policy_runtime,
-        )
     }
 
     /// Tools-first LLM handler with model-aware request defaults.
@@ -463,11 +442,12 @@ mod tests {
         let resp = mgr.handle_message(msg_ctx, None).await.expect("ok");
         match resp {
             RuntimeResponse::Message(msg) => {
-                assert!(msg
-                    .message
-                    .parts
-                    .iter()
-                    .any(|p| matches!(p, agent_core::ContentPart::Text(_))));
+                assert!(
+                    msg.message
+                        .parts
+                        .iter()
+                        .any(|p| matches!(p, agent_core::ContentPart::Text(_)))
+                );
             }
             _ => panic!("expected Message"),
         }

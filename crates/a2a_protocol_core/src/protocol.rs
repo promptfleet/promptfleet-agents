@@ -1,13 +1,13 @@
 //! A2A v1.0 Protocol Handler
 
 use crate::{
-    jsonrpc_error_codes, A2AError, A2AMethodRegistry, A2AResult, A2ATransport, AgentCard,
-    MethodMetadata,
+    A2AError, A2AMethodRegistry, A2AResult, A2ATransport, AgentCard, MethodMetadata,
+    jsonrpc_error_codes,
 };
 use protocol_transport_core::{
     JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -114,6 +114,9 @@ impl A2AProtocol {
                 self.handle_notification(notification)?;
                 Ok(None)
             }
+            _ => Err(A2AError::unsupported_operation(
+                "This JSON-RPC incoming message variant is not supported by A2AProtocol",
+            )),
         }
     }
 
@@ -160,7 +163,7 @@ impl A2AProtocol {
         }
 
         // ── Basic agent methods ─────────────────────────────────────
-        self.register_method("pf.agent.ping", "A2A agent ping", |request| {
+        self.register_method("Ping", "A2A agent ping", |request| {
             #[cfg(feature = "time-stamps")]
             let timestamp = chrono::Utc::now().to_rfc3339();
             #[cfg(not(feature = "time-stamps"))]
@@ -189,7 +192,16 @@ impl A2AProtocol {
                 "Get authenticated extended agent card",
                 move |request| {
                     let params: AuthenticatedExtendedCardParams =
-                        serde_json::from_value(request.params.clone()).unwrap_or_default();
+                        match serde_json::from_value(request.params.clone()) {
+                            Ok(p) => p,
+                            Err(_) => {
+                                return Ok(JsonRpcResponse::error(
+                                    request.id,
+                                    jsonrpc_error_codes::INVALID_PARAMS,
+                                    "Invalid parameters for GetExtendedAgentCard".to_string(),
+                                ));
+                            }
+                        };
                     let discovery = DefaultAgentDiscovery::new(agent_card_for_discovery.clone());
                     match discovery.agent_authenticated_extended_card(params) {
                         Ok(result) => Ok(JsonRpcResponse::success(request.id, json!(result))),
@@ -308,7 +320,7 @@ mod tests {
         let mut protocol = A2AProtocol::new(card);
         protocol.register_a2a_methods(None);
 
-        let ping = JsonRpcRequest::new(json!("r1"), "pf.agent.ping".to_string(), json!({}));
+        let ping = JsonRpcRequest::new(json!("r1"), "Ping".to_string(), json!({}));
         let resp = protocol.handle_request(ping).unwrap();
         assert!(resp.is_success());
         assert_eq!(resp.result.unwrap()["pong"], true);
@@ -359,12 +371,16 @@ mod tests {
             None,
             Arc::new(|req| Ok(JsonRpcResponse::success(req.id, json!({})))),
         );
-        assert!(protocol
-            .validate_request_params("test", &json!(null))
-            .is_err());
-        assert!(protocol
-            .validate_request_params("test", &json!({"a": 1}))
-            .is_ok());
+        assert!(
+            protocol
+                .validate_request_params("test", &json!(null))
+                .is_err()
+        );
+        assert!(
+            protocol
+                .validate_request_params("test", &json!({"a": 1}))
+                .is_ok()
+        );
     }
 
     #[tokio::test]

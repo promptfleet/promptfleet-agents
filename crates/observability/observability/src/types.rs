@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use observability_core::traits::LogLevel;
 #[cfg(any(feature = "otel", feature = "prometheus"))]
 use observability_core::ObservabilityPlugin;
+use observability_core::traits::LogLevel;
 use observability_core::{
     ObservabilityConfig as CoreLoggingConfig, ObservabilityManager, ObservabilityResult,
 };
@@ -63,6 +63,10 @@ pub trait ObsHandle: Send + Sync {
 
 pub type SharedObs = Arc<dyn ObsHandle>;
 
+fn default_otel_metrics_enabled() -> bool {
+    true
+}
+
 /// Unified configuration for the happy path.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -115,6 +119,8 @@ impl ObservabilityConfig {
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct OtelConfig {
     pub enabled: bool,
+    #[cfg_attr(feature = "serde", serde(default = "default_otel_metrics_enabled"))]
+    pub metrics_enabled: bool,
     pub otlp_endpoint: String,
     pub batch_size: usize,
     #[cfg_attr(feature = "serde", serde(with = "duration_millis"))]
@@ -171,6 +177,7 @@ impl OtelConfig {
     pub fn disabled() -> Self {
         Self {
             enabled: false,
+            metrics_enabled: default_otel_metrics_enabled(),
             otlp_endpoint: "http://localhost:4317".to_string(),
             batch_size: 512,
             export_timeout: Duration::from_secs(30),
@@ -221,6 +228,8 @@ struct ObsInner {
     #[cfg_attr(not(any(feature = "otel", feature = "prometheus")), allow(dead_code))]
     otel_configured: bool,
     #[cfg_attr(not(any(feature = "otel", feature = "prometheus")), allow(dead_code))]
+    otel_metrics_enabled: bool,
+    #[cfg_attr(not(feature = "prometheus"), allow(dead_code))]
     prometheus_configured: bool,
     init_notes: Vec<String>,
 
@@ -253,6 +262,7 @@ impl Obs {
             inner: Arc::new(ObsInner {
                 _manager: ObservabilityManager::default(),
                 otel_configured: false,
+                otel_metrics_enabled: false,
                 prometheus_configured: false,
                 init_notes: vec![],
                 flush_interval: Duration::from_secs(
@@ -375,6 +385,7 @@ impl Obs {
             inner: Arc::new(ObsInner {
                 _manager: manager,
                 otel_configured: cfg.otel.enabled,
+                otel_metrics_enabled: cfg.otel.enabled && cfg.otel.metrics_enabled,
                 prometheus_configured: cfg.prometheus.enabled,
                 init_notes,
                 flush_interval,
@@ -467,8 +478,10 @@ impl ObsHandle for Obs {
 
         // Fan-out: if multiple backends are enabled, emit to all.
         #[cfg(feature = "otel")]
-        if let Some(otel) = self.otel_plugin() {
-            otel.record_metric(name, value, &labels);
+        if self.inner.otel_metrics_enabled {
+            if let Some(otel) = self.otel_plugin() {
+                otel.record_metric(name, value, &labels);
+            }
         }
 
         #[cfg(feature = "prometheus")]
@@ -567,7 +580,7 @@ impl ObservabilityConfig {
     ///   - Filtering: `OBS_LOG_LEVEL` (PromptFleet) or `RUST_LOG` (Rust ecosystem)
     ///   - Format: `PF_LOG_FORMAT` (PromptFleet) or `OBS_LOG_FORMAT` (back-compat) or `LOG_FORMAT` (alias)
     ///   - Flags: `OBS_LOG_STRUCTURED`, `OBS_LOG_CONTEXT`
-    /// - OTEL: `OBS_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OBS_OTEL_SAMPLING`, `OBS_OTEL_SAMPLING_RATIO`
+    /// - OTEL: `OBS_OTEL_ENABLED`, `OBS_OTEL_METRICS_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OBS_OTEL_SAMPLING`, `OBS_OTEL_SAMPLING_RATIO`
     /// - Prometheus: `OBS_PROMETHEUS_ENABLED`, `PROMETHEUS_PUSHGATEWAY`, `PROMETHEUS_JOB_NAME`, `PROMETHEUS_INSTANCE`
     pub fn from_env() -> Self {
         fn env_bool(key: &str) -> Option<bool> {
@@ -645,6 +658,9 @@ impl ObservabilityConfig {
                 || std::env::var("OTEL_SERVICE_NAME").is_ok()
             {
                 cfg.otel.enabled = true;
+            }
+            if let Some(enabled) = env_bool("OBS_OTEL_METRICS_ENABLED") {
+                cfg.otel.metrics_enabled = enabled;
             }
             if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
                 cfg.otel.otlp_endpoint = endpoint;
@@ -735,6 +751,9 @@ impl ObservabilityConfig {
         fn get_u64(v: &ConfigValue, key: &str) -> Option<u64> {
             v.get(key)?.as_u64()
         }
+        fn get_duration_millis(v: &ConfigValue, key: &str) -> Option<Duration> {
+            get_u64(v, key).map(Duration::from_millis)
+        }
         fn get_usize(v: &ConfigValue, key: &str) -> Option<usize> {
             v.get(key)?.as_u64().map(|n| n as usize)
         }
@@ -760,6 +779,9 @@ impl ObservabilityConfig {
         if let Some(s) = get_str(obs_val, "service_namespace") {
             cfg.service_namespace = s;
         }
+        if let Some(enabled) = get_bool(obs_val, "metrics_enabled") {
+            cfg.otel.metrics_enabled = enabled;
+        }
 
         // logging
         if let Some(logging) = get_obj(obs_val, "logging") {
@@ -784,13 +806,18 @@ impl ObservabilityConfig {
             if let Some(enabled) = get_bool(&otel_val, "enabled") {
                 cfg.otel.enabled = enabled;
             }
+            if let Some(enabled) = get_bool(&otel_val, "metrics_enabled") {
+                cfg.otel.metrics_enabled = enabled;
+            }
             if let Some(endpoint) = get_str(&otel_val, "otlp_endpoint") {
                 cfg.otel.otlp_endpoint = endpoint;
             }
             if let Some(bs) = get_usize(&otel_val, "batch_size") {
                 cfg.otel.batch_size = bs;
             }
-            if let Some(secs) = get_u64(&otel_val, "export_timeout_secs") {
+            if let Some(timeout) = get_duration_millis(&otel_val, "export_timeout") {
+                cfg.otel.export_timeout = timeout;
+            } else if let Some(secs) = get_u64(&otel_val, "export_timeout_secs") {
                 cfg.otel.export_timeout = Duration::from_secs(secs);
             }
             if let Some(sampling) = get_str(&otel_val, "sampling") {
@@ -830,7 +857,9 @@ impl ObservabilityConfig {
             if let Some(inst) = get_str(&p_val, "instance") {
                 cfg.prometheus.instance = inst;
             }
-            if let Some(secs) = get_u64(&p_val, "push_interval_secs") {
+            if let Some(interval) = get_duration_millis(&p_val, "push_interval") {
+                cfg.prometheus.push_interval = interval;
+            } else if let Some(secs) = get_u64(&p_val, "push_interval_secs") {
                 cfg.prometheus.push_interval = Duration::from_secs(secs);
             }
             if let Some(cr) = get_bool(&p_val, "cardinality_reduction") {
@@ -848,6 +877,8 @@ impl ObservabilityConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "config")]
+    use serde_json::json;
 
     #[test]
     fn init_default_config_works() {
@@ -864,6 +895,7 @@ mod tests {
         assert_eq!(cfg.service_name, back.service_name);
         assert_eq!(cfg.service_version, back.service_version);
         assert_eq!(cfg.otel.enabled, back.otel.enabled);
+        assert_eq!(cfg.otel.metrics_enabled, back.otel.metrics_enabled);
         assert_eq!(cfg.prometheus.enabled, back.prometheus.enabled);
     }
 
@@ -882,6 +914,7 @@ mod tests {
             },
             otel: OtelConfig {
                 enabled: true,
+                metrics_enabled: true,
                 otlp_endpoint: "http://otel:4317".to_string(),
                 batch_size: 256,
                 export_timeout: Duration::from_millis(5000),
@@ -901,6 +934,7 @@ mod tests {
         let back: ObservabilityConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(cfg.service_name, back.service_name);
         assert_eq!(cfg.otel.enabled, back.otel.enabled);
+        assert_eq!(cfg.otel.metrics_enabled, back.otel.metrics_enabled);
         assert_eq!(cfg.otel.otlp_endpoint, back.otel.otlp_endpoint);
         assert_eq!(cfg.otel.batch_size, back.otel.batch_size);
         assert_eq!(cfg.otel.export_timeout, back.otel.export_timeout);
@@ -947,6 +981,7 @@ mod tests {
     fn serde_duration_millis_roundtrip() {
         let otel = OtelConfig {
             enabled: true,
+            metrics_enabled: false,
             otlp_endpoint: "http://localhost:4317".to_string(),
             batch_size: 512,
             export_timeout: Duration::from_millis(7500),
@@ -956,6 +991,100 @@ mod tests {
         assert!(json.contains("7500"), "Duration should serialize as millis");
         let back: OtelConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(otel.export_timeout, back.export_timeout);
+        assert!(!back.metrics_enabled);
+    }
+
+    #[cfg(feature = "config")]
+    #[test]
+    fn from_value_roundtrips_canonical_duration_fields() {
+        let cfg = ObservabilityConfig {
+            service_name: "test-agent".to_string(),
+            service_version: "2.0.0".to_string(),
+            service_namespace: "prod".to_string(),
+            logging: CoreLoggingConfig {
+                level: "debug".to_string(),
+                format: "json".to_string(),
+                structured: true,
+                context_enrichment: true,
+                default_context: Default::default(),
+            },
+            otel: OtelConfig {
+                enabled: true,
+                metrics_enabled: true,
+                otlp_endpoint: "http://otel:4317".to_string(),
+                batch_size: 256,
+                export_timeout: Duration::from_millis(5_500),
+                sampling: OtelSampling::ParentBased,
+            },
+            prometheus: PrometheusConfig {
+                enabled: true,
+                pushgateway_endpoint: Some("http://pushgw:9091".to_string()),
+                job_name: "my-job".to_string(),
+                instance: "pod-1".to_string(),
+                push_interval: Duration::from_millis(15_250),
+                cardinality_reduction: false,
+                max_cardinality: 5000,
+            },
+        };
+
+        let json = serde_json::to_value(&cfg).unwrap();
+        let roundtrip: ObservabilityConfig = serde_json::from_value(json.clone()).unwrap();
+        let from_value = ObservabilityConfig::from_value(&json);
+
+        assert_eq!(cfg, roundtrip);
+        assert_eq!(cfg, from_value);
+    }
+
+    #[cfg(feature = "config")]
+    #[test]
+    fn from_value_prefers_canonical_duration_fields_over_legacy_seconds() {
+        let cfg = ObservabilityConfig::from_value(&json!({
+            "observability": {
+                "service_name": "legacy-bridge",
+                "service_version": "1.0.0",
+                "service_namespace": "prod",
+                "otel": {
+                    "enabled": true,
+                    "metrics_enabled": false,
+                    "otlp_endpoint": "http://otel:4317",
+                    "batch_size": 128,
+                    "export_timeout": 1500,
+                    "export_timeout_secs": 99,
+                    "sampling": "always_off"
+                },
+                "prometheus": {
+                    "enabled": true,
+                    "pushgateway_endpoint": "http://pushgw:9091",
+                    "job_name": "bridge",
+                    "instance": "pod-a",
+                    "push_interval": 2500,
+                    "push_interval_secs": 88
+                }
+            }
+        }));
+
+        assert_eq!(cfg.otel.export_timeout, Duration::from_millis(1500));
+        assert!(!cfg.otel.metrics_enabled);
+        assert_eq!(cfg.prometheus.push_interval, Duration::from_millis(2500));
+        assert!(cfg.otel.enabled);
+        assert!(cfg.prometheus.enabled);
+    }
+
+    #[cfg(feature = "config")]
+    #[test]
+    fn from_value_accepts_root_metrics_enabled_for_otel_runtime() {
+        let cfg = ObservabilityConfig::from_value(&json!({
+            "observability": {
+                "metrics_enabled": false,
+                "otel": {
+                    "enabled": true,
+                    "otlp_endpoint": "http://otel:4317"
+                }
+            }
+        }));
+
+        assert!(cfg.otel.enabled);
+        assert!(!cfg.otel.metrics_enabled);
     }
 
     #[test]
@@ -987,7 +1116,10 @@ mod tests {
     fn health_marks_failed_backends_when_configured_but_invalid() {
         // This test asserts "best-effort init": invalid backend configs must not panic,
         // and health must surface the failure as `Some(false)` with a helpful note.
+        #[cfg(any(feature = "otel", feature = "prometheus"))]
         let mut cfg = ObservabilityConfig::default();
+        #[cfg(not(any(feature = "otel", feature = "prometheus")))]
+        let cfg = ObservabilityConfig::default();
 
         #[cfg(feature = "otel")]
         {

@@ -152,7 +152,7 @@ pub trait McpToolSource: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_forwarded_headers_meta, MCP_FORWARDED_HEADERS_META_KEY};
+    use super::{MCP_FORWARDED_HEADERS_META_KEY, build_forwarded_headers_meta};
     use std::collections::HashMap;
 
     #[test]

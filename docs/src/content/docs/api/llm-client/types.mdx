@@ -1,0 +1,152 @@
+---
+title: "types"
+description: "types module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Structs
+
+### `ChatMessage`
+
+Provider-neutral chat message supporting text, tool calls, and tool results.
+
+Each provider maps this internal representation to its own wire format:
+- OpenAI: `tool_calls` in assistant messages, `role: "tool"` for results
+- Anthropic: `tool_use` content blocks, `tool_result` content blocks
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | `String` |  |
+| `content` | `Option&lt;String&gt;` |  |
+| `tool_calls` | `Option&lt;Vec&lt;ToolCallRequest&gt;&gt;` | Tool calls requested by the assistant (present in assistant messages). |
+| `tool_call_id` | `Option&lt;String&gt;` | ID of the tool call this message is responding to (present in tool-result messages). |
+| `name` | `Option&lt;String&gt;` | Function name for tool-result messages. |
+
+### `ToolCallRequest`
+
+A tool call as requested by the LLM in an assistant message.
+
+`arguments` is normalized to `serde_json::Value` internally — OpenAI sends
+arguments as a JSON string, Anthropic sends `input` as a JSON object. Each
+provider normalizes on ingest and serializes back to its wire format.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `name` | `String` |  |
+| `arguments` | `serde_json::Value` |  |
+
+### `ToolSchema`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `parameters` | `serde_json::Value` |  |
+| `strict` | `Option&lt;bool&gt;` |  |
+
+### `LlmRequest`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `String` |  |
+| `messages` | `Vec&lt;ChatMessage&gt;` |  |
+| `tools` | `Option&lt;Vec&lt;ToolSchema&gt;&gt;` |  |
+| `tool_choice` | `Option&lt;ToolChoice&gt;` |  |
+| `temperature` | `Option&lt;f32&gt;` |  |
+| `max_tokens` | `Option&lt;u32&gt;` |  |
+| `extensions` | `Option&lt;serde_json::Map&lt;String, serde_json::Value&gt;&gt;` |  |
+
+### `Usage`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt_tokens` | `Option&lt;u32&gt;` |  |
+| `completion_tokens` | `Option&lt;u32&gt;` |  |
+| `total_tokens` | `Option&lt;u32&gt;` |  |
+
+### `LlmChoice`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `index` | `u32` |  |
+| `message` | `ChatMessage` |  |
+| `finish_reason` | `Option&lt;String&gt;` |  |
+
+### `ToolCall`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Option&lt;String&gt;` |  |
+| `call_id` | `Option&lt;String&gt;` |  |
+| `name` | `String` |  |
+| `arguments` | `serde_json::Value` |  |
+
+### `LlmResponse`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `Option&lt;String&gt;` |  |
+| `created` | `Option&lt;u64&gt;` |  |
+| `model` | `Option&lt;String&gt;` |  |
+| `choices` | `Vec&lt;LlmChoice&gt;` |  |
+| `usage` | `Option&lt;Usage&gt;` |  |
+| `tool_calls` | `Option&lt;Vec&lt;ToolCall&gt;&gt;` |  |
+
+## Enums
+
+### `ToolChoice`
+
+How the model should choose tools (OpenAI / Anthropic wire formats mapped internally).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Auto` |  |
+| `None` |  |
+| `Required` |  |
+| `Function(String)` |  |
+
+**Methods**
+
+#### `to_openai_value`
+
+```rust
+fn to_openai_value(&self) -> serde_json::Value
+```
+
+OpenAI Chat Completions / Responses `tool_choice` JSON.
+
+#### `to_anthropic_value`
+
+```rust
+fn to_anthropic_value(&self) -> serde_json::Value
+```
+
+Anthropic Messages `tool_choice` JSON.

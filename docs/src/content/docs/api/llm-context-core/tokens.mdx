@@ -1,0 +1,79 @@
+---
+title: "tokens"
+description: "Fast token estimation for LLM context budgeting."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Fast token estimation for LLM context budgeting.
+
+Uses a character-based heuristic (~4 chars per token for English) that is
+WASM-safe and requires zero external dependencies. Accuracy is within ±15%
+of actual BPE tokenizer counts for typical English text.
+
+For precise counting, use a tokenizer library (e.g. `tiktoken-rs`) at the
+caller level and feed exact counts into [`ContextBudget`].
+
+## Functions
+
+### `estimate_tokens`
+
+```rust
+fn estimate_tokens(text: &str) -> u32
+```
+
+Estimate token count for a text string.
+
+Uses the widely-accepted heuristic of ~4 characters per token for English text,
+with a small overhead for BPE tokenizer framing. Non-ASCII text uses a slightly
+higher ratio (3 chars/token) to account for multi-byte characters.
+
+### `estimate_message_tokens`
+
+```rust
+fn estimate_message_tokens(role: &str, content: &str) -> u32
+```
+
+Estimate tokens for a single OpenAI-format chat message.
+
+Accounts for role overhead (~4 tokens: role tag, separators, etc.)
+plus the content tokens.
+
+### `estimate_message_json_tokens`
+
+```rust
+fn estimate_message_json_tokens(msg: &serde_json::Value) -> u32
+```
+
+Estimate tokens for a JSON-serialized message value (OpenAI format).
+
+Handles `role`, `content`, and `tool_calls` fields. Tool calls add
+additional overhead for function name and arguments.
+
+### `estimate_messages_tokens`
+
+```rust
+fn estimate_messages_tokens(messages: &[serde_json::Value]) -> u32
+```
+
+Estimate total token count for a sequence of OpenAI-format message values.
+
+Includes a ~3 token overhead for the overall messages array framing.
+
+### `estimate_tool_schema_tokens`
+
+```rust
+fn estimate_tool_schema_tokens(tool_json: &serde_json::Value) -> u32
+```
+
+Estimate tokens for a tool schema definition (for budget reservation).
+
+### `estimate_tools_tokens`
+
+```rust
+fn estimate_tools_tokens(tools_json: &[serde_json::Value]) -> u32
+```
+
+Estimate total tokens for all tool schemas.

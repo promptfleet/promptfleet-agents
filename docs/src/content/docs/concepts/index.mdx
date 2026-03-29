@@ -1,0 +1,113 @@
+---
+title: Thinking in PromptFleet
+description: Design philosophy — dual-target, crate composition, feature-flag opt-in.
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+PromptFleet Agents is a Rust workspace of 25 crates designed around three principles: **dual-target builds**, **crate composition**, and **feature-flag opt-in**. Understanding these principles will help you make the right choices when building agents.
+
+## Dual-target philosophy
+
+Every agent you build from `agent_sdk` can compile to two targets from the same source:
+
+| Target | Runtime | Use case |
+|--------|---------|----------|
+| `wasm32-wasip1` (WASI Preview 1) | Spin locally or SpinKube on Kubernetes (serverless; ~4.8 ms cold start, ~0.6 MB/agent) | Run `spin up` for dev/CI; deploy the same WASM to SpinKube in production |
+| Native (`x86_64` / `aarch64`) | Tokio + Axum | Local development, testing, sub-agent delegation, AG-UI streaming |
+
+The SDK uses `cfg(target_arch = "wasm32")` gates internally so your agent code stays the same — only the entry point and async runtime change. On WASM (`wasm32-wasip1`), Spin SDK provides the HTTP listener and async executor. On native, Tokio and Axum take over.
+
+<Aside type="tip">
+You never need to write `#[cfg(...)]` in your own agent code. The SDK handles target differences for you. See [WASM vs Native](/promptfleet-agents/concepts/wasm-vs-native/) for the full comparison.
+</Aside>
+
+## Crate composition
+
+The 25 crates are organized into five groups. You compose an agent by pulling in the groups you need — nothing is forced on you.
+
+<CardGrid>
+  <Card title="SDK / Core" icon="rocket">
+    `agent_sdk` · `agent_core` · `pf_macros` · `pf-types` · `pf_config`
+
+    The runtime foundation: agent types, builder, skills, config loading, and proc-macros for wiring.
+  </Card>
+  <Card title="A2A Protocol" icon="puzzle">
+    `protocol_transport_core` · `a2a_protocol_core` · `a2a_http_client` · `a2a_http_server` · `a2a_app_ports` · `a2a_rpc_macros`
+
+    Google's Agent-to-Agent protocol: JSON-RPC 2.0 types, HTTP dispatch, streaming SSE, clean-architecture ports.
+  </Card>
+  <Card title="LLM" icon="star">
+    `llm_client` · `llm_context_core` · `llm_tools` · `llm_tool_macros` · `tool_web_search`
+
+    Provider-agnostic LLM client, token budgeting, tool registry with proc-macro, and reusable tool crates.
+  </Card>
+  <Card title="Observability" icon="magnifier">
+    `observability` · `observability_core` · `structured_logging` · `otel` · `prometheus`
+
+    Facade pattern: one entrypoint, pluggable OpenTelemetry and Prometheus backends, structured logging.
+  </Card>
+  <Card title="Support / Integration" icon="setting">
+    `foundation_utils` · `mcp_protocol` · `pf_test_harness` · `umao_agents`
+
+    RAII utilities, MCP protocol support, native test harness for streaming/SSE, and UMAO multi-agent coordination.
+  </Card>
+</CardGrid>
+
+See the [Architecture](/promptfleet-agents/architecture/) page for the full dependency diagram.
+
+## Feature-flag opt-in
+
+By default, `agent_sdk` gives you only `agent-core` — the protocol-agnostic runtime types. Everything else is opt-in via Cargo features. This keeps your WASM binary small and your compile times fast.
+
+### Primitive features
+
+These are the individual building blocks:
+
+| Feature | What it enables |
+|---------|-----------------|
+| `agent-core` | Protocol-agnostic agent domain types (default) |
+| `a2a-server` | A2A HTTP server — Spin on WASM, Axum on native |
+| `a2a-client` | A2A HTTP client — Spin on WASM, Reqwest on native |
+| `llm-engine` | Provider-agnostic LLM orchestration with tool registry |
+| `context-window` | Token budgeting and history strategies via `llm_context_core` |
+| `event-stream` | Native SSE streaming for A2A and AG-UI (native only) |
+| `agui-stream` | AG-UI stream surface on top of `event-stream` (native only) |
+| `sub-agents` | Sub-agent delegation tools (native only) |
+| `mcp-client` | MCP tool integration — `rmcp` on native, `mcp_protocol` on WASM |
+| `config-loader` | JSON + env config loading via `pf_config` |
+| `agent-observability` | Observability facade with optional OTEL |
+| `redis-storage` | Redis/Valkey shared task storage (native only) |
+| `a2a-tools` | A2A agent discovery and messaging exposed as LLM tools |
+| `interactive-tools` | Typed interaction contracts (ask-question, confirmation flows) |
+
+### Capability presets
+
+Presets compose primitives into common profiles so you don't need to list features one by one:
+
+| Preset | Includes | Typical use |
+|--------|----------|-------------|
+| `a2a-agent` | `agent-core` + `llm-engine` + `a2a-server` + `a2a-client` + `event-stream` | A2A-capable interoperable agent |
+| `agui-agent` | `agent-core` + `llm-engine` + `agui-stream` | User-facing AG-UI agent |
+| `dual-agent` | `agui-agent` + `a2a-agent` | Both A2A and AG-UI in one runtime |
+| `pf-agent` | `dual-agent` + `mcp-client` + `agent-observability` | Full PromptFleet opinionated bundle |
+
+### Example Cargo.toml
+
+A minimal A2A agent:
+
+```toml
+[dependencies]
+agent_sdk = { version = "0.1", features = ["a2a-agent"] }
+```
+
+The full platform bundle with observability and MCP:
+
+```toml
+[dependencies]
+agent_sdk = { version = "0.1", features = ["pf-agent"] }
+```
+
+<Aside type="caution">
+Some features are **native-only**: `event-stream`, `agui-stream`, `sub-agents`, and `redis-storage` require Tokio and will not compile for `wasm32-wasip1`. The presets that include them (`a2a-agent`, `dual-agent`, `pf-agent`) work on native; on WASM, use `a2a-server` + `llm-engine` directly.
+</Aside>

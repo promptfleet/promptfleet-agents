@@ -1,0 +1,124 @@
+---
+title: "server"
+description: "# MCP Server"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Server
+
+**MCP server implementation** for exposing tools and memory operations
+- **HTTP Server**: Standard HTTP/JSON-RPC (default)
+- **SSE Server**: Direct SSE connections (feature: "sse-server")
+
+## Structs
+
+### `McpServer`
+
+**MCP Server** - Expose tools and capabilities via MCP protocol
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new MCP server
+
+#### `with_capabilities`
+
+```rust
+fn with_capabilities(self, capabilities: ServerCapabilities) -> Self
+```
+
+Configure server capabilities
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Configure authentication handler
+
+#### `with_tool_provider`
+
+```rust
+fn with_tool_provider<P>(self, provider: P) -> Self
+```
+
+Configure tool provider
+
+#### `with_server_info`
+
+```rust
+fn with_server_info(self, server_info: ServerInfo) -> Self
+```
+
+Configure server info
+
+#### `handle_request`
+
+```rust
+fn handle_request(&self, request: &UniversalRequest) -> Result<UniversalResponse, ProtocolError>
+```
+
+Handle incoming MCP request
+
+### `McpServerBuilder`
+
+**MCP Server Builder** - Convenient server configuration
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new server builder
+
+#### `with_capabilities`
+
+```rust
+fn with_capabilities(self, capabilities: ServerCapabilities) -> Self
+```
+
+Set server capabilities
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Set authentication handler
+
+#### `with_tool_provider`
+
+```rust
+fn with_tool_provider<P>(self, provider: P) -> Self
+```
+
+Set tool provider
+
+#### `with_server_info`
+
+```rust
+fn with_server_info(self, server_info: ServerInfo) -> Self
+```
+
+Set server info
+
+#### `build`
+
+```rust
+fn build(self) -> McpServer
+```
+
+Build the MCP server

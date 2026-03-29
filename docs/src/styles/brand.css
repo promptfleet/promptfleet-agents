@@ -1,0 +1,126 @@
+/**
+ * PromptFleet Brand Tokens → Starlight Theme
+ * Maps brand design tokens from promptfleet-brand-site onto Starlight's CSS custom properties.
+ *
+ * Brand palette: Electric Cyan primary, navy backgrounds, Inter + JetBrains Mono typography.
+ * Source: promptfleet-brand-site/src/brand/brand.css
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Brand primitives (portable — same values as brand.css)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --pf-cyan: 187 100% 50%;
+  --pf-cyan-glow: 187 100% 60%;
+  --pf-green: 150 100% 45%;
+  --pf-amber: 38 92% 50%;
+  --pf-coral: 0 80% 55%;
+  --pf-bg-deep: 220 50% 5%;
+  --pf-bg-navy: 222 47% 11%;
+  --pf-bg-surface: 222 35% 8%;
+  --pf-bg-elevated: 222 30% 11%;
+  --pf-foreground: 210 40% 93%;
+  --pf-muted: 215 15% 50%;
+  --pf-border: 220 20% 16%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Starlight dark mode overrides (default)
+   Gray scale: white (brightest text) → gray-1..6 → black (deepest bg)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Typography */
+  --sl-font: 'Inter', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Accent — Electric Cyan */
+  --sl-color-accent-low: hsl(187, 50%, 12%);
+  --sl-color-accent: hsl(var(--pf-cyan));
+  --sl-color-accent-high: hsl(187, 100%, 78%);
+
+  /* Gray scale — navy-tinted backgrounds */
+  --sl-color-white: hsl(210, 40%, 98%);
+  --sl-color-gray-1: hsl(var(--pf-foreground));
+  --sl-color-gray-2: hsl(210, 25%, 72%);
+  --sl-color-gray-3: hsl(var(--pf-muted));
+  --sl-color-gray-4: hsl(220, 15%, 30%);
+  --sl-color-gray-5: hsl(var(--pf-border));
+  --sl-color-gray-6: hsl(var(--pf-bg-elevated));
+  --sl-color-black: hsl(var(--pf-bg-deep));
+
+  /* Starlight semantic colors (note colors) — tuned to brand */
+  --sl-hue-orange: 38;
+  --sl-hue-green: 150;
+  --sl-hue-blue: 187;
+  --sl-hue-purple: 281;
+  --sl-hue-red: 0;
+
+  /* Note block accent colors — use brand hues */
+  --sl-color-green-low: hsl(150, 40%, 12%);
+  --sl-color-green: hsl(150, 90%, 45%);
+  --sl-color-green-high: hsl(150, 80%, 75%);
+
+  --sl-color-blue-low: hsl(187, 40%, 12%);
+  --sl-color-blue: hsl(187, 100%, 50%);
+  --sl-color-blue-high: hsl(187, 100%, 80%);
+
+  --sl-color-orange-low: hsl(38, 40%, 15%);
+  --sl-color-orange: hsl(38, 92%, 55%);
+  --sl-color-orange-high: hsl(38, 85%, 80%);
+
+  --sl-color-red-low: hsl(0, 40%, 15%);
+  --sl-color-red: hsl(0, 80%, 55%);
+  --sl-color-red-high: hsl(0, 80%, 80%);
+
+  --sl-color-purple-low: hsl(281, 40%, 15%);
+  --sl-color-purple: hsl(281, 80%, 60%);
+  --sl-color-purple-high: hsl(281, 80%, 85%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Starlight light mode overrides
+   Inverted scale: white (darkest text) → gray-1..7 → black (white bg)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='light'] {
+  /* Accent — darker cyan for contrast on white */
+  --sl-color-accent-high: hsl(187, 85%, 22%);
+  --sl-color-accent: hsl(187, 85%, 38%);
+  --sl-color-accent-low: hsl(187, 70%, 92%);
+
+  /* Gray scale — cool-tinted for brand coherence */
+  --sl-color-white: hsl(220, 50%, 8%);
+  --sl-color-gray-1: hsl(222, 47%, 11%);
+  --sl-color-gray-2: hsl(220, 20%, 22%);
+  --sl-color-gray-3: hsl(215, 12%, 40%);
+  --sl-color-gray-4: hsl(215, 10%, 55%);
+  --sl-color-gray-5: hsl(220, 15%, 80%);
+  --sl-color-gray-6: hsl(220, 20%, 94%);
+  --sl-color-gray-7: hsl(220, 20%, 97%);
+  --sl-color-black: hsl(0, 0%, 100%);
+
+  /* Note accent colors — tuned for light bg readability */
+  --sl-color-green-high: hsl(150, 80%, 20%);
+  --sl-color-green: hsl(150, 80%, 38%);
+  --sl-color-green-low: hsl(150, 70%, 92%);
+
+  --sl-color-blue-high: hsl(187, 85%, 22%);
+  --sl-color-blue: hsl(187, 85%, 42%);
+  --sl-color-blue-low: hsl(187, 70%, 92%);
+
+  --sl-color-orange-high: hsl(38, 80%, 25%);
+  --sl-color-orange: hsl(38, 90%, 48%);
+  --sl-color-orange-low: hsl(38, 85%, 92%);
+
+  --sl-color-red-high: hsl(0, 75%, 28%);
+  --sl-color-red: hsl(0, 80%, 50%);
+  --sl-color-red-low: hsl(0, 75%, 93%);
+
+  --sl-color-purple-high: hsl(281, 75%, 28%);
+  --sl-color-purple: hsl(281, 75%, 55%);
+  --sl-color-purple-low: hsl(281, 70%, 93%);
+}

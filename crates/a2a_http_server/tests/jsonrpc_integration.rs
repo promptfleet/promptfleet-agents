@@ -18,12 +18,9 @@ fn build_server() -> axum::Router {
 #[tokio::test]
 async fn test_agent_ping_returns_pong() {
     let router = build_server();
-    let capture = call_jsonrpc(
-        router,
-        jsonrpc_body(json!("ping-1"), "pf.agent.ping", json!({})),
-    )
-    .await
-    .expect("ping request should complete");
+    let capture = call_jsonrpc(router, jsonrpc_body(json!("ping-1"), "Ping", json!({})))
+        .await
+        .expect("ping request should complete");
 
     assert_eq!(capture.status, StatusCode::OK);
     let payload = capture.body_json.expect("ping must return JSON body");

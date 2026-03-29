@@ -1,0 +1,24 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Lead ship -->
+  <path d="M32 8L38 20L32 17L26 20L32 8Z" fill="url(#cyanGrad)" opacity="1"/>
+  <!-- Left wing - ship 1 -->
+  <path d="M20 22L26 34L20 31L14 34L20 22Z" fill="url(#cyanGrad)" opacity="0.8"/>
+  <!-- Right wing - ship 1 -->
+  <path d="M44 22L50 34L44 31L38 34L44 22Z" fill="url(#cyanGrad)" opacity="0.8"/>
+  <!-- Left wing - ship 2 -->
+  <path d="M10 36L16 48L10 45L4 48L10 36Z" fill="url(#cyanGrad)" opacity="0.55"/>
+  <!-- Right wing - ship 2 -->
+  <path d="M54 36L60 48L54 45L48 48L54 36Z" fill="url(#cyanGrad)" opacity="0.55"/>
+  <!-- Mesh connection lines -->
+  <line x1="32" y1="17" x2="20" y2="31" stroke="#00E5FF" stroke-width="0.5" opacity="0.3"/>
+  <line x1="32" y1="17" x2="44" y2="31" stroke="#00E5FF" stroke-width="0.5" opacity="0.3"/>
+  <line x1="20" y1="31" x2="10" y2="45" stroke="#00E5FF" stroke-width="0.5" opacity="0.25"/>
+  <line x1="44" y1="31" x2="54" y2="45" stroke="#00E5FF" stroke-width="0.5" opacity="0.25"/>
+  <line x1="20" y1="31" x2="44" y2="31" stroke="#00E5FF" stroke-width="0.4" opacity="0.15"/>
+  <defs>
+    <linearGradient id="cyanGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#33ECFF"/>
+      <stop offset="100%" stop-color="#3B82C8"/>
+    </linearGradient>
+  </defs>
+</svg>

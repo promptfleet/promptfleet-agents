@@ -31,26 +31,72 @@
 //! - Adding context trimming or token budgeting: `context-window`
 //! - Adding observability, storage, or sub-agents: compose the matching primitive features on top
 //!
+//! ## Feature matrix (surfaces)
+//!
+//! | Surface | Native | WASM |
+//! | --- | --- | --- |
+//! | [`AgentBuilder`] | yes | yes |
+//! | [`crate::a2a::A2aApp`] | yes | yes |
+//! | [`crate::a2a::A2aClient`] | yes | target-gated |
+//! | [`AgentHostBuilder`] + A2A | yes | yes |
+//! | [`AgentHostBuilder`] + AG-UI | yes | no |
+//!
 //! ## Quick Start
 //!
 //! ### Core Agent
 //!
 //! ```rust,no_run
-//! use agent_sdk::{Agent, error::SdkResult};
-//! use serde_json::{json, Value};
+//! use agent_sdk::{AgentBuilder, error::SdkResult};
+//! use serde_json::json;
 //!
 //! #[tokio::main]
 //! async fn main() -> SdkResult<()> {
-//!     let mut agent = Agent::new_runtime("weather-agent")?;
-//!     
-//!     agent.skill("get_weather", |params| async move {
-//!         let location = params["location"].as_str().unwrap_or("unknown");
-//!         Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
-//!     }).register()?;
+//!     let mut agent = AgentBuilder::new("weather-agent")?.build()?;
+//!
+//!     agent
+//!         .add_skill("get_weather")
+//!         .handler(|params| async move {
+//!             let location = params["location"].as_str().unwrap_or("unknown");
+//!             Ok(json!({"location": location, "temp": 22, "condition": "sunny"}))
+//!         })
+//!         .register()?;
+//!
+//!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
 //!
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ### LLM runtime (`llm-engine`)
+//!
+//! On **native** with `llm-engine`, call [`crate::Agent::configure_llm_runtime`] after
+//! [`AgentBuilder::build`] with an OpenAI-compatible [`llm_client::LlmClient`] (or another type
+//! that implements the invoker traits) and a [`crate::agent::tools::ToolRegistry`]:
+//!
+//! ```rust,ignore
+//! use agent_sdk::{AgentBuilder, SdkResult};
+//! use agent_sdk::agent::tools::ToolRegistry;
+//! use llm_client::{LlmClient, WireFormat};
+//! use llm_client::auth::ApiKeyAuth;
+//!
+//! fn wire_llm() -> SdkResult<()> {
+//!     let mut agent = AgentBuilder::new("my-agent")?.build()?;
+//!     let client = LlmClient::builder(WireFormat::OpenAiCompat)
+//!         .base_url("https://api.openai.com/v1")
+//!         .auth(ApiKeyAuth::new("sk-..."))
+//!         .build()
+//!         .map_err(|e| agent_sdk::SdkError::configuration(e.to_string()))?;
+//!     let tools = ToolRegistry::new();
+//!     agent.configure_llm_runtime(client, "gpt-4o-mini", tools, None, None, None)?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Migration from older SDK snapshots
+//!
+//! - Use [`AgentBuilder::new`] or [`AgentBuilder::from_config`] instead of crate-root `new`/`new_runtime` helpers (removed).
+//! - Use [`crate::Agent::configure_llm_runtime`] instead of `set_llm_tools_message_handler_configured` / `_with`.
+//! - Use [`SkillEntryBuilder`] via [`crate::Agent::add_skill`] for optional handler + full metadata.
 //!
 //! ### Native Host Composition
 //!
@@ -136,7 +182,7 @@ pub mod sub_agent;
 pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
-    SkillBuilder, SkillCall,
+    SkillCall, SkillEntryBuilder,
 };
 pub use callable::CallableSkill;
 pub use error::{SdkError, SdkResult};
@@ -160,21 +206,12 @@ pub use observability_runtime::ObservabilityRuntime;
 // Re-export A2A tool helpers (when enabled)
 #[cfg(feature = "a2a-tools")]
 pub use a2a_tools::tools::{
-    make_tools_from_config as a2a_tools_from_config, make_tools_from_names as a2a_tools_from_names,
-    A2AToolConfig,
+    A2AToolConfig, make_tools_from_config as a2a_tools_from_config,
+    make_tools_from_names as a2a_tools_from_names,
 };
 
 /// SDK version info
 pub const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Create a new runtime agent.
-pub fn new_runtime(name: &str) -> Result<AgentRuntime, SdkError> {
-    AgentRuntime::new_runtime(name)
-}
-
-pub fn new(name: &str) -> Result<AgentRuntime, SdkError> {
-    AgentRuntime::new_runtime(name)
-}
 
 /// Create a new A2A client (requires `a2a-client`)
 #[cfg(feature = "a2a-client")]
@@ -190,7 +227,7 @@ pub fn new_client(endpoint: &str) -> Result<a2a::A2aClient, SdkError> {
 /// use agent_sdk::a2a_serve;
 ///
 /// a2a_serve! {
-///     Agent::new_runtime("my-agent")?
+///     AgentBuilder::new("my-agent")?.build()?
 ///         .skill("echo", |params| async move {
 ///             Ok(json!({"echo": params}))
 ///         }).register()?
@@ -203,12 +240,13 @@ pub fn new_client(endpoint: &str) -> Result<a2a::A2aClient, SdkError> {
 /// fn handle_request(req: spin_sdk::http::Request) -> anyhow::Result<spin_sdk::http::Response> {
 ///     static APP: std::sync::OnceLock<agent_sdk::a2a::A2aApp> = std::sync::OnceLock::new();
 ///     let app = APP.get_or_init(|| {
-///         let agent = Agent::new_runtime("my-agent")
-///             .and_then(|mut a| {
-///                 a.skill("echo", |params| async move {
+///         let agent = AgentBuilder::new("my-agent")
+///             .and_then(|builder| {
+///                 let mut agent = builder.build()?;
+///                 agent.skill("echo", |params| async move {
 ///                     Ok(json!({"echo": params}))
 ///                 }).register()?;
-///                 Ok(a)
+///                 Ok(agent)
 ///             })
 ///             .expect("Failed to initialize agent");
 ///         agent_sdk::a2a::app(agent).expect("Failed to initialize A2A app")
@@ -239,7 +277,7 @@ macro_rules! a2a_serve {
 pub mod prelude {
     pub use crate::{
         AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        ServiceContainer, SkillBuilder, SkillCall, SkillDefinition, TaskPhase,
+        ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder, TaskPhase,
     };
 
     pub use agent_core::ConversationContext;

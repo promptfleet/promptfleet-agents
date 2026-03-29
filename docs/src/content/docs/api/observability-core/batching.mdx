@@ -1,0 +1,335 @@
+---
+title: "batching"
+description: "Smart batching system for telemetry data to optimize performance"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Smart batching system for telemetry data to optimize performance
+
+## Traits
+
+### `MemoryEstimator`
+
+Trait for estimating memory usage
+
+**Required / Provided Methods**
+
+```rust
+fn estimated_size(&self) -> usize
+```
+
+
+## Structs
+
+### `BatchingConfig`
+
+Configuration for batching behavior
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_batch_size` | `usize` | Maximum number of items in a batch |
+| `flush_interval` | `web_time::Duration` | Maximum time to wait before flushing a batch |
+| `max_memory_bytes` | `usize` | Maximum memory usage in bytes (approximate) |
+| `drop_on_overflow` | `bool` | Whether to drop items when buffer is full |
+| `min_batch_size` | `usize` | Minimum batch size to trigger early flush |
+
+### `SpanData`
+
+Span data for batching
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `span_id` | `String` |  |
+| `trace_id` | `String` |  |
+| `parent_span_id` | `Option&lt;String&gt;` |  |
+| `name` | `String` |  |
+| `start_time` | `web_time::Instant` |  |
+| `end_time` | `Option&lt;web_time::Instant&gt;` |  |
+| `status` | `SpanStatus` |  |
+| `attributes` | `HashMap&lt;String, String&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(span_id: String, trace_id: String, name: String) -> Self
+```
+
+
+#### `with_parent`
+
+```rust
+fn with_parent(self, parent_span_id: String) -> Self
+```
+
+
+#### `add_attribute`
+
+```rust
+fn add_attribute(&mut self, key: String, value: String)
+```
+
+
+#### `end`
+
+```rust
+fn end(&mut self)
+```
+
+
+#### `duration`
+
+```rust
+fn duration(&self) -> Option<Duration>
+```
+
+
+### `MetricData`
+
+Metric data for batching
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `value` | `f64` |  |
+| `labels` | `HashMap&lt;String, String&gt;` |  |
+| `timestamp` | `web_time::Instant` |  |
+| `metric_type` | `MetricType` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(name: String, value: f64, labels: HashMap<String, String>, metric_type: MetricType) -> Self
+```
+
+
+### `LogData`
+
+Log data for batching
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `level` | `LogLevel` |  |
+| `message` | `String` |  |
+| `fields` | `serde_json::Value` |  |
+| `timestamp` | `web_time::Instant` |  |
+| `trace_id` | `Option&lt;String&gt;` |  |
+| `span_id` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(level: LogLevel, message: String, fields: JsonValue) -> Self
+```
+
+
+#### `with_trace_context`
+
+```rust
+fn with_trace_context(self, trace_id: String, span_id: String) -> Self
+```
+
+
+### `MemoryEfficientBuffer`
+
+Memory-efficient buffer with overflow handling
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(max_size: usize, max_memory: usize, drop_on_overflow: bool) -> Self
+```
+
+
+#### `push`
+
+```rust
+fn push(&mut self, item: T) -> bool
+where
+    T: MemoryEstimator
+```
+
+
+#### `drain`
+
+```rust
+fn drain(&mut self) -> Vec<T>
+```
+
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+
+#### `dropped_count`
+
+```rust
+fn dropped_count(&self) -> u64
+```
+
+
+#### `memory_usage`
+
+```rust
+fn memory_usage(&self) -> usize
+```
+
+
+### `BatchingManager`
+
+Batching manager for telemetry data
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: BatchingConfig) -> Self
+```
+
+
+#### `set_flush_callback`
+
+```rust
+fn set_flush_callback<F>(&mut self, callback: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+Set the flush callback function
+
+#### `add_span`
+
+```rust
+fn add_span(&self, span: SpanData) -> ObservabilityResult<()>
+```
+
+Add a span to the batch
+
+#### `add_metric`
+
+```rust
+fn add_metric(&self, metric: MetricData) -> ObservabilityResult<()>
+```
+
+Add a metric to the batch
+
+#### `add_log`
+
+```rust
+fn add_log(&self, log: LogData) -> ObservabilityResult<()>
+```
+
+Add a log to the batch
+
+#### `flush_all`
+
+```rust
+fn flush_all(&self) -> ObservabilityResult<()>
+```
+
+Force flush all buffers
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> BatchingStats
+```
+
+Get buffer statistics
+
+### `BatchingStats`
+
+Statistics about batching buffers
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `span_count` | `usize` |  |
+| `metric_count` | `usize` |  |
+| `log_count` | `usize` |  |
+| `span_dropped` | `u64` |  |
+| `metric_dropped` | `u64` |  |
+| `log_dropped` | `u64` |  |
+| `memory_usage` | `usize` |  |
+| `last_flush` | `web_time::Instant` |  |
+
+**Methods**
+
+#### `total_items`
+
+```rust
+fn total_items(&self) -> usize
+```
+
+
+#### `total_dropped`
+
+```rust
+fn total_dropped(&self) -> u64
+```
+
+
+## Enums
+
+### `TelemetryData`
+
+Telemetry data types for batching
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Span(SpanData)` |  |
+| `Metric(MetricData)` |  |
+| `Log(LogData)` |  |
+
+**Methods**
+
+#### `estimated_size`
+
+```rust
+fn estimated_size(&self) -> usize
+```
+
+Estimate memory usage of this telemetry data
+
+### `MetricType`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Counter` |  |
+| `Histogram` |  |
+| `Gauge` |  |

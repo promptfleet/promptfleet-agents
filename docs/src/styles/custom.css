@@ -1,0 +1,33 @@
+/* Brand polish for PromptFleet docs */
+
+:root {
+  --sl-content-width: 52rem;
+  --sl-text-h1: var(--sl-text-4xl);
+}
+
+/* Slightly reduce card padding density */
+.sl-card-grid {
+  gap: 1rem;
+}
+
+/* Tighten hero tagline */
+.hero .tagline {
+  max-width: 38ch;
+}
+
+/* Mermaid diagrams: break out of content column, scroll if needed */
+.mermaid-container,
+pre.mermaid,
+.mermaid {
+  max-width: none;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mermaid svg {
+  min-width: 900px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}

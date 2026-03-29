@@ -11,7 +11,6 @@ use crate::memory::{LongTermMemory, MemoryEntry, MemoryFilters, MemoryType, NoOp
 use crate::strategy::{self, ContextStrategy, ContextStrategyKind};
 use crate::tokens;
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 

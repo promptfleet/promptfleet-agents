@@ -208,14 +208,14 @@ mod tests {
 
     use a2a_protocol_core::data::{Message, MessageRole, Task, TaskState};
     use a2a_protocol_core::services::{InMemoryTaskStorage, TaskStorage};
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use super::{TaskManager, TaskReusePolicy};
+    use crate::SdkResult;
     use crate::agent::task_store::{
         ContinuationArtifactRef, ContinuationSnapshot, ContinuationStrategyDescriptor,
         RuntimeTaskStore,
     };
-    use crate::SdkResult;
 
     struct TestRuntimeTaskStore {
         latest_by_context: std::sync::RwLock<HashMap<String, ContinuationSnapshot>>,

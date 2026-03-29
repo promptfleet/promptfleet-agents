@@ -1,4 +1,5 @@
 use structured_logging::{
+    Result,
     clear_all_contexts,
     emit_a2a_message_latency,
     emit_counter,
@@ -13,7 +14,6 @@ use structured_logging::{
     set_llm_context,
     set_request_context,
     set_template_context,
-    Result,
 };
 
 fn main() -> Result<()> {

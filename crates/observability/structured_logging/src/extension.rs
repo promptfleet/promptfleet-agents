@@ -8,7 +8,7 @@ use observability_core::{LogEntry, ObservabilityConfig, ObservabilityManager};
 use serde::{Deserialize, Serialize};
 
 /// Enhanced configuration for structured logging with performance and convenience features
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnhancedObservabilityConfig {
     /// Base observability configuration
     pub base: ObservabilityConfig,
@@ -132,25 +132,6 @@ impl Default for ConvenienceConfig {
             enable_a2a_logging: true,
             enable_convenience_macros: true,
             enable_domain_fields: true,
-        }
-    }
-}
-
-impl Default for EnhancedObservabilityConfig {
-    fn default() -> Self {
-        Self {
-            base: ObservabilityConfig::default(),
-
-            #[cfg(feature = "performance-optimized")]
-            performance: PerformanceConfig::default(),
-
-            #[cfg(feature = "correlation-enhanced")]
-            correlation: CorrelationConfig::default(),
-
-            #[cfg(feature = "convenience")]
-            convenience: ConvenienceConfig::default(),
-
-            panic_handler: crate::panic_handler::PanicHandlerConfig::default(),
         }
     }
 }
@@ -312,17 +293,11 @@ impl PerformanceExtension {
             }
         }
 
-        // Initialize panic handler if configured
+        // Install panic handler if configured (idempotent — silently succeeds if already installed)
         if self.config.panic_handler.enable_structured_logging {
-            crate::panic_handler::install_panic_handler_with_config(
+            let _ = crate::panic_handler::install_panic_handler_with_config(
                 self.config.panic_handler.clone(),
-            )
-            .map_err(|e| {
-                StructuredLoggingError::enhanced_config(format!(
-                    "Failed to install panic handler: {}",
-                    e
-                ))
-            })?;
+            );
         }
 
         Ok(())

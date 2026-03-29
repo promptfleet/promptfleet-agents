@@ -62,7 +62,8 @@ pub use config::{AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStr
 pub use core::Agent;
 pub use message::{MessageContext, MessageType, SkillCall, SkillExecutor, TaskContext};
 pub use skill::{
-    NotificationHandler, SkillBuilder, SkillContext, SkillDefinition, SkillHandler, SkillRegistry,
+    NotificationHandler, SkillContext, SkillDefinition, SkillEntryBuilder, SkillHandler,
+    SkillRegistry,
 };
 
 // Export handler function type from message_handlers

@@ -3,29 +3,30 @@
 
 use agent_sdk::mcp_tools::{McpServersConfig, McpToolSource, NativeMcpBackend};
 use axum::{
+    Json, Router,
     body::Bytes,
     extract::State,
     http::{HeaderMap, HeaderValue},
     response::IntoResponse,
     routing::post,
-    Json, Router,
 };
 use mcp_protocol::McpClient;
 use rmcp::{
+    ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
         CallToolResult, Content, Implementation, ListToolsResult, PaginatedRequestParams,
         ServerCapabilities, ServerInfo,
     },
     service::RequestContext,
-    tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
+    tool, tool_router,
 };
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 use tokio::net::TcpListener;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 fn expected_tool_name() -> &'static str {
     "search_agents"

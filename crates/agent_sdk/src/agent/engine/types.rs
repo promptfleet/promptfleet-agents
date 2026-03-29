@@ -64,7 +64,7 @@ pub type TurnFuture =
 ///
 /// The core loop calls `invoke_turn()` and processes the result uniformly.
 pub trait LlmTurnInvoker: Send + Sync {
-    fn invoke_turn(&self, payload: serde_json::Value) -> TurnFuture;
+    fn invoke_turn(&self, request: llm_client::LlmRequest) -> TurnFuture;
 }
 
 // ===========================================================================
@@ -267,7 +267,7 @@ impl ToolEngine {
 
     pub async fn run_messages(
         &self,
-        mut messages: Vec<serde_json::Value>,
+        mut messages: Vec<llm_client::ChatMessage>,
     ) -> Result<EngineResult, EngineError> {
         use super::invokers::StreamingTurnInvoker;
 
@@ -287,7 +287,10 @@ impl ToolEngine {
         .await
     }
 
-    pub fn run_messages_stream(&self, mut messages: Vec<serde_json::Value>) -> AgentTraceStream {
+    pub fn run_messages_stream(
+        &self,
+        mut messages: Vec<llm_client::ChatMessage>,
+    ) -> AgentTraceStream {
         use super::invokers::StreamingTurnInvoker;
 
         let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);
@@ -418,23 +421,35 @@ fn build_messages(
     system_prompt: Option<&str>,
     user_prompt: &str,
     history: Option<&[(&str, &str)]>,
-) -> Vec<serde_json::Value> {
+) -> Vec<llm_client::ChatMessage> {
     let mut messages = Vec::new();
 
     if let Some(sys) = system_prompt {
         if !sys.is_empty() {
-            messages.push(serde_json::json!({"role": "system", "content": sys}));
+            messages.push(llm_client::ChatMessage {
+                role: "system".into(),
+                content: Some(sys.into()),
+                ..Default::default()
+            });
         }
     }
 
     if let Some(turns) = history {
         for (role, text) in turns {
             if !text.is_empty() {
-                messages.push(serde_json::json!({"role": *role, "content": *text}));
+                messages.push(llm_client::ChatMessage {
+                    role: (*role).to_string(),
+                    content: Some((*text).into()),
+                    ..Default::default()
+                });
             }
         }
     }
 
-    messages.push(serde_json::json!({"role": "user", "content": user_prompt}));
+    messages.push(llm_client::ChatMessage {
+        role: "user".into(),
+        content: Some(user_prompt.into()),
+        ..Default::default()
+    });
     messages
 }

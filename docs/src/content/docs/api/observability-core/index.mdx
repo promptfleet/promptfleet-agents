@@ -1,0 +1,1508 @@
+---
+title: "observability_core"
+description: "# Observability Core"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Observability Core
+
+Core traits and foundational components for structured logging and observability.
+This crate provides zero-cost abstractions for telemetry, metrics, and structured logging
+that can be conditionally compiled based on feature flags.
+
+## Features
+
+- `observability`: Enables all observability features
+- `otel-2025`: OpenTelemetry 2025 integration
+- `structured-logging`: JSON structured logging support
+- `prometheus-federation`: Prometheus metrics federation
+- `auto-instrumentation`: Automatic instrumentation capabilities
+
+## Constants
+
+### `VERSION`
+
+```rust
+const VERSION: &str = ;
+```
+
+Version information for the observability core
+
+### `DEFAULT_BATCH_SIZE`
+
+```rust
+const DEFAULT_BATCH_SIZE: usize = ;
+```
+
+Default batch size for telemetry data
+
+### `DEFAULT_FLUSH_INTERVAL_SECS`
+
+```rust
+const DEFAULT_FLUSH_INTERVAL_SECS: u64 = ;
+```
+
+Default flush interval in seconds
+
+## Type Aliases
+
+### `ObservabilityResult`
+
+```rust
+type ObservabilityResult = Result<T, ObservabilityError>;
+```
+
+Result type for observability operations
+
+## Traits
+
+### `MetricsCollector`
+
+Trait for collecting and managing metrics
+
+**Required / Provided Methods**
+
+```rust
+fn register_counter(&mut self, name: &str, description: &str, labels: &[&str]) -> ObservabilityResult<()>
+```
+
+Register a new counter
+
+```rust
+fn register_histogram(&mut self, name: &str, description: &str, buckets: &[f64], labels: &[&str]) -> ObservabilityResult<()>
+```
+
+Register a new histogram  
+
+```rust
+fn register_gauge(&mut self, name: &str, description: &str, labels: &[&str]) -> ObservabilityResult<()>
+```
+
+Register a new gauge
+
+```rust
+fn record_counter(&self, name: &str, value: f64, labels: &HashMap<String, String>) -> ObservabilityResult<()>
+```
+
+Record a counter increment
+
+```rust
+fn record_histogram(&self, name: &str, value: f64, labels: &HashMap<String, String>) -> ObservabilityResult<()>
+```
+
+Record a histogram observation
+
+```rust
+fn set_gauge(&self, name: &str, value: f64, labels: &HashMap<String, String>) -> ObservabilityResult<()>
+```
+
+Set a gauge value
+
+```rust
+fn get_metrics(&self) -> HashMap<String, f64>
+```
+
+Get current metric values (for testing/debugging)
+
+```rust
+fn clear(&mut self)
+```
+
+Clear all metrics
+
+### `ObservabilityPlugin`
+
+Core observability plugin trait
+
+**Required / Provided Methods**
+
+```rust
+fn start_span(&self, name: &str, attributes: &[(&str, &str)]) -> SpanGuard
+```
+
+Start a new span and return a guard
+
+```rust
+fn end_span(&self, span_id: &str)
+```
+
+End a span by ID
+
+```rust
+fn add_span_attribute(&self, span_id: &str, key: &str, value: &str)
+```
+
+Add an attribute to an existing span
+
+```rust
+fn set_span_status(&self, span_id: &str, status: SpanStatus)
+```
+
+Set the status of a span
+
+```rust
+fn record_metric(&self, name: &str, value: f64, labels: &[(&str, &str)])
+```
+
+Record a metric with labels
+
+```rust
+fn increment_counter(&self, name: &str, labels: &[(&str, &str)])
+```
+
+Increment a counter metric
+
+```rust
+fn record_histogram(&self, name: &str, value: f64, labels: &[(&str, &str)])
+```
+
+Record a histogram value
+
+```rust
+fn log_structured(&self, level: LogLevel, message: &str, fields: &JsonValue)
+```
+
+Log a structured message with fields
+
+```rust
+fn log(&self, level: LogLevel, message: &str)
+```
+
+Log a simple message
+
+```rust
+fn write_log(&self, message: &str)
+```
+
+Write log output (implementation-specific)
+
+```rust
+fn flush(&self) -> ObservabilityResult<()>
+```
+
+Flush any pending telemetry data
+
+```rust
+fn is_enabled(&self) -> bool
+```
+
+Check if the plugin is enabled
+
+```rust
+fn plugin_type(&self) -> &''static str
+```
+
+Get the plugin name/type
+
+### `StructuredLogger`
+
+Trait for structured logging
+
+**Required / Provided Methods**
+
+```rust
+fn log_with_trace(&self, level: LogLevel, message: &str, fields: &JsonValue, trace_id: Option<&str>, span_id: Option<&str>)
+```
+
+Log with trace context correlation
+
+```rust
+fn log_performance(&self, operation: &str, duration: Duration, success: bool, additional_fields: &JsonValue)
+```
+
+Log performance metrics
+
+```rust
+fn log_error(&self, error: &dyn Error, context: &JsonValue)
+```
+
+Log errors with context
+
+```rust
+fn set_level(&mut self, level: LogLevel)
+```
+
+Set the minimum log level
+
+```rust
+fn is_level_enabled(&self, level: LogLevel) -> bool
+```
+
+Check if a level is enabled
+
+### `BatchingPort`
+
+Port for batching log entries
+
+This allows different batching strategies:
+- TimeBasedBatcher (flush every N seconds)
+- SizeBasedBatcher (flush when buffer reaches N entries)
+- HybridBatcher (combination of time and size)
+
+**Required / Provided Methods**
+
+```rust
+fn add_to_batch(&self, entry: LogEntry) -> ObservabilityResult<()>
+```
+
+Add an entry to the batch
+
+```rust
+fn flush_batch(&self) -> ObservabilityResult<()>
+```
+
+Force flush the current batch
+
+```rust
+fn batch_size(&self) -> usize
+```
+
+Get current batch size
+
+### `ContextPort`
+
+Port for accessing context information
+
+This allows the logging system to enrich entries with context:
+- Agent ID, request ID, trace ID
+- User-defined context fields
+- Thread/task local context
+
+**Required / Provided Methods**
+
+```rust
+fn get_context(&self) -> HashMap<String, serde_json::Value>
+```
+
+Get current context fields
+
+```rust
+fn add_context(&self, key: String, value: serde_json::Value)
+```
+
+Add a context field
+
+```rust
+fn remove_context(&self, key: &str)
+```
+
+Remove a context field
+
+```rust
+fn clear_context(&self)
+```
+
+Clear all context
+
+### `FormatterPort`
+
+Port for formatting log entries
+
+Different formatters can be plugged in:
+- JsonFormatter (structured JSON output)
+- PlainTextFormatter (human-readable text)
+- CompactFormatter (single-line JSON)
+
+**Required / Provided Methods**
+
+```rust
+fn format(&self, entry: &LogEntry) -> ObservabilityResult<String>
+```
+
+Format a log entry into a string
+
+### `MetricsPort`
+
+Port for metrics collection (basic interface for correlation).
+
+**Required / Provided Methods**
+
+```rust
+fn emit_counter_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple counter metric
+
+```rust
+fn emit_histogram_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple histogram/timing metric
+
+```rust
+fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple gauge metric
+
+```rust
+fn is_enabled(&self) -> bool
+```
+
+Check if metrics collection is enabled
+
+```rust
+fn emit_metrics_batch(&self, entries: &[MetricsEntry]) -> ObservabilityResult<()>
+```
+
+Batch emit multiple metrics (optional, has default implementation)
+
+### `StandardLoggingPort`
+
+Port for standard logging integration
+
+This port allows us to hook into standard Rust logging infrastructure:
+- log::Log implementation
+- tracing::Subscriber implementation
+
+**Required / Provided Methods**
+
+```rust
+fn initialize(&self) -> ObservabilityResult<()>
+```
+
+Initialize the logging system (called once during agent startup)
+
+```rust
+fn process_standard_log(&self, entry: LogEntry) -> ObservabilityResult<()>
+```
+
+Process a log entry from standard logging macros
+
+```rust
+fn enabled(&self, level: &LogLevel) -> bool
+```
+
+Check if logging is enabled for this level
+
+### `TransportPort`
+
+Port for transporting log entries to external systems
+
+This is the interface that different adapters implement:
+- WasmStdoutAdapter (writes to WASM stdout)
+- HttpTransportAdapter (sends via HTTP)
+- BatchingTransportAdapter (batches entries)
+
+**Required / Provided Methods**
+
+```rust
+fn transport(&self, entry: &LogEntry) -> ObservabilityResult<()>
+```
+
+Transport a single log entry
+
+```rust
+fn transport_batch(&self, entries: &[LogEntry]) -> ObservabilityResult<()>
+```
+
+Transport multiple log entries (for batching)
+
+## Structs
+
+### `BatchingConfig`
+
+Configuration for batching behavior
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_batch_size` | `usize` | Maximum number of items in a batch |
+| `flush_interval` | `web_time::Duration` | Maximum time to wait before flushing a batch |
+| `max_memory_bytes` | `usize` | Maximum memory usage in bytes (approximate) |
+| `drop_on_overflow` | `bool` | Whether to drop items when buffer is full |
+| `min_batch_size` | `usize` | Minimum batch size to trigger early flush |
+
+### `BatchingManager`
+
+Batching manager for telemetry data
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: BatchingConfig) -> Self
+```
+
+
+#### `set_flush_callback`
+
+```rust
+fn set_flush_callback<F>(&mut self, callback: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+Set the flush callback function
+
+#### `add_span`
+
+```rust
+fn add_span(&self, span: SpanData) -> ObservabilityResult<()>
+```
+
+Add a span to the batch
+
+#### `add_metric`
+
+```rust
+fn add_metric(&self, metric: MetricData) -> ObservabilityResult<()>
+```
+
+Add a metric to the batch
+
+#### `add_log`
+
+```rust
+fn add_log(&self, log: LogData) -> ObservabilityResult<()>
+```
+
+Add a log to the batch
+
+#### `flush_all`
+
+```rust
+fn flush_all(&self) -> ObservabilityResult<()>
+```
+
+Force flush all buffers
+
+#### `get_stats`
+
+```rust
+fn get_stats(&self) -> BatchingStats
+```
+
+Get buffer statistics
+
+### `ContextFuture`
+
+Future wrapper that restores trace context across async poll boundaries.
+
+### `HeaderExtractor`
+
+Header extractor for W3C trace context propagation
+
+**Methods**
+
+#### `extract`
+
+```rust
+fn extract(&self) -> ObservabilityResult<Option<W3CTraceContext>>
+```
+
+
+### `HeaderInjector`
+
+Header injector for W3C trace context propagation
+
+**Methods**
+
+#### `inject`
+
+```rust
+fn inject(&mut self, context: &W3CTraceContext)
+```
+
+
+### `TraceContext`
+
+Simplified trace context for internal use
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` |  |
+| `span_id` | `String` |  |
+| `parent_span_id` | `Option&lt;String&gt;` |  |
+| `sampled` | `bool` |  |
+
+**Methods**
+
+#### `new_root`
+
+```rust
+fn new_root() -> Self
+```
+
+Create a new root trace context
+
+#### `new_child`
+
+```rust
+fn new_child(&self) -> Self
+```
+
+Create a child span
+
+#### `to_w3c`
+
+```rust
+fn to_w3c(&self) -> W3CTraceContext
+```
+
+Convert to W3C trace context
+
+#### `from_w3c`
+
+```rust
+fn from_w3c(w3c: &W3CTraceContext) -> Self
+```
+
+Create from W3C trace context
+
+### `W3CTraceContext`
+
+W3C Trace Context implementation for distributed tracing
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` | W3C trace ID (32 hex characters) |
+| `parent_id` | `String` | W3C span ID (16 hex characters)   |
+| `trace_flags` | `String` | Trace flags (2 hex characters) |
+| `trace_state` | `Option&lt;String&gt;` | Additional trace state |
+
+**Methods**
+
+#### `new_root`
+
+```rust
+fn new_root() -> Self
+```
+
+Create a new root trace context
+
+#### `new_child`
+
+```rust
+fn new_child(&self) -> Self
+```
+
+Create a child span context
+
+#### `from_traceparent`
+
+```rust
+fn from_traceparent(header: &str) -> ObservabilityResult<Self>
+```
+
+Create from W3C traceparent header
+
+#### `from_headers`
+
+```rust
+fn from_headers(headers: &HashMap<String, String>) -> ObservabilityResult<Option<Self>>
+```
+
+Create from W3C headers
+
+#### `to_traceparent`
+
+```rust
+fn to_traceparent(&self) -> String
+```
+
+Generate W3C traceparent header value
+
+#### `to_headers`
+
+```rust
+fn to_headers(&self) -> HashMap<String, String>
+```
+
+Generate W3C headers for propagation
+
+#### `is_sampled`
+
+```rust
+fn is_sampled(&self) -> bool
+```
+
+Check if the trace is sampled
+
+#### `set_sampled`
+
+```rust
+fn set_sampled(&mut self, sampled: bool)
+```
+
+Set sampling flag
+
+#### `add_trace_state`
+
+```rust
+fn add_trace_state(&mut self, key: &str, value: &str)
+```
+
+Add or update trace state
+
+#### `get_trace_state`
+
+```rust
+fn get_trace_state(&self, key: &str) -> Option<String>
+```
+
+Get value from trace state
+
+### `NoOpObservabilityPlugin`
+
+No-op observability plugin that does nothing
+
+This implementation provides zero runtime cost when observability is disabled.
+All methods are inlined and compile to nothing in release builds.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new no-op plugin
+
+#### `shared`
+
+```rust
+fn shared() -> Arc<Self>
+```
+
+Create an Arc'd no-op plugin for sharing
+
+### `SpanGuard`
+
+Span guard that automatically ends spans when dropped
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(span_id: String, plugin: Arc<dyn ObservabilityPlugin>) -> Self
+```
+
+
+#### `no_op`
+
+```rust
+fn no_op() -> Self
+```
+
+
+#### `span_id`
+
+```rust
+fn span_id(&self) -> &str
+```
+
+
+#### `duration`
+
+```rust
+fn duration(&self) -> Duration
+```
+
+
+#### `add_attribute`
+
+```rust
+fn add_attribute(&self, key: &str, value: &str)
+```
+
+
+#### `set_status`
+
+```rust
+fn set_status(&self, status: SpanStatus)
+```
+
+
+### `CompactJsonFormatter`
+
+Compact JSON formatter (single line)
+
+### `JsonFormatter`
+
+JSON formatter for structured logging output
+
+### `LogDirectives`
+
+Parsed `RUST_LOG`-style directives for per-target log filtering.
+
+Supports: `"info"`, `"info,agent_sdk=debug,a2a_protocol_core=trace"`.
+Unknown tokens are silently ignored.
+
+**Methods**
+
+#### `from_level`
+
+```rust
+fn from_level(level: LogLevel) -> Self
+```
+
+
+#### `parse`
+
+```rust
+fn parse(s: &str) -> Self
+```
+
+Parse a `RUST_LOG`-style directive string.
+
+Examples: `"info"`, `"info,agent_sdk=debug"`, `"warn,a2a_protocol_core=trace,llm_client=debug"`.
+
+#### `global_level`
+
+```rust
+fn global_level(&self) -> LogLevel
+```
+
+
+#### `max_level`
+
+```rust
+fn max_level(&self) -> LogLevel
+```
+
+
+#### `enabled`
+
+```rust
+fn enabled(&self, level: LogLevel, target: &str) -> bool
+```
+
+Check whether a log record at `level` from `target` should be emitted.
+
+### `StandardLogAdapter`
+
+Standard logging adapter that hooks into Rust's log crate
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(processor_chain: ProcessorChain, transport: Arc<dyn TransportPort>, directives: LogDirectives) -> Self
+```
+
+
+### `UnifiedWasmStdoutAdapter`
+
+Extended WASM adapter that handles both logs and metrics with correlation
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `transport_metric`
+
+```rust
+fn transport_metric(&self, entry: &MetricsEntry) -> ObservabilityResult<()>
+```
+
+Process metrics entry through same formatting as logs for correlation
+
+### `WasmStdoutAdapter`
+
+WASM stdout transport adapter
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(formatter: Box<dyn FormatterPort>) -> Self
+```
+
+
+#### `with_json_formatter`
+
+```rust
+fn with_json_formatter() -> Self
+```
+
+
+#### `with_compact_formatter`
+
+```rust
+fn with_compact_formatter() -> Self
+```
+
+
+#### `with_plain_text_formatter`
+
+```rust
+fn with_plain_text_formatter() -> Self
+```
+
+
+### `WasmStdoutMetricsAdapter`
+
+Basic WASM stdout adapter for metrics (correlation-focused)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `disabled`
+
+```rust
+fn disabled() -> Self
+```
+
+
+### `TracingIntegrationBuilder`
+
+Builder for creating tracing-integrated logging setup
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_processor_chain`
+
+```rust
+fn with_processor_chain(self, chain: ProcessorChain) -> Self
+```
+
+
+#### `with_transport`
+
+```rust
+fn with_transport(self, transport: Arc<dyn TransportPort>) -> Self
+```
+
+
+#### `with_level_filter`
+
+```rust
+fn with_level_filter(self, level: LogLevel) -> Self
+```
+
+
+#### `build`
+
+```rust
+fn build(self) -> ObservabilityResult<TracingSubscriberAdapter>
+```
+
+
+### `TracingSubscriberAdapter`
+
+Tracing subscriber adapter for structured logging integration
+
+This adapter implements tracing::Subscriber to capture tracing events
+and convert them to LogEntry for processing through the hexagonal architecture
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(processor_chain: ProcessorChain, transport: Arc<dyn TransportPort>, level_filter: LogLevel) -> Self
+```
+
+
+### `EnhancedContextEnricher`
+
+Enhanced processor that combines context enrichment with kv extraction
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_field`
+
+```rust
+fn with_field<impl Into<String>, impl Into<serde_json::Value>>(self, key: impl Into, value: impl Into) -> Self
+```
+
+
+#### `with_kv_extraction`
+
+```rust
+fn with_kv_extraction(self, extract_kv: bool) -> Self
+```
+
+
+### `LogEntry`
+
+Core log entry - pure data structure
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `chrono::DateTime&lt;chrono::Utc&gt;` |  |
+| `level` | `LogLevel` |  |
+| `message` | `String` |  |
+| `fields` | `serde_json::Value` |  |
+| `trace_context` | `Option&lt;TraceContext&gt;` |  |
+| `source` | `LogSource` |  |
+
+### `LogKvExtractor`
+
+Processor that extracts structured fields from log::kv
+
+This processor supports the log::info!("msg"; "key" => value) syntax
+by extracting key-value pairs from log::Record and adding them to LogEntry fields
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `extract_kv_from_record`
+
+```rust
+fn extract_kv_from_record(record: &log::Record<'_>) -> serde_json::Value
+```
+
+Extract key-value pairs from log::Record
+
+This function would be called by StandardLogAdapter when processing log::Record
+but we'll implement the interface here for the processor chain
+
+### `MetricsEntry`
+
+Basic metric entry for correlation with logs
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `value` | `f64` |  |
+| `metric_type` | `BasicMetricType` |  |
+| `timestamp` | `chrono::DateTime&lt;chrono::Utc&gt;` |  |
+| `trace_context` | `Option&lt;TraceContext&gt;` |  |
+| `source` | `MetricsSource` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(name: impl Into, value: f64, metric_type: BasicMetricType) -> Self
+```
+
+Create a new metrics entry
+
+#### `with_trace_context`
+
+```rust
+fn with_trace_context(self, trace_context: TraceContext) -> Self
+```
+
+Add trace context for correlation
+
+#### `with_source`
+
+```rust
+fn with_source(self, module: Option<String>, component: Option<String>, operation: Option<String>) -> Self
+```
+
+Add source information
+
+#### `to_json`
+
+```rust
+fn to_json(&self) -> serde_json::Value
+```
+
+Convert to JSON for transport
+
+### `MetricsSource`
+
+Source of the metric
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `module` | `Option&lt;String&gt;` |  |
+| `component` | `Option&lt;String&gt;` |  |
+| `operation` | `Option&lt;String&gt;` |  |
+
+### `ProcessorChain`
+
+Processor chain pattern (inspired by structlog)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty processor chain
+
+#### `add_processor`
+
+```rust
+fn add_processor(self, processor: Box<dyn LogProcessor>) -> Self
+```
+
+Add a processor to the chain
+
+#### `process`
+
+```rust
+fn process(&self, entry: LogEntry) -> ObservabilityResult<LogEntry>
+```
+
+Process an entry through the entire chain
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+Get number of processors in the chain
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+Check if chain is empty
+
+### `TraceCorrelation`
+
+Serializable trace identifiers for log/metric correlation.
+
+Distinct from [`crate::context::TraceContext`] which is the runtime
+tracing context with sampling decisions and W3C conversion methods.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` |  |
+| `span_id` | `String` |  |
+| `parent_span_id` | `Option&lt;String&gt;` |  |
+
+### `GlobalLoggerSingleton`
+
+Singleton global logger that initializes once and is shared across all extension instances
+
+**Methods**
+
+#### `get_or_init`
+
+```rust
+fn get_or_init(config: ObservabilityConfig) -> ObservabilityResult<&''static GlobalLoggerSingleton>
+```
+
+Get or create the singleton instance
+
+This is thread-safe and will initialize exactly once
+
+#### `adapter`
+
+```rust
+fn adapter(&self) -> &Arc<StandardLogAdapter>
+```
+
+Get the logger adapter
+
+#### `config`
+
+```rust
+fn config(&self) -> &ObservabilityConfig
+```
+
+Get the configuration used
+
+### `ObservabilityConfig`
+
+Configuration for observability
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `level` | `String` | Minimum log level to process |
+| `format` | `String` | Output format: "json", "compact", "plain" |
+| `structured` | `bool` | Enable structured logging features |
+| `context_enrichment` | `bool` | Enable context enrichment |
+| `default_context` | `HashMap&lt;String, serde_json::Value&gt;` | Additional context fields to always include |
+
+**Methods**
+
+#### `parse_level`
+
+```rust
+fn parse_level(&self) -> ObservabilityResult<LogLevel>
+```
+
+Parse log level from string (global level only, ignores per-crate directives).
+
+#### `parse_directives`
+
+```rust
+fn parse_directives(&self) -> LogDirectives
+```
+
+Parse `RUST_LOG`-style directives from the level string.
+
+Accepts both simple levels (`"info"`) and per-crate directives
+(`"info,agent_sdk=debug,a2a_protocol_core=trace"`).
+
+#### `create_transport`
+
+```rust
+fn create_transport(&self) -> Arc<dyn TransportPort>
+```
+
+Create transport based on format configuration
+
+#### `validate`
+
+```rust
+fn validate(&self) -> ObservabilityResult<()>
+```
+
+Validate configuration
+
+### `ObservabilityManager`
+
+Core observability manager
+
+This provides structured logging integration with standard Rust logging macros
+(log::info!, log::debug!, etc.) without external extension system dependencies
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: ObservabilityConfig) -> ObservabilityResult<Self>
+```
+
+Create a new observability manager with configuration
+
+#### `initialize`
+
+```rust
+fn initialize(&mut self) -> ObservabilityResult<()>
+```
+
+Initialize global logging (convenience method)
+
+#### `config`
+
+```rust
+fn config(&self) -> &ObservabilityConfig
+```
+
+Get current configuration
+
+#### `is_enabled`
+
+```rust
+fn is_enabled(&self, level: LogLevel) -> bool
+```
+
+Check if logging is enabled for a level
+
+#### `global_logger`
+
+```rust
+fn global_logger() -> Option<Arc<StandardLogAdapter>>
+```
+
+Get the global logger instance (always available with singleton pattern)
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> Vec<String>
+```
+
+Get capabilities as strings
+
+## Enums
+
+### `ObservabilityError`
+
+Comprehensive error types for observability operations
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Configuration { ... }` | Configuration errors |
+| `Serialization { ... }` | Serialization/deserialization errors |
+| `Transport { ... }` | Network/transport errors |
+| `TraceContext { ... }` | Trace context propagation errors |
+| `Metric { ... }` | Metric collection errors |
+| `Logging { ... }` | Logging errors |
+| `Batching { ... }` | Batching system errors |
+| `Buffer { ... }` | Buffer overflow or memory errors |
+| `FeatureNotEnabled { ... }` | Feature not enabled |
+| `Generic { ... }` | Generic errors for compatibility |
+
+**Methods**
+
+#### `configuration`
+
+```rust
+fn configuration<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a configuration error
+
+#### `serialization`
+
+```rust
+fn serialization<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a serialization error
+
+#### `transport`
+
+```rust
+fn transport<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a transport error
+
+#### `trace_context`
+
+```rust
+fn trace_context<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a trace context error
+
+#### `metric`
+
+```rust
+fn metric<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a metric error
+
+#### `logging`
+
+```rust
+fn logging<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a logging error
+
+#### `batching`
+
+```rust
+fn batching<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a batching error
+
+#### `buffer`
+
+```rust
+fn buffer<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a buffer error
+
+#### `feature_not_enabled`
+
+```rust
+fn feature_not_enabled<impl Into<String>>(feature: impl Into) -> Self
+```
+
+Create a feature not enabled error
+
+#### `generic`
+
+```rust
+fn generic<impl Into<String>>(message: impl Into) -> Self
+```
+
+Create a generic error
+
+### `LogLevel`
+
+Log levels for structured logging
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Error` |  |
+| `Warn` |  |
+| `Info` |  |
+| `Debug` |  |
+| `Trace` |  |
+
+**Methods**
+
+#### `as_str`
+
+```rust
+fn as_str(&self) -> &''static str
+```
+
+
+### `SpanStatus`
+
+Status of a span
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Ok` |  |
+| `Error` |  |
+| `Cancelled` |  |
+
+### `BasicMetricType`
+
+Simple metric types supported by core
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Counter` | Counter metric (monotonically increasing) |
+| `Histogram` | Histogram/timing metric (distribution of values) |
+| `Gauge` | Gauge metric (current value) |
+
+## Functions
+
+### `clear_current_context`
+
+```rust
+fn clear_current_context()
+```
+
+Clear the current trace context
+
+### `get_current_context`
+
+```rust
+fn get_current_context() -> Option<TraceContext>
+```
+
+Get the current trace context for this thread
+
+### `set_current_context`
+
+```rust
+fn set_current_context(context: TraceContext)
+```
+
+Set the current trace context for this thread
+
+### `with_context`
+
+```rust
+fn with_context<F, R>(context: TraceContext, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with a specific trace context
+
+### `with_context_future`
+
+```rust
+fn with_context_future<F>(context: TraceContext, future: F) -> ContextFuture<F>
+where
+    F: Future
+```
+
+Execute a future with a specific trace context re-applied on every poll.
+
+### `create_counter_metric`
+
+```rust
+fn create_counter_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a counter metric
+
+### `create_gauge_metric`
+
+```rust
+fn create_gauge_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a gauge metric
+
+### `create_histogram_metric`
+
+```rust
+fn create_histogram_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a histogram metric
+
+### `create_observability_manager`
+
+```rust
+fn create_observability_manager(config: Option<serde_json::Value>) -> ObservabilityResult<ObservabilityManager>
+```
+
+Factory function for creating observability manager from JSON configuration
+
+## Macros
+
+### `observability_plugin!`
+
+Macro to conditionally create observability plugin based on features
+
+### `shared_observability_plugin!`
+
+Macro to conditionally create shared observability plugin based on features
+
+### `observability_span!`
+
+Conditional span creation macro
+
+### `observability_metric!`
+
+Conditional metric recording macro
+
+### `observability_log!`
+
+Conditional logging macro

@@ -1,0 +1,582 @@
+---
+title: "foundation_utils"
+description: "# Foundation Utils"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Foundation Utils
+
+Core foundational utilities for the PromptFleet Agents project.
+Provides zero-dependency, WASM-compatible patterns for:
+
+- **RAII Guards**: Automatic resource cleanup with Drop trait
+- **Scoped Operations**: Guaranteed setup/teardown patterns  
+- **Context Management**: Thread-safe context propagation
+- **Resource Management**: Safe resource acquisition/release
+
+## Design Principles
+
+- **Zero Dependencies**: Pure Rust stdlib only
+- **WASM Compatible**: Designed for WebAssembly environments
+- **Zero Cost**: Compile-time abstractions with no runtime overhead
+- **Exception Safe**: Automatic cleanup even during panics
+- **Type Safe**: Compiler-enforced correctness
+
+## Usage
+
+```rust
+use foundation_utils::raii::Guard;
+use foundation_utils::scoped::with_context;
+
+// RAII guard for automatic cleanup
+let _guard = Guard::new("my_resource", |r| {
+    println!("Cleaning up: {}", r);
+});
+
+// Scoped access to a value (value drops when scope ends)
+let result = with_context(42, |ctx| {
+    ctx + 1
+});
+assert_eq!(result, 43);
+```
+
+## Constants
+
+### `VERSION`
+
+```rust
+const VERSION: &str = ;
+```
+
+Version of the foundation utils
+
+## Traits
+
+### `ContextManager`
+
+Context manager trait for different context implementations
+
+This trait provides a common interface for different types of context storage.
+
+**Required / Provided Methods**
+
+```rust
+fn set_string(&self, key: &str, value: String)
+```
+
+Set a string value in the context
+
+```rust
+fn get_string(&self, key: &str) -> Option<String>
+```
+
+Get a string value from the context
+
+```rust
+fn remove_string(&self, key: &str) -> bool
+```
+
+Remove a string value from the context
+
+```rust
+fn clear_all(&self)
+```
+
+Clear all context values
+
+### `ScopedGuard`
+
+Trait for types that can create scoped guards
+
+This trait provides a standard interface for creating RAII guards
+for different types of resources.
+
+**Associated Types**
+
+- `type Resource` — 
+- `type Guard` — 
+
+**Required / Provided Methods**
+
+```rust
+fn scoped(resource: <Self as ?>::Resource) -> <Self as ?>::Guard
+```
+
+Create a scoped guard for this resource
+
+### `ScopedCallback`
+
+Trait for scoped callback operations
+
+This trait provides a standard interface for types that support
+scoped operations with automatic cleanup.
+
+**Required / Provided Methods**
+
+```rust
+fn with_scope<F, R>(self, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with scoped access to the resource
+
+## Structs
+
+### `Guard`
+
+Generic RAII guard that owns a resource and cleans it up on drop
+
+This is the fundamental building block for all RAII patterns in the project.
+It ensures that resources are properly cleaned up even if panics occur.
+
+# Type Parameters
+- `T`: The type of resource being managed
+- `F`: The type of cleanup function (must be `FnOnce(T)`)
+
+# Example
+```rust
+use foundation_utils::raii::Guard;
+
+let _guard = Guard::new(42, |value| {
+    println!("Cleaning up value: {}", value);
+});
+// Cleanup happens automatically when guard drops
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(resource: T, cleanup: F) -> Self
+```
+
+Create a new RAII guard
+
+# Arguments
+- `resource`: The resource to manage
+- `cleanup`: Function to call when the guard drops
+
+# Example
+```rust
+use foundation_utils::raii::Guard;
+
+let guard = Guard::new("resource", |r| println!("Cleanup: {}", r));
+```
+
+#### `resource`
+
+```rust
+fn resource(&self) -> &T
+```
+
+Get a reference to the managed resource
+
+# Panics
+Panics if the guard has already been consumed (should not happen in normal use)
+
+#### `resource_mut`
+
+```rust
+fn resource_mut(&mut self) -> &mut T
+```
+
+Get a mutable reference to the managed resource
+
+# Panics
+Panics if the guard has already been consumed (should not happen in normal use)
+
+#### `into_inner`
+
+```rust
+fn into_inner(self) -> T
+```
+
+Consume the guard and return the resource without cleanup
+
+This is useful when you want to transfer ownership without cleanup
+
+#### `cleanup_now`
+
+```rust
+fn cleanup_now(self)
+```
+
+Manually trigger cleanup now (guard becomes invalid after this)
+
+This allows explicit cleanup before the guard would naturally drop
+
+### `ResourceGuard`
+
+Resource guard that manages the lifetime of a resource
+
+This guard ensures that resources are properly returned to their pool
+or cleaned up when they're no longer needed.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<F>(resource: T, return_fn: F) -> Self
+where
+    F: FnOnce + Send + ?
+```
+
+Create a new resource guard
+
+# Arguments
+- `resource`: The resource to manage
+- `return_fn`: Function to call when returning the resource
+
+#### `resource`
+
+```rust
+fn resource(&self) -> &T
+```
+
+Get a reference to the managed resource
+
+#### `resource_mut`
+
+```rust
+fn resource_mut(&mut self) -> &mut T
+```
+
+Get a mutable reference to the managed resource
+
+#### `return_resource`
+
+```rust
+fn return_resource(self) -> Result<(), Box<dyn Error + Send + Sync>>
+```
+
+Manually return the resource (consumes the guard)
+
+#### `take_ownership`
+
+```rust
+fn take_ownership(self) -> T
+```
+
+Take ownership of the resource without returning it to the pool
+
+### `ResourcePool`
+
+A resource pool that manages the lifecycle of expensive resources
+
+This pool provides thread-safe access to resources with automatic
+cleanup, health checking, and graceful degradation.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<F>(config: PoolConfig, factory: F) -> Result<Self, Box<dyn Error + Send + Sync>>
+where
+    F: Fn + Send + Sync + ?
+```
+
+Create a new resource pool
+
+# Arguments
+- `config`: Pool configuration
+- `factory`: Function to create new resources
+
+# Example
+```rust
+use foundation_utils::resource::{ResourcePool, PoolConfig};
+
+let pool = ResourcePool::new(
+    PoolConfig::default(),
+    || Ok("new_resource".to_string())
+).unwrap();
+```
+
+#### `with_health_checker`
+
+```rust
+fn with_health_checker<F>(self, health_checker: F) -> Self
+where
+    F: Fn + Send + Sync + ?
+```
+
+Set a health checker function for resources
+
+The health checker is called periodically to validate that
+pooled resources are still healthy.
+
+#### `acquire`
+
+```rust
+fn acquire(&self) -> Result<ResourceGuard<T>, Box<dyn Error + Send + Sync>>
+```
+
+Acquire a resource from the pool
+
+This method will either return an existing resource from the pool
+or create a new one if the pool is not at capacity.
+
+# Returns
+A `ResourceGuard` that automatically returns the resource to the pool
+when dropped.
+
+#### `stats`
+
+```rust
+fn stats(&self) -> PoolStats
+```
+
+Get pool statistics
+
+#### `health_check`
+
+```rust
+fn health_check(&self) -> Result<usize, Box<dyn Error + Send + Sync>>
+```
+
+Perform health check on all idle resources
+
+### `ScopedBuilder`
+
+Builder for creating complex scoped operations
+
+This builder allows you to compose multiple scoped operations
+with different setup/cleanup phases.
+
+# Example
+```rust
+use foundation_utils::scoped::ScopedBuilder;
+
+let result = ScopedBuilder::new()
+    .with_resource("resource1", |r| println!("cleanup: {}", r))
+    .with_resource("resource2", |r| println!("cleanup: {}", r))
+    .execute(|resources| {
+        format!("used {} resources", resources.len())
+    });
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new scoped builder
+
+#### `with_resource`
+
+```rust
+fn with_resource<F>(self, resource: T, cleanup: F) -> Self
+where
+    F: FnOnce + ?
+```
+
+Add a resource with cleanup to the scoped operation
+
+# Arguments
+- `resource`: The resource to manage
+- `cleanup`: Function to clean up the resource when the scope ends
+
+#### `execute`
+
+```rust
+fn execute<F, R>(self, work: F) -> R
+where
+    F: FnOnce
+```
+
+Execute the scoped operation with all resources
+
+All cleanup functions will be called in reverse order (LIFO)
+even if the work function panics.
+
+## Functions
+
+### `with_context`
+
+```rust
+fn with_context<T, F, R>(context: T, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with a scoped context
+
+This is the most common scoped operation pattern. It sets up a context,
+executes a function with that context, and automatically cleans up.
+
+# Type Parameters
+- `T`: The type of context
+- `F`: The type of function to execute
+- `R`: The return type of the function
+
+# Arguments
+- `context`: The context value to set up
+- `f`: The function to execute with the context
+
+# Example
+```rust
+use foundation_utils::scoped::with_context;
+
+let result = with_context("my_context", |ctx| {
+    println!("Working with context: {}", ctx);
+    42
+});
+assert_eq!(result, 42);
+```
+
+### `guard`
+
+```rust
+fn guard<T, F>(resource: T, cleanup: F) -> Guard<T, F>
+where
+    F: FnOnce
+```
+
+Create a simple RAII guard with cleanup function
+
+This is the most basic guard pattern - useful for any resource that needs cleanup
+
+# Example
+```rust
+use foundation_utils::guard;
+
+let _guard = guard("my_resource", |r| {
+    println!("Cleaning up: {}", r);
+});
+// Cleanup happens automatically when guard drops
+```
+
+### `with_scoped`
+
+```rust
+fn with_scoped<S, W, C, T, R>(setup: S, work: W, cleanup: C) -> R
+where
+    S: FnOnce,
+    W: FnOnce,
+    C: FnOnce
+```
+
+Execute a function with scoped setup and cleanup
+
+This pattern guarantees that cleanup happens even if the function panics
+
+# Example
+```rust
+use foundation_utils::with_scoped;
+
+let result = with_scoped(
+    || 42,
+    |resource| *resource + 10,
+    |resource| println!("cleanup: {}", resource),
+);
+assert_eq!(result, 52);
+```
+
+## Macros
+
+### `context_key!`
+
+Macro for creating context keys
+
+This macro creates a typed context key that can be used for type-safe
+context access.
+
+# Example
+```rust
+use foundation_utils::context_key;
+
+context_key!(USER_ID, String);
+context_key!(REQUEST_ID, String);
+context_key!(TRACE_ID, String);
+```
+
+### `with_context_scoped!`
+
+Macro for scoped context operations
+
+This macro provides a convenient way to set context values for a scope.
+
+# Example
+```rust
+use foundation_utils::{with_context_scoped, context_key};
+
+context_key!(USER_ID, String);
+
+let result = with_context_scoped!(USER_ID, "user123".to_string(), {
+    // Work with context
+    42
+});
+```
+
+### `raii_guard!`
+
+Macro to create a simple RAII guard
+
+This macro provides a convenient way to create guards with inline cleanup logic.
+
+# Example
+```rust
+use foundation_utils::raii_guard;
+
+let _guard = raii_guard!("my_resource", |r| {
+    println!("Cleaning up: {}", r);
+});
+```
+
+### `context_guard!`
+
+Macro to create a context guard
+
+This macro provides a convenient way to create context guards with
+setup and cleanup logic.
+
+# Example
+```rust
+use foundation_utils::context_guard;
+
+let _guard = context_guard!(
+    "my_context",
+    |ctx| println!("set: {}", ctx),
+    || println!("cleared")
+);
+```
+
+### `scoped_operation!`
+
+Macro for creating scoped operations
+
+This macro provides a convenient syntax for common scoped patterns.
+
+# Example
+```rust
+use foundation_utils::scoped_operation;
+
+let result = scoped_operation! {
+    setup => || "resource",
+    work => |resource| format!("used: {}", resource),
+    cleanup => |resource| println!("cleanup: {}", resource)
+};
+```
+
+### `with_scoped_context!`
+
+Macro for creating context-based scoped operations
+
+# Example
+```rust
+use foundation_utils::with_scoped_context;
+
+let result = with_scoped_context!("my_context", |ctx| {
+    println!("Context: {}", ctx);
+    42
+});
+```

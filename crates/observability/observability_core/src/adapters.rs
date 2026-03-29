@@ -44,7 +44,7 @@ impl FormatterPort for CompactJsonFormatter {
         // Add structured fields if any
         if let serde_json::Value::Object(ref fields) = entry.fields {
             if !fields.is_empty() {
-                output.push_str(" ");
+                output.push(' ');
                 output.push_str(&serde_json::to_string(fields).map_err(|e| {
                     ObservabilityError::logging(format!("Field serialization failed: {}", e))
                 })?);
@@ -433,7 +433,7 @@ impl LoggingSetupBuilder {
     pub fn build(self) -> ObservabilityResult<StandardLogAdapter> {
         let processor_chain = self
             .processor_chain
-            .unwrap_or_else(|| crate::domain::build_default_processor_chain());
+            .unwrap_or_else(crate::domain::build_default_processor_chain);
 
         let transport = self
             .transport
@@ -700,7 +700,7 @@ impl TracingIntegrationBuilder {
     pub fn build(self) -> ObservabilityResult<TracingSubscriberAdapter> {
         let processor_chain = self
             .processor_chain
-            .unwrap_or_else(|| crate::domain::build_default_processor_chain());
+            .unwrap_or_else(crate::domain::build_default_processor_chain);
 
         let transport = self
             .transport
@@ -806,6 +806,12 @@ impl UnifiedWasmStdoutAdapter {
         let json_output = entry.to_json();
         println!("[METRIC] {}", json_output);
         Ok(())
+    }
+}
+
+impl Default for UnifiedWasmStdoutAdapter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

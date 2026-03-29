@@ -1,0 +1,141 @@
+---
+title: "protocol"
+description: "A2A v1.0 Protocol Handler"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Protocol Handler
+
+## Structs
+
+### `A2AProtocol`
+
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(agent_card: AgentCard) -> Self
+```
+
+
+#### `with_registry`
+
+```rust
+fn with_registry(agent_card: AgentCard, registry: A2AMethodRegistry) -> Self
+```
+
+
+#### `agent_card`
+
+```rust
+fn agent_card(&self) -> &AgentCard
+```
+
+
+#### `update_agent_card`
+
+```rust
+fn update_agent_card(&mut self, agent_card: AgentCard)
+```
+
+
+#### `registry`
+
+```rust
+fn registry(&self) -> &A2AMethodRegistry
+```
+
+
+#### `registry_mut`
+
+```rust
+fn registry_mut(&mut self) -> &mut A2AMethodRegistry
+```
+
+
+#### `register_method`
+
+```rust
+fn register_method<F>(&mut self, method: &str, description: &str, handler: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+
+#### `register_notification`
+
+```rust
+fn register_notification<F>(&mut self, method: &str, description: &str, handler: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+
+#### `handle_request`
+
+```rust
+fn handle_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+
+#### `handle_notification`
+
+```rust
+fn handle_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+
+#### `handle_incoming`
+
+```rust
+fn handle_incoming(&self, incoming: JsonRpcIncoming) -> A2AResult<Option<JsonRpcResponse>>
+```
+
+
+#### `get_capabilities`
+
+```rust
+fn get_capabilities(&self) -> Value
+```
+
+
+#### `get_method_metadata`
+
+```rust
+fn get_method_metadata(&self) -> HashMap<String, &MethodMetadata>
+```
+
+
+#### `validate_request_params`
+
+```rust
+fn validate_request_params(&self, method: &str, params: &Value) -> A2AResult<()>
+```
+
+
+#### `register_a2a_methods`
+
+```rust
+fn register_a2a_methods(&mut self, storage: Option<Arc<dyn TaskStorage>>)
+```
+
+Register all A2A v1.0 protocol methods.
+
+#### `send_request`
+
+```rust
+async fn send_request<T>(&self, transport: &T, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+
+#### `send_notification`
+
+```rust
+async fn send_notification<T>(&self, transport: &T, notification: JsonRpcNotification) -> A2AResult<()>
+```
+

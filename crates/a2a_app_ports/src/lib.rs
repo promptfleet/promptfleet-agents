@@ -3,10 +3,9 @@
 //! Defines the application-facing port that infrastructure (HTTP server)
 //! uses to delegate A2A methods to the SDK/application layer.
 
+use a2a_protocol_core::A2AResult;
 use a2a_protocol_core::agent::AgentCard;
 use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
-use a2a_protocol_core::A2AResult;
-use core::future::Future;
 use std::pin::Pin;
 
 #[cfg(target_arch = "wasm32")]

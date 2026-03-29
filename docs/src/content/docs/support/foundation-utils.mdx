@@ -1,0 +1,60 @@
+---
+title: foundation_utils
+description: Foundation utilities for RAII patterns, resource management, and scoped operations.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Zero runtime dependencies (pure Rust stdlib).</Aside>
+
+**Crate:** `foundation_utils` · **Path:** `crates/foundation_utils`  
+**Description** (`Cargo.toml`): *Foundation utilities for RAII patterns, resource management, and scoped operations*
+
+## Role
+
+Core foundational utilities for the PromptFleet Agents project. Provides zero-dependency, WASM-compatible patterns for RAII guards, scoped operations, context management, and resource pools. Pure Rust stdlib — no runtime overhead, automatic cleanup even during panics.
+
+## Feature flags
+
+From `crates/foundation_utils/Cargo.toml`:
+
+*No feature flags declared.* (`default = []`, core functionality has zero dependencies.)
+
+Optional dependencies `web-time` and `wasm-bindgen` exist but are not gated behind named features.
+
+## Public API (from `src/lib.rs`)
+
+Modules: `context`, `raii`, `resource`, `scoped`.
+
+Re-exports:
+
+- **`ContextManager`**, **`ThreadLocalContext`** — thread-safe context propagation
+- **`Guard`**, **`ScopedGuard`** — RAII guards with Drop-based cleanup
+- **`ResourceGuard`**, **`ResourcePool`** — safe resource acquisition/release
+- **`with_context`**, **`ScopedBuilder`**, **`ScopedCallback`** — scoped operation helpers
+
+Top-level convenience functions:
+
+- **`guard(resource, cleanup)`** — create a simple RAII guard
+- **`with_scoped(setup, work, cleanup)`** — execute a function with guaranteed setup/teardown
+
+Constant: **`VERSION`**.
+
+## Example sketch
+
+```rust
+use foundation_utils::{guard, with_scoped};
+
+// RAII guard — cleanup runs automatically when _g drops
+let _g = guard("my_resource", |r| println!("Cleaning up: {}", r));
+
+// Scoped operation — guaranteed setup/teardown
+let result = with_scoped(
+    || 42,
+    |resource| *resource + 10,
+    |resource| println!("cleanup: {}", resource),
+);
+assert_eq!(result, 52);
+```
+
+**Full API reference:** `cargo doc -p foundation_utils --no-deps`

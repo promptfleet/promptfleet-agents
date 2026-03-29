@@ -1,0 +1,76 @@
+---
+title: "error"
+description: "# MCP Protocol Errors"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Protocol Errors
+
+**Comprehensive error handling** for MCP protocol operations
+- JSON-RPC 2.0 compliant error codes
+- Integration with protocol_transport_core error system
+- Authentication and authorization error handling
+
+## Type Aliases
+
+### `McpResult`
+
+```rust
+type McpResult = Result<T, McpError>;
+```
+
+**Result type for MCP operations**
+
+## Enums
+
+### `McpError`
+
+**MCP-specific errors**
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `JsonRpc(String)` |  |
+| `Authentication(String)` |  |
+| `Authorization(String)` |  |
+| `ToolNotFound(String)` |  |
+| `ToolExecutionFailed(String)` |  |
+| `MemoryOperationFailed(String)` |  |
+| `InvalidToolParameters(String)` |  |
+| `ProtocolVersionMismatch { ... }` |  |
+| `UnsupportedCapability(String)` |  |
+| `Timeout(String)` |  |
+| `ExternalServerError(String)` |  |
+| `Transport(protocol_transport_core::TransportError)` |  |
+| `Protocol(protocol_transport_core::ProtocolError)` |  |
+| `Serialization(serde_json::Error)` |  |
+
+**Methods**
+
+#### `is_retryable`
+
+```rust
+fn is_retryable(&self) -> bool
+```
+
+Check if error is retryable
+
+#### `is_auth_error`
+
+```rust
+fn is_auth_error(&self) -> bool
+```
+
+Check if error is due to authentication
+
+#### `to_jsonrpc_code`
+
+```rust
+fn to_jsonrpc_code(&self) -> i32
+```
+
+Convert to JSON-RPC error code

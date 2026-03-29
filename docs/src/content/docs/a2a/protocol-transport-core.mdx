@@ -1,0 +1,71 @@
+---
+title: protocol_transport_core
+description: Universal transport foundation for multiple protocols — SpinKube optimized
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Uses Spin SDK on WASM, Reqwest/Tokio on native.</Aside>
+
+**Crate:** `protocol_transport_core` · **Path:** `crates/protocol_transport_core`  
+**Description** (`Cargo.toml`): *Universal transport foundation for multiple protocols - SpinKube optimized*
+
+## Role
+
+Universal transport foundation for A2A, MCP, Redpanda PubSub, and REST protocols. Protocol-agnostic, WASM-optimized, zero-copy design with composable transports. Provides the JSON-RPC 2.0 layer, streaming policies, header forwarding, and protocol routing that higher-level crates build on.
+
+## Feature flags
+
+From `crates/protocol_transport_core/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | Enables `client` and `server` |
+| `client` | Client-side transport (`transport` module) |
+| `server` | Server-side routing (`server` module) |
+| `batch` | Batch request support |
+
+## Public API (from `src/lib.rs`)
+
+**Modules:** `error`, `forward_headers`, `headers`, `jsonrpc`, `serialization`, `server` (feature `server`), `streaming`, `transport` (feature `client`)
+
+**Core types:**
+
+- **`UniversalRequest`** / **`UniversalResponse`** — protocol-agnostic request/response containers
+- **`ProtocolHandler`** trait — encode/decode between protocol-specific and universal formats
+- **`Transport`** trait — async send + health check (no `Send` bound for WASM compat)
+- **`AsyncProtocolHandler`** trait — Spin SDK async-compatible handler
+- **`ProtocolRouter`** — routes requests to registered protocol handlers
+- **`ProtocolHandlerFn`** — boxed function-based handler type
+
+**Re-exports:**
+
+- `ProtocolError`, `ProtocolResult`, `TransportError`, `TransportResult`
+- `ForwardedHeaders`, `sanitize_header_map`, `sanitize_headers`
+- `ProtocolHeaders`
+- `JsonRpcError`, `JsonRpcId`, `JsonRpcIncoming`, `JsonRpcNotification`, `JsonRpcRequest`, `JsonRpcResponse`, `JSONRPC_VERSION`, `error_codes`
+- `StreamingPolicy`, `RPC_REQUEST_TIMEOUT`
+- `IdleTimeoutStream` (native only)
+
+## Example sketch
+
+```rust
+use protocol_transport_core::{ProtocolRouter, UniversalRequest, AsyncProtocolHandler};
+
+let mut router = ProtocolRouter::new();
+router.register("A2A", my_a2a_handler);
+router.register("MCP", my_mcp_handler);
+
+let request = UniversalRequest {
+    method: "POST".into(),
+    uri: "/jsonrpc".into(),
+    headers: Default::default(),
+    body: payload,
+    protocol: "A2A".into(),
+    correlation_id: uuid::Uuid::new_v4().to_string(),
+};
+
+let response = router.route_request(request)?;
+```
+
+**Full API reference:** `cargo doc -p protocol_transport_core --no-deps`

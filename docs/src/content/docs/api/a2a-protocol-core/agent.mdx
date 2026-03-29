@@ -1,0 +1,211 @@
+---
+title: "agent"
+description: "A2A v1.0 Agent Metadata Types"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A v1.0 Agent Metadata Types
+
+Complete AgentCard redesign per A2A Protocol v1.0.0 specification.
+
+## Structs
+
+### `AgentSkill`
+
+**Agent Skill** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `tags` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `examples` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `input_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `security_requirements` | `Option&lt;Vec&lt;SecurityRequirement&gt;&gt;` |  |
+
+**Methods**
+
+#### `with_examples`
+
+```rust
+fn with_examples(self, examples: Vec<String>) -> Self
+```
+
+
+#### `with_example`
+
+```rust
+fn with_example<impl Into<String>>(self, example: impl Into) -> Self
+```
+
+
+#### `with_tags`
+
+```rust
+fn with_tags(self, tags: Vec<String>) -> Self
+```
+
+
+#### `supports_json_input`
+
+```rust
+fn supports_json_input(&self) -> bool
+```
+
+
+### `AgentInterface`
+
+**Agent Interface** (v1.0) — how to reach this agent.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `String` |  |
+| `protocol_binding` | `String` |  |
+| `tenant` | `Option&lt;String&gt;` |  |
+| `protocol_version` | `Option&lt;String&gt;` |  |
+
+### `AgentCapabilities`
+
+**Agent Capabilities** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `streaming` | `bool` |  |
+| `push_notifications` | `bool` |  |
+| `extensions` | `Option&lt;Vec&lt;AgentExtension&gt;&gt;` |  |
+| `extended_agent_card` | `bool` |  |
+
+### `AgentExtension`
+
+**Agent Extension** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uri` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `required` | `bool` |  |
+| `params` | `Option&lt;serde_json::Value&gt;` |  |
+
+### `AgentProvider`
+
+**Agent Provider** (v1.0)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `Option&lt;String&gt;` |  |
+| `organization` | `String` |  |
+
+### `AgentCardSignature`
+
+JWS signature for agent card integrity.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protected` | `String` |  |
+| `signature` | `String` |  |
+| `header` | `Option&lt;serde_json::Value&gt;` |  |
+
+### `AgentCard`
+
+**Agent Card** — v1.0 top-level metadata object.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `version` | `Option&lt;String&gt;` |  |
+| `supported_interfaces` | `Option&lt;Vec&lt;AgentInterface&gt;&gt;` |  |
+| `capabilities` | `Option&lt;AgentCapabilities&gt;` |  |
+| `skills` | `Vec&lt;AgentSkill&gt;` |  |
+| `default_input_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `default_output_modes` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `security_schemes` | `Option&lt;HashMap&lt;String, SecurityScheme&gt;&gt;` |  |
+| `security_requirements` | `Option&lt;Vec&lt;SecurityRequirement&gt;&gt;` |  |
+| `signatures` | `Option&lt;Vec&lt;AgentCardSignature&gt;&gt;` |  |
+| `icon_url` | `Option&lt;String&gt;` |  |
+| `provider` | `Option&lt;AgentProvider&gt;` |  |
+| `documentation_url` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(name: impl Into) -> Self
+```
+
+Minimal card with just a name.
+
+#### `with_capability`
+
+```rust
+fn with_capability<impl Into<String>, impl Into<String>>(self, method: impl Into, description: impl Into) -> Self
+```
+
+Register a method capability on this agent card.
+
+Stores the method name and description in the card's `pf:methods`
+metadata map. Used by `A2AProtocol::register_method` to keep the
+agent card in sync with the method registry.
+
+#### `supports_method`
+
+```rust
+fn supports_method(&self, method: &str) -> bool
+```
+
+
+#### `get_method_description`
+
+```rust
+fn get_method_description(&self, method: &str) -> Option<String>
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(self, skill: AgentSkill) -> Self
+```
+
+
+#### `get_skill`
+
+```rust
+fn get_skill(&self, skill_id: &str) -> Option<&AgentSkill>
+```
+
+
+#### `get_skills_by_input_mode`
+
+```rust
+fn get_skills_by_input_mode(&self, input_mode: &str) -> Vec<&AgentSkill>
+```
+
+
+#### `supports_structured_skills`
+
+```rust
+fn supports_structured_skills(&self) -> bool
+```
+

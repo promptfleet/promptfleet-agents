@@ -1,0 +1,304 @@
+---
+title: "registry"
+description: "A2A Method Registry"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+A2A Method Registry
+
+Manages registration and lookup of A2A protocol methods.
+This module provides the core registry functionality without
+any transport or infrastructure dependencies.
+
+## Type Aliases
+
+### `A2AMethodHandler`
+
+```rust
+type A2AMethodHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+A2A Method Handler function type
+
+Handlers receive a JSON-RPC request and return a JSON-RPC response.
+All A2A protocol logic is handled through JSON-RPC 2.0 messages.
+
+### `A2ANotificationHandler`
+
+```rust
+type A2ANotificationHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+A2A Notification Handler function type
+
+Notification handlers receive notifications and perform side effects
+without returning responses (fire-and-forget).
+
+## Structs
+
+### `MethodMetadata`
+
+Method metadata
+
+Contains information about a registered method including
+its description, parameters, and capabilities.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `parameters` | `Option&lt;serde_json::Value&gt;` |  |
+| `returns` | `Option&lt;serde_json::Value&gt;` |  |
+| `is_notification` | `bool` |  |
+
+### `A2AMethodRegistry`
+
+A2A Method Registry
+
+Central registry for A2A protocol methods and their handlers.
+Provides method registration, lookup, and validation functionality
+without any transport dependencies.
+
+# Design Principles
+
+- **Pure Domain Logic**: No transport or infrastructure concerns
+- **JSON-RPC Foundation**: All methods use JSON-RPC 2.0 message types
+- **Thread Safe**: Can be safely shared across multiple threads
+- **Method Metadata**: Rich metadata for discovery and documentation
+
+# Examples
+
+```rust
+use a2a_protocol_core::{A2AMethodRegistry, JsonRpcRequest, JsonRpcResponse, A2AError};
+use serde_json::json;
+use std::sync::Arc;
+
+fn example() -> Result<(), A2AError> {
+    let mut registry = A2AMethodRegistry::new();
+     
+    // Register a method handler
+    registry.register_method(
+        "ping",
+        "Simple ping method",
+        Arc::new(|request| {
+            Ok(JsonRpcResponse::success(request.id, json!({"pong": true})))
+        })
+    );
+     
+    // Handle requests
+    let request = JsonRpcRequest::new(json!("req-123"), "ping".to_string(), json!({}));
+    let response = registry.handle_request(request)?;
+    Ok(())
+}
+```
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty registry
+
+#### `with_agent_card`
+
+```rust
+fn with_agent_card(agent_card: AgentCard) -> Self
+```
+
+Create a registry with agent card
+
+#### `set_agent_card`
+
+```rust
+fn set_agent_card(&mut self, agent_card: AgentCard)
+```
+
+Set the agent card for this registry
+
+#### `agent_card`
+
+```rust
+fn agent_card(&self) -> Option<&AgentCard>
+```
+
+Get the agent card
+
+#### `register_method`
+
+```rust
+fn register_method<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, handler: A2AMethodHandler)
+```
+
+Register a method handler
+
+Registers a handler function for JSON-RPC requests to the specified method.
+
+# Arguments
+
+- `method`: Method name (e.g., "ping", "process_data")
+- `description`: Human-readable description of the method
+- `handler`: Function that handles requests for this method
+
+#### `register_method_with_metadata`
+
+```rust
+fn register_method_with_metadata<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, parameters: Option<Value>, returns: Option<Value>, handler: A2AMethodHandler)
+```
+
+Register a method handler with metadata
+
+Registers a method handler with detailed parameter and return type information.
+
+#### `register_notification`
+
+```rust
+fn register_notification<impl Into<String>, impl Into<String>>(&mut self, method: impl Into, description: impl Into, handler: A2ANotificationHandler)
+```
+
+Register a notification handler
+
+Registers a handler function for JSON-RPC notifications (fire-and-forget).
+
+# Arguments
+
+- `method`: Method name (e.g., "log.info", "metric.counter")
+- `description`: Human-readable description of the notification
+- `handler`: Function that handles notifications for this method
+
+#### `handle_request`
+
+```rust
+fn handle_request(&self, request: JsonRpcRequest) -> A2AResult<JsonRpcResponse>
+```
+
+Handle a JSON-RPC request
+
+Looks up the method handler and executes it with the request.
+
+# Arguments
+
+- `request`: The JSON-RPC 2.0 request to handle
+
+# Returns
+
+- `Ok(JsonRpcResponse)`: Success response from method handler
+- `Err(A2AError)`: Method not found or handler error
+
+#### `handle_notification`
+
+```rust
+fn handle_notification(&self, notification: JsonRpcNotification) -> A2AResult<()>
+```
+
+Handle a JSON-RPC notification
+
+Looks up the notification handler and executes it.
+
+# Arguments
+
+- `notification`: The JSON-RPC 2.0 notification to handle
+
+# Returns
+
+- `Ok(())`: Notification handled successfully
+- `Err(A2AError)`: Method not found or handler error
+
+#### `has_method`
+
+```rust
+fn has_method(&self, method: &str) -> bool
+```
+
+Check if method is registered
+
+#### `has_notification`
+
+```rust
+fn has_notification(&self, method: &str) -> bool
+```
+
+Check if notification is registered
+
+#### `get_method_metadata`
+
+```rust
+fn get_method_metadata(&self, method: &str) -> Option<&MethodMetadata>
+```
+
+Get method metadata
+
+#### `list_methods`
+
+```rust
+fn list_methods(&self) -> Vec<String>
+```
+
+List all registered methods
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+List all registered notifications
+
+#### `get_all_metadata`
+
+```rust
+fn get_all_metadata(&self) -> &HashMap<String, MethodMetadata>
+```
+
+Get all method metadata
+
+#### `unregister_method`
+
+```rust
+fn unregister_method(&mut self, method: &str) -> bool
+```
+
+Unregister a method
+
+#### `unregister_notification`
+
+```rust
+fn unregister_notification(&mut self, method: &str) -> bool
+```
+
+Unregister a notification
+
+#### `clear`
+
+```rust
+fn clear(&mut self)
+```
+
+Clear all registrations
+
+#### `stats`
+
+```rust
+fn stats(&self) -> RegistryStats
+```
+
+Get registry statistics
+
+### `RegistryStats`
+
+Registry statistics
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `method_count` | `usize` |  |
+| `notification_count` | `usize` |  |
+| `total_registrations` | `usize` |  |

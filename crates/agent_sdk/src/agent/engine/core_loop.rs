@@ -1,7 +1,7 @@
 //! Core tool-calling execution loop — the single source of truth.
 //!
 //! This module contains the protocol-agnostic inner loop that drives
-//! LLM → tool calls → LLM iterations. It operates on raw JSON messages
+//! LLM-to-tool-call iterations. It operates on [`llm_client::ChatMessage`]
 //! and emits [`AgentTraceEvent`]s through a callback.
 //!
 //! No A2A types, no `MessageContext`, no `TaskContext`, no `checkpoint_task`.
@@ -12,10 +12,11 @@ use crate::agent::llm_invoker::LlmRequestDefaults;
 use crate::agent::tool_context::ToolContext;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::trace::AgentTraceEvent;
+use llm_client::{ChatMessage, LlmRequest, ToolChoice, ToolSchema};
 use log::debug;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use super::types::{EngineConfig, EngineError, EngineResult, LlmTurnInvoker};
 
@@ -39,7 +40,7 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
     model: &str,
     tools: &ToolRegistry,
     config: &EngineConfig,
-    messages: &mut Vec<serde_json::Value>,
+    messages: &mut Vec<ChatMessage>,
     on_event: &F,
     event_sink: Option<Arc<dyn Fn(AgentTraceEvent) + Send + Sync>>,
     cancel_flag: Option<Arc<AtomicBool>>,
@@ -90,11 +91,11 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
             }
         }
 
-        // ── Build LLM payload ───────────────────────────────────────
-        let tools_json = build_tools_json(tools);
+        // ── Build LLM request ───────────────────────────────────────
+        let tool_schemas = build_tool_schemas(tools);
 
         if let Some(max_tokens) = config.max_context_tokens {
-            let evicted = trim_messages_to_budget(messages, max_tokens, &tools_json);
+            let evicted = trim_messages_to_budget(messages, max_tokens, &tool_schemas);
             if evicted > 0 {
                 on_event(AgentTraceEvent::ContextTrimmed {
                     evicted_count: evicted as u32,
@@ -103,15 +104,23 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
             }
         }
 
-        let mut payload = serde_json::json!({
-            "model": model,
-            "messages": &*messages,
-            "tools": tools_json,
-            "tool_choice": "auto",
-            "parallel_tool_calls": false
-        });
+        let mut parallel_ext = serde_json::Map::new();
+        parallel_ext.insert(
+            "parallel_tool_calls".to_string(),
+            serde_json::Value::Bool(false),
+        );
+
+        let mut request = LlmRequest {
+            model: model.to_string(),
+            messages: messages.clone(),
+            tools: Some(tool_schemas),
+            tool_choice: Some(ToolChoice::Auto),
+            extensions: Some(parallel_ext),
+            ..Default::default()
+        };
+
         if let Some(ref defaults) = config.request_defaults {
-            apply_request_defaults(&mut payload, defaults);
+            apply_request_defaults(&mut request, defaults);
         }
 
         // ── Emit TurnStarted ────────────────────────────────────────
@@ -122,7 +131,7 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
         });
 
         // ── Invoke LLM turn ─────────────────────────────────────────
-        let turn_result = match invoker.invoke_turn(payload).await {
+        let turn_result = match invoker.invoke_turn(request).await {
             Ok(r) => r,
             Err(e) => {
                 on_event(AgentTraceEvent::Failed {
@@ -138,25 +147,23 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
 
         // ── Execute pending tool calls ──────────────────────────────
         if !turn_result.tool_calls.is_empty() {
-            let tc_history: Vec<serde_json::Value> = turn_result
+            let tool_call_requests: Vec<llm_client::ToolCallRequest> = turn_result
                 .tool_calls
                 .iter()
-                .map(|tc| {
-                    serde_json::json!({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": tc.arguments_raw
-                        }
-                    })
+                .map(|tc| llm_client::ToolCallRequest {
+                    id: tc.id.clone(),
+                    name: tc.name.clone(),
+                    arguments: serde_json::from_str(&tc.arguments_raw)
+                        .unwrap_or_else(|_| serde_json::json!({"_raw": tc.arguments_raw})),
                 })
                 .collect();
-            messages.push(serde_json::json!({
-                "role": "assistant",
-                "content": serde_json::Value::Null,
-                "tool_calls": tc_history
-            }));
+            let assistant_msg = ChatMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(tool_call_requests),
+                ..Default::default()
+            };
+            messages.push(assistant_msg);
 
             for tc in &turn_result.tool_calls {
                 let arguments: serde_json::Value = serde_json::from_str(&tc.arguments_raw)
@@ -220,11 +227,13 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             success: true,
                         });
 
-                        messages.push(serde_json::json!({
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": out_str
-                        }));
+                        let tool_result_msg = ChatMessage {
+                            role: "tool".to_string(),
+                            content: Some(out_str),
+                            tool_call_id: Some(tc.id.clone()),
+                            ..Default::default()
+                        };
+                        messages.push(tool_result_msg);
 
                         total_tool_calls += 1;
                     }
@@ -240,11 +249,13 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             success: false,
                         });
 
-                        messages.push(serde_json::json!({
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": serde_json::json!({"error": parsed_error}).to_string()
-                        }));
+                        let error_result_msg = ChatMessage {
+                            role: "tool".to_string(),
+                            content: Some(serde_json::json!({"error": parsed_error}).to_string()),
+                            tool_call_id: Some(tc.id.clone()),
+                            ..Default::default()
+                        };
+                        messages.push(error_result_msg);
 
                         total_tool_calls += 1;
                     }
@@ -294,19 +305,15 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
 // Internal helpers
 // =========================================================================
 
-fn build_tools_json(tools: &ToolRegistry) -> Vec<serde_json::Value> {
+fn build_tool_schemas(tools: &ToolRegistry) -> Vec<ToolSchema> {
     tools
         .list()
         .iter()
-        .map(|t| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.parameters
-                }
-            })
+        .map(|t| ToolSchema {
+            name: t.name.clone(),
+            description: t.description.clone(),
+            parameters: t.parameters.clone(),
+            strict: if t.strict { Some(true) } else { None },
         })
         .collect()
 }
@@ -314,26 +321,22 @@ fn build_tools_json(tools: &ToolRegistry) -> Vec<serde_json::Value> {
 // ── Context-window management ───────────────────────────────────────────
 
 fn trim_messages_to_budget(
-    messages: &mut Vec<serde_json::Value>,
+    messages: &mut Vec<ChatMessage>,
     max_tokens: u32,
-    tools_json: &[serde_json::Value],
+    tool_schemas: &[ToolSchema],
 ) -> usize {
-    let tools_tokens = estimate_tools_tokens(tools_json);
+    let tools_tokens = estimate_tools_tokens_schemas(tool_schemas);
     let available = max_tokens.saturating_sub(tools_tokens);
 
-    let total = estimate_messages_tokens(messages);
+    let total = estimate_messages_tokens_chat(messages);
     if total <= available {
         return 0;
     }
 
-    let has_system = messages
-        .first()
-        .and_then(|m| m.get("role"))
-        .and_then(|v| v.as_str())
-        == Some("system");
+    let has_system = messages.first().is_some_and(|m| m.role == "system");
 
     let system_tokens = if has_system {
-        estimate_msg_tokens(&messages[0])
+        chat_message_as_value_tokens(&messages[0])
     } else {
         0
     };
@@ -344,7 +347,7 @@ fn trim_messages_to_budget(
     let mut keep_from = messages.len();
     let mut used: u32 = 0;
     for i in (start_idx..messages.len()).rev() {
-        let msg_tokens = estimate_msg_tokens(&messages[i]);
+        let msg_tokens = chat_message_as_value_tokens(&messages[i]);
         if used + msg_tokens > history_budget {
             break;
         }
@@ -367,6 +370,14 @@ fn trim_messages_to_budget(
     evicted
 }
 
+fn chat_message_as_value_tokens(msg: &ChatMessage) -> u32 {
+    serde_json::to_value(msg)
+        .ok()
+        .as_ref()
+        .map(estimate_msg_tokens)
+        .unwrap_or(4)
+}
+
 fn estimate_msg_tokens(msg: &serde_json::Value) -> u32 {
     let overhead: u32 = 4;
     let content = msg.get("content").and_then(|v| v.as_str()).unwrap_or("");
@@ -386,11 +397,14 @@ fn estimate_msg_tokens(msg: &serde_json::Value) -> u32 {
     tokens
 }
 
-fn estimate_messages_tokens(messages: &[serde_json::Value]) -> u32 {
-    3 + messages.iter().map(estimate_msg_tokens).sum::<u32>()
+fn estimate_messages_tokens_chat(messages: &[ChatMessage]) -> u32 {
+    3 + messages
+        .iter()
+        .map(chat_message_as_value_tokens)
+        .sum::<u32>()
 }
 
-fn estimate_tools_tokens(tools: &[serde_json::Value]) -> u32 {
+fn estimate_tools_tokens_schemas(tools: &[ToolSchema]) -> u32 {
     if tools.is_empty() {
         return 0;
     }
@@ -404,23 +418,32 @@ fn estimate_tools_tokens(tools: &[serde_json::Value]) -> u32 {
 
 // ── Request defaults ────────────────────────────────────────────────────
 
-fn apply_request_defaults(payload: &mut serde_json::Value, defaults: &LlmRequestDefaults) {
-    let obj = match payload.as_object_mut() {
-        Some(o) => o,
-        None => return,
-    };
+fn merge_ext_maps(
+    a: Option<serde_json::Map<String, serde_json::Value>>,
+    b: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    match (a, b) {
+        (None, None) => None,
+        (Some(m), None) | (None, Some(m)) => Some(m),
+        (Some(mut m1), Some(m2)) => {
+            for (k, v) in m2 {
+                m1.insert(k, v);
+            }
+            Some(m1)
+        }
+    }
+}
 
+fn apply_request_defaults(request: &mut LlmRequest, defaults: &LlmRequestDefaults) {
     if let Some(ref model_cfg) = defaults.model_config {
-        let req = llm_client::LlmRequest {
-            model: obj
-                .get("model")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            temperature: defaults.temperature,
-            max_tokens: defaults.max_tokens,
-            extensions: defaults.extensions.clone(),
-            ..Default::default()
+        let prep_input = LlmRequest {
+            model: request.model.clone(),
+            messages: vec![],
+            tools: None,
+            tool_choice: None,
+            temperature: defaults.temperature.or(request.temperature),
+            max_tokens: defaults.max_tokens.or(request.max_tokens),
+            extensions: merge_ext_maps(request.extensions.clone(), defaults.extensions.clone()),
         };
 
         let mutators: Vec<Box<dyn llm_client::prepare::RequestMutator>> = vec![
@@ -432,47 +455,48 @@ fn apply_request_defaults(payload: &mut serde_json::Value, defaults: &LlmRequest
 
         match llm_client::prepare::prepare_request(
             model_cfg,
-            req,
+            prep_input,
             &mutators,
             &validators,
             llm_client::prepare::Policy::Permissive,
         ) {
             Ok(prepared) => {
-                if let Some(t) = prepared.temperature {
-                    obj.insert("temperature".to_string(), serde_json::json!(t));
+                if prepared.temperature.is_some() {
+                    request.temperature = prepared.temperature;
                 }
-                if let Some(mt) = prepared.max_tokens {
-                    obj.insert("max_tokens".to_string(), serde_json::json!(mt));
+                if prepared.max_tokens.is_some() {
+                    request.max_tokens = prepared.max_tokens;
                 }
                 if let Some(ext) = prepared.extensions {
+                    let mut m = request.extensions.clone().unwrap_or_default();
                     for (k, v) in ext {
-                        obj.insert(k, v);
+                        m.insert(k, v);
                     }
+                    request.extensions = Some(m);
                 }
             }
             Err(e) => {
                 log::warn!("prepare_request failed, applying raw defaults: {}", e);
-                merge_raw_defaults(obj, defaults);
+                merge_raw_defaults(request, defaults);
             }
         }
     } else {
-        merge_raw_defaults(obj, defaults);
+        merge_raw_defaults(request, defaults);
     }
 }
 
-fn merge_raw_defaults(
-    obj: &mut serde_json::Map<String, serde_json::Value>,
-    defaults: &LlmRequestDefaults,
-) {
+fn merge_raw_defaults(req: &mut LlmRequest, defaults: &LlmRequestDefaults) {
     if let Some(t) = defaults.temperature {
-        obj.insert("temperature".to_string(), serde_json::json!(t));
+        req.temperature = Some(t);
     }
     if let Some(mt) = defaults.max_tokens {
-        obj.insert("max_tokens".to_string(), serde_json::json!(mt));
+        req.max_tokens = Some(mt);
     }
     if let Some(ref ext) = defaults.extensions {
+        let mut m = req.extensions.take().unwrap_or_default();
         for (k, v) in ext {
-            obj.insert(k.clone(), v.clone());
+            m.insert(k.clone(), v.clone());
         }
+        req.extensions = Some(m);
     }
 }

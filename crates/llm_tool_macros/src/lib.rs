@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::Parser, parse_macro_input, punctuated::Punctuated, Expr, ExprLit, ItemFn, Lit, Meta,
-    MetaNameValue, Token,
+    Expr, ExprLit, ItemFn, Lit, Meta, MetaNameValue, Token, parse::Parser, parse_macro_input,
+    punctuated::Punctuated,
 };
 
 /// #[llm_tool(name="get_weather", description="...", context)]
@@ -21,8 +21,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
             Meta::NameValue(MetaNameValue { path, value, .. }) => {
                 if path.is_ident("name") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(ref s),
-                        ..
+                        lit: Lit::Str(s), ..
                     }) = value
                     {
                         tool_name = Some(s.value());
@@ -30,8 +29,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 if path.is_ident("description") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(ref s),
-                        ..
+                        lit: Lit::Str(s), ..
                     }) = value
                     {
                         tool_desc = Some(s.value());
@@ -58,34 +56,31 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let mut call_args = Vec::new();
     let mut has_context_param = false;
     for (idx, input) in inputs.iter().enumerate() {
-        match input {
-            syn::FnArg::Typed(pt) => {
-                let pat = &pt.pat;
-                let ty = &pt.ty;
-                let is_context = match &**ty {
-                    syn::Type::Path(tp) => tp
-                        .path
-                        .segments
-                        .last()
-                        .map(|seg| seg.ident == "ToolContext")
-                        .unwrap_or(false),
-                    _ => false,
-                };
+        if let syn::FnArg::Typed(pt) = input {
+            let pat = &pt.pat;
+            let ty = &pt.ty;
+            let is_context = match &**ty {
+                syn::Type::Path(tp) => tp
+                    .path
+                    .segments
+                    .last()
+                    .map(|seg| seg.ident == "ToolContext")
+                    .unwrap_or(false),
+                _ => false,
+            };
 
-                if is_context {
-                    has_context_param = true;
-                    call_args.push(quote! { <#ty as Default>::default() });
-                    continue;
-                }
-
-                let field_ident = match &**pat {
-                    syn::Pat::Ident(pi) => pi.ident.clone(),
-                    _ => format_ident!("arg{}", idx),
-                };
-                fields.push(quote! { pub #field_ident: #ty });
-                call_args.push(quote! { parsed.#field_ident });
+            if is_context {
+                has_context_param = true;
+                call_args.push(quote! { <#ty as Default>::default() });
+                continue;
             }
-            _ => {}
+
+            let field_ident = match &**pat {
+                syn::Pat::Ident(pi) => pi.ident.clone(),
+                _ => format_ident!("arg{}", idx),
+            };
+            fields.push(quote! { pub #field_ident: #ty });
+            call_args.push(quote! { parsed.#field_ident });
         }
     }
 
@@ -139,7 +134,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let gen = quote! {
+    let r#gen = quote! {
         #func
 
         #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
@@ -176,5 +171,5 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
             serde_json::to_value(out).unwrap_or(serde_json::json!({"result":"<non-serializable>"}))
         }
     };
-    gen.into()
+    r#gen.into()
 }

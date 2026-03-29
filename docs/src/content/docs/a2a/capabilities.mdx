@@ -1,0 +1,38 @@
+---
+title: A2A v1.0 Compliance
+description: Implementation status of Google A2A v1.0.0 JSON-RPC methods.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+Based on the A2A v1.0.0 spec (Linux Foundation, March 2026). Our implementation targets the JSON-RPC binding exclusively.
+</Aside>
+
+JSON-RPC methods are registered in [`A2AProtocol::register_a2a_methods`](https://docs.rs/a2a_protocol_core/latest/a2a_protocol_core/struct.A2AProtocol.html#method.register_a2a_methods) in `a2a_protocol_core` (`crates/a2a_protocol_core/src/protocol.rs`). The HTTP server (`a2a_http_server`) may intercept `SendStreamingMessage` on **native** for SSE when a streaming port is configured; see [`native_server.rs`](https://github.com/promptfleet/promptfleet-agents/blob/main/crates/a2a_http_server/src/native_server.rs).
+
+See also the [full capabilities matrix](/promptfleet-agents/capabilities/) for SDK feature flags.
+
+## Method matrix
+
+| Method | Status | Feature flag | WASM | Native | Notes |
+|--------|--------|--------------|------|--------|-------|
+| `Ping` | ✅ Stable | `a2a_protocol_core` `core` | Yes | Yes | Always registered when methods are installed. |
+| `GetAgentCard` | ✅ Stable | `a2a_protocol_core` `core` | Yes | Yes | Always registered. |
+| `GetExtendedAgentCard` | ✅ Stable | `a2a_protocol_core` `core` | Yes | Yes | Always registered; uses `DefaultAgentDiscovery`. |
+| `SendMessage` | ✅ Stable | — | Yes | Yes | Registered only when `register_a2a_methods` is called with `Some(task_storage)`. |
+| `GetTask` | ✅ Stable | — | Yes | Yes | Requires task storage (`Some`). |
+| `CancelTask` | ✅ Stable | — | Yes | Yes | Requires task storage (`Some`). |
+| `ListTasks` | ✅ Stable | — | Yes | Yes | Requires task storage (`Some`). |
+| `SendStreamingMessage` | ✅ Feature-gated | `event-stream` on `a2a_protocol_core` (e.g. via `agent_sdk` `event-stream` or `a2a_http_server` `streaming`) | Partial | Yes | Requires task storage **and** `event-stream`. Protocol handler creates a task (`handle_tasks_send_subscribe`). **HTTP SSE** is native-only when `A2AHttpServer::with_streaming_port` is set; WASM JSON-RPC returns a normal JSON-RPC result (no SSE route). |
+| `SubscribeToTask` | 🔲 Planned | — | — | — | Request types exist in `a2a_protocol_core`; not registered in `register_a2a_methods`. |
+| `CreateTaskPushNotificationConfig` | 🔲 Planned | — | — | — | Types only (`push-notifications` feature exists on `a2a_protocol_core` / `a2a_http_server` `push`; no handlers registered). |
+| `GetTaskPushNotificationConfig` | 🔲 Planned | — | — | — | Types only. |
+| `ListTaskPushNotificationConfigs` | 🔲 Planned | — | — | — | Types only. |
+| `DeleteTaskPushNotificationConfig` | 🔲 Planned | — | — | — | Types only. |
+
+### Legend
+
+- **✅ Stable** — Implemented and registered (subject to storage / HTTP wiring as noted).
+- **✅ Feature-gated** — Implemented behind Cargo features (`event-stream` / `streaming`).
+- **🔲 Planned** — Domain/types may exist; no JSON-RPC handler in `register_a2a_methods`.

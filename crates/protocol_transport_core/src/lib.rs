@@ -28,15 +28,15 @@ pub use transport::*;
 
 // Re-export core types for convenience
 pub use error::{ProtocolError, ProtocolResult, TransportError, TransportResult};
-pub use forward_headers::{sanitize_header_map, sanitize_headers, ForwardedHeaders};
+pub use forward_headers::{ForwardedHeaders, sanitize_header_map, sanitize_headers};
 pub use headers::ProtocolHeaders;
 pub use jsonrpc::{
-    error_codes, JsonRpcError, JsonRpcId, JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest,
-    JsonRpcResponse, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest,
+    JsonRpcResponse, error_codes,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use streaming::IdleTimeoutStream;
-pub use streaming::{StreamingPolicy, RPC_REQUEST_TIMEOUT};
+pub use streaming::{RPC_REQUEST_TIMEOUT, StreamingPolicy};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -82,7 +82,7 @@ pub trait ProtocolHandler {
 
     /// Deserialize universal response to protocol format
     fn decode_response(&self, universal: &UniversalResponse)
-        -> Result<Self::Response, Self::Error>;
+    -> Result<Self::Response, Self::Error>;
 }
 
 /// **Transport Trait** - HTTP, SSE, etc.
@@ -511,9 +511,11 @@ mod tests {
         // Test that new handler is used
         let request = create_test_universal_request("OVERWRITE");
         let result = router.route_request(request).unwrap();
-        assert!(String::from_utf8(result.body)
-            .unwrap()
-            .contains("OVERWRITTEN"));
+        assert!(
+            String::from_utf8(result.body)
+                .unwrap()
+                .contains("OVERWRITTEN")
+        );
     }
 
     #[test]

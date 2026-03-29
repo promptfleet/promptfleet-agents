@@ -1,0 +1,50 @@
+---
+title: PromptFleet Agents
+description: Rust crate ecosystem for building, deploying, and scaling A2A agents.
+template: splash
+hero:
+  title: PromptFleet Agents
+  tagline: Build WASM-native A2A agents in Rust. 25 crates. One SDK.
+  actions:
+    - text: Quickstart
+      link: /promptfleet-agents/quickstart/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/promptfleet/promptfleet-agents
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="SDK / Core" icon="rocket">
+    AgentBuilder, skills, config, proc macros. Zero to agent in 10 lines.
+  </Card>
+  <Card title="A2A Protocol" icon="random">
+    Full Google A2A v1.0 implementation. JSON-RPC, SSE streaming, agent discovery.
+  </Card>
+  <Card title="LLM" icon="star">
+    Provider-agnostic client, tool registry, context window management.
+  </Card>
+  <Card title="Observability" icon="magnifier">
+    Structured logging, OpenTelemetry, Prometheus. WASM-compatible.
+  </Card>
+</CardGrid>
+
+## Why PromptFleet?
+
+<CardGrid>
+  <Card title="Dual-Target" icon="laptop">
+    Same codebase compiles to **WASM** (local Spin or SpinKube on Kubernetes) and **native** (Axum). Pick your runtime.
+  </Card>
+  <Card title="Feature-Flag Composition" icon="setting">
+    Only pay for what you use. Every capability is behind an opt-in feature flag.
+  </Card>
+  <Card title="A2A v1.0 Compliant" icon="approve-check">
+    First-class Google A2A protocol support — JSON-RPC 2.0, SSE streaming, agent cards.
+  </Card>
+  <Card title="Production Observability" icon="magnifier">
+    OpenTelemetry traces, Prometheus metrics, structured logging — all WASM-safe.
+  </Card>
+</CardGrid>

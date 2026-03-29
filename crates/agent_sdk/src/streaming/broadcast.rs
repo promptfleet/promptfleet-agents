@@ -1,5 +1,5 @@
 use tokio::sync::broadcast;
-use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 #[derive(Clone)]
 pub struct StreamBroadcast<E: Clone + Send + 'static> {
@@ -20,7 +20,7 @@ impl<E: Clone + Send + 'static> StreamBroadcast<E> {
         self.tx.subscribe()
     }
 
-    pub fn to_stream(&self) -> impl futures::Stream<Item = E> {
+    pub fn to_stream(&self) -> impl futures::Stream<Item = E> + use<E> {
         BroadcastStream::new(self.tx.subscribe()).filter_map(|result| result.ok())
     }
 }

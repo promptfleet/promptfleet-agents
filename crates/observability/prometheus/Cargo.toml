@@ -1,14 +1,18 @@
 [package]
-name = "prometheus"
-version = "0.1.0"
-edition = "2021"
+name = "pf_prometheus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Prometheus metrics integration for the PromptFleet observability stack"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["structured-logging"]
-prometheus-federation = ["prometheus", "reqwest", "uuid", "serde_json"]
+prometheus-federation = ["prometheus_crate", "reqwest", "uuid", "serde_json"]
 pushgateway-client = ["prometheus-federation"]
 cardinality-reduction = ["prometheus-federation", "url"]
 recording-rules = ["prometheus-federation", "serde_yaml"]
@@ -22,7 +26,7 @@ observability_core = { workspace = true }
 log = "0.4"
 
 # Prometheus dependencies (feature-gated)
-prometheus = { version = "0.13", optional = true }
+prometheus_crate = { package = "prometheus", version = "0.13", optional = true }
 
 # Core dependencies
 thiserror = "1.0"

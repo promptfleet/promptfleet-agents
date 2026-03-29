@@ -1,6 +1,6 @@
 //! Auto-instrumentation support for OpenTelemetry
 
-use observability_core::{ObservabilityPlugin, SpanGuard, W3CTraceContext};
+use observability_core::{ObservabilityPlugin, W3CTraceContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -122,12 +122,12 @@ impl TraceContextPropagator {
 /// Macro for automatic function instrumentation
 #[macro_export]
 macro_rules! auto_instrument {
-    ($observability:expr, $name:expr, $func:expr) => {{
+    ($observability:expr_2021, $name:expr_2021, $func:expr_2021) => {{
         let instrumentation =
             $crate::auto_instrumentation::FunctionInstrumentation::new($observability);
         instrumentation.instrument_sync($name, &[], || $func)
     }};
-    ($observability:expr, $name:expr, $attrs:expr, $func:expr) => {{
+    ($observability:expr_2021, $name:expr_2021, $attrs:expr_2021, $func:expr_2021) => {{
         let instrumentation =
             $crate::auto_instrumentation::FunctionInstrumentation::new($observability);
         instrumentation.instrument_sync($name, $attrs, || $func)
@@ -137,12 +137,12 @@ macro_rules! auto_instrument {
 /// Macro for automatic async function instrumentation
 #[macro_export]
 macro_rules! auto_instrument_async {
-    ($observability:expr, $name:expr, $func:expr) => {{
+    ($observability:expr_2021, $name:expr_2021, $func:expr_2021) => {{
         let instrumentation =
             $crate::auto_instrumentation::FunctionInstrumentation::new($observability);
         instrumentation.instrument($name, &[], $func).await
     }};
-    ($observability:expr, $name:expr, $attrs:expr, $func:expr) => {{
+    ($observability:expr_2021, $name:expr_2021, $attrs:expr_2021, $func:expr_2021) => {{
         let instrumentation =
             $crate::auto_instrumentation::FunctionInstrumentation::new($observability);
         instrumentation.instrument($name, $attrs, $func).await

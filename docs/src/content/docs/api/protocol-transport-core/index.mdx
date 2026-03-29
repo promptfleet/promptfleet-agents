@@ -1,0 +1,634 @@
+---
+title: "protocol_transport_core"
+description: "# Protocol Transport Core"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Protocol Transport Core
+
+**Universal transport foundation** for multiple protocols
+- A2A (Agent-to-Agent)
+- MCP (Model Context Protocol)  
+- Redpanda PubSub
+- REST (GET/PUT/POST)
+
+## Design Principles
+- **Protocol Agnostic**: Transport independent of protocol details
+- **WASM-Optimized**: SpinKube-first design
+- **Zero-Copy**: Minimal serialization overhead
+- **Composable**: Mix and match transports and protocols
+
+## Constants
+
+### `JSONRPC_VERSION`
+
+```rust
+const JSONRPC_VERSION: &str = ;
+```
+
+JSON-RPC 2.0 version constant
+
+### `RPC_REQUEST_TIMEOUT`
+
+```rust
+const RPC_REQUEST_TIMEOUT: Duration = ;
+```
+
+Per-request RPC timeout (wall-clock). Applied to non-streaming calls.
+
+## Type Aliases
+
+### `ProtocolResult`
+
+```rust
+type ProtocolResult = Result<T, ProtocolError>;
+```
+
+
+### `TransportResult`
+
+```rust
+type TransportResult = Result<T, TransportError>;
+```
+
+**Result types**
+
+### `JsonRpcId`
+
+```rust
+type JsonRpcId = serde_json::Value;
+```
+
+JSON-RPC 2.0 request ID type
+
+Can be a string, number, or null according to the JSON-RPC 2.0 specification.
+The ID is used to correlate requests with responses and must be echoed back
+in the response exactly as received.
+
+# Valid ID Types
+
+- **String**: `"request-123"`, `"abc-def-456"`
+- **Number**: `1`, `42`, `1234567890`
+- **Null**: `null` (though discouraged for traceability)
+
+### `ProtocolHandlerFn`
+
+```rust
+type ProtocolHandlerFn = Box<dyn Fn + Send + Sync>;
+```
+
+**Protocol Handler Function** - Function-based approach for WASM compatibility
+
+## Traits
+
+### `ProtocolHandler`
+
+**Protocol Handler Trait** - Implement for each protocol
+
+**Associated Types**
+
+- `type Request` — 
+- `type Response` — 
+- `type Error` — 
+
+**Required / Provided Methods**
+
+```rust
+fn protocol_name(&self) -> &''static str
+```
+
+Protocol name (e.g., "A2A", "MCP", "REST")
+
+```rust
+fn encode_request(&self, request: &<Self as ?>::Request) -> Result<UniversalRequest, <Self as ?>::Error>
+```
+
+Serialize protocol request to universal format
+
+```rust
+fn decode_request(&self, universal: &UniversalRequest) -> Result<<Self as ?>::Request, <Self as ?>::Error>
+```
+
+Deserialize universal request to protocol format
+
+```rust
+fn encode_response(&self, response: &<Self as ?>::Response) -> Result<UniversalResponse, <Self as ?>::Error>
+```
+
+Serialize protocol response to universal format
+
+```rust
+fn decode_response(&self, universal: &UniversalResponse) -> Result<<Self as ?>::Response, <Self as ?>::Error>
+```
+
+Deserialize universal response to protocol format
+
+### `Transport`
+
+**Transport Trait** - HTTP, SSE, etc.
+
+Uses `async fn` in trait without `Send` bounds because WASM
+targets (Spin SDK) do not produce `Send` futures.
+
+**Required / Provided Methods**
+
+```rust
+async fn send(&self, request: UniversalRequest) -> Result<UniversalResponse, TransportError>
+```
+
+
+```rust
+async fn health_check(&self) -> Result<(), TransportError>
+```
+
+
+### `AsyncProtocolHandler`
+
+**Async Protocol Handler** - Spin SDK async compatible
+
+**Required / Provided Methods**
+
+```rust
+fn protocol_name(&self) -> &''static str
+```
+
+Protocol name (e.g., "A2A", "MCP", "REST")
+
+```rust
+fn handle_request_sync(&self, request: UniversalRequest) -> Result<UniversalResponse, ProtocolError>
+```
+
+Handle request synchronously (async operations handled internally)
+
+## Structs
+
+### `ForwardedHeaders`
+
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(headers: HashMap<String, String>) -> Self
+```
+
+
+#### `as_map`
+
+```rust
+fn as_map(&self) -> &HashMap<String, String>
+```
+
+
+#### `into_map`
+
+```rust
+fn into_map(self) -> HashMap<String, String>
+```
+
+
+### `ProtocolHeaders`
+
+**Common Protocol Headers**
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol` | `String` |  |
+| `version` | `String` |  |
+| `correlation_id` | `String` |  |
+| `client_agent_id` | `Option&lt;String&gt;` |  |
+| `trace_id` | `Option&lt;String&gt;` |  |
+
+**Methods**
+
+#### `from_headers`
+
+```rust
+fn from_headers(headers: &HashMap<String, String>) -> Self
+```
+
+Extract protocol headers from raw headers
+
+#### `to_headers`
+
+```rust
+fn to_headers(&self) -> HashMap<String, String>
+```
+
+Convert to raw headers HashMap
+
+### `JsonRpcError`
+
+JSON-RPC 2.0 Error Object structure
+
+Represents detailed error information in JSON-RPC 2.0 error responses.
+Includes a standard error code, human-readable message, and optional
+additional data for debugging and error handling.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `i64` | Error code (standard or application-defined) |
+| `message` | `String` | Error message |
+| `data` | `Option&lt;serde_json::Value&gt;` | Optional additional error data |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(code: i64, message: String) -> Self
+```
+
+Create a new JSON-RPC 2.0 error
+
+#### `with_data`
+
+```rust
+fn with_data(code: i64, message: String, data: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 error with additional data
+
+### `JsonRpcNotification`
+
+JSON-RPC 2.0 Notification structure
+
+Represents a JSON-RPC 2.0 notification message that does not expect a response.
+Notifications are "fire-and-forget" messages used for operations where the
+caller doesn't need to know the result.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (must be "2.0") |
+| `method` | `String` | Method name to invoke |
+| `params` | `serde_json::Value` | Method parameters (optional, defaults to null) |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(method: String, params: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 notification
+
+#### `is_valid`
+
+```rust
+fn is_valid(&self) -> bool
+```
+
+Check if this is a valid JSON-RPC 2.0 notification
+
+### `JsonRpcRequest`
+
+JSON-RPC 2.0 Request structure
+
+Represents a JSON-RPC 2.0 request message that expects a response.
+All requests must include the `jsonrpc`, `id`, and `method` fields.
+The `params` field is optional and defaults to null.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (must be "2.0") |
+| `id` | `JsonRpcId` | Request ID (string, number, or null) |
+| `method` | `String` | Method name to invoke |
+| `params` | `serde_json::Value` | Method parameters (optional, defaults to null) |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(id: JsonRpcId, method: String, params: serde_json::Value) -> Self
+```
+
+Create a new JSON-RPC 2.0 request
+
+#### `is_valid`
+
+```rust
+fn is_valid(&self) -> bool
+```
+
+Check if this is a valid JSON-RPC 2.0 request
+
+### `JsonRpcResponse`
+
+JSON-RPC 2.0 Response structure
+
+Represents a JSON-RPC 2.0 response message sent back to the client.
+A response must contain either a `result` (for success) or an `error`
+(for failure), but never both. The `id` field must match the request ID.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jsonrpc` | `String` | JSON-RPC version (always "2.0") |
+| `result` | `Option&lt;serde_json::Value&gt;` | Successful result (mutually exclusive with error) |
+| `error` | `Option&lt;JsonRpcError&gt;` | Error object (mutually exclusive with result) |
+| `id` | `JsonRpcId` | Request ID (copied from request) |
+
+**Methods**
+
+#### `success`
+
+```rust
+fn success(id: JsonRpcId, result: serde_json::Value) -> Self
+```
+
+Create a successful JSON-RPC 2.0 response
+
+#### `error`
+
+```rust
+fn error(id: JsonRpcId, code: i64, message: String) -> Self
+```
+
+Create an error JSON-RPC 2.0 response
+
+#### `error_with_data`
+
+```rust
+fn error_with_data(id: JsonRpcId, code: i64, message: String, data: serde_json::Value) -> Self
+```
+
+Create an error JSON-RPC 2.0 response with additional data
+
+#### `is_success`
+
+```rust
+fn is_success(&self) -> bool
+```
+
+Check if this is a success response
+
+#### `is_error`
+
+```rust
+fn is_error(&self) -> bool
+```
+
+Check if this is an error response
+
+### `IdleTimeoutStream`
+
+Stream wrapper that terminates when no item arrives within `idle_timeout`.
+
+The timer resets on every yielded item — a stream emitting one token
+every 500ms runs indefinitely. A stream that goes silent for
+`idle_timeout` is terminated with `None` (clean EOF).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(inner: S, idle_timeout: Duration) -> Self
+```
+
+
+### `StreamingPolicy`
+
+Three-clock streaming timeout configuration.
+
+Unconditional: compiled for both WASM and native targets.
+On WASM, values are stored for config parity but not enforced
+until WASI 0.3 streaming support is available.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connect_ms` | `u64` | TCP + TLS handshake timeout. Default: 10s. |
+| `first_byte_ms` | `u64` | Time until first data chunk arrives (after headers). Default: 45s. |
+| `idle_ms` | `u64` | Max silence between consecutive chunks — resets on each chunk. Default: 90s. |
+
+**Methods**
+
+#### `connect_timeout`
+
+```rust
+fn connect_timeout(&self) -> Duration
+```
+
+
+#### `first_byte_timeout`
+
+```rust
+fn first_byte_timeout(&self) -> Duration
+```
+
+
+#### `idle_timeout`
+
+```rust
+fn idle_timeout(&self) -> Duration
+```
+
+
+### `UniversalRequest`
+
+**Universal Request** - Protocol-agnostic request container
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `method` | `String` |  |
+| `uri` | `String` |  |
+| `headers` | `HashMap&lt;String, String&gt;` |  |
+| `body` | `Vec&lt;u8&gt;` |  |
+| `protocol` | `String` |  |
+| `correlation_id` | `String` |  |
+
+### `UniversalResponse`
+
+**Universal Response** - Protocol-agnostic response container
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `u16` |  |
+| `headers` | `HashMap&lt;String, String&gt;` |  |
+| `body` | `Vec&lt;u8&gt;` |  |
+| `protocol` | `String` |  |
+| `correlation_id` | `String` |  |
+
+### `ProtocolRouter`
+
+**Server Router** - Route requests to appropriate protocol handlers (Spin async compatible)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `register_fn`
+
+```rust
+fn register_fn<F>(&mut self, protocol: &str, handler: F)
+where
+    F: Fn + Send + Sync + ?
+```
+
+Register protocol handler function
+
+#### `register`
+
+```rust
+fn register<H>(&mut self, protocol: &str, handler: H)
+where
+    H: AsyncProtocolHandler + ?
+```
+
+Register async protocol handler
+
+#### `route_request`
+
+```rust
+fn route_request(&self, request: UniversalRequest) -> Result<UniversalResponse, ProtocolError>
+```
+
+Route request to appropriate handler
+
+#### `list_protocols`
+
+```rust
+fn list_protocols(&self) -> Vec<String>
+```
+
+List available protocols
+
+## Enums
+
+### `ProtocolError`
+
+**Universal Protocol Error**  
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `UnsupportedProtocol(String)` |  |
+| `ProtocolNotFound(String)` |  |
+| `Validation(String)` |  |
+| `Parsing(String)` |  |
+| `Transport(TransportError)` |  |
+| `Serialization(serde_json::Error)` |  |
+| `Internal(String)` |  |
+
+**Methods**
+
+#### `internal_error`
+
+```rust
+fn internal_error(msg: &str) -> Self
+```
+
+Create internal error
+
+#### `is_retryable`
+
+```rust
+fn is_retryable(&self) -> bool
+```
+
+Check if error is retryable
+
+### `TransportError`
+
+**Universal Transport Error**
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Network(_)` |  |
+| `Serialization(String)` |  |
+| `Timeout(String)` |  |
+| `Http { ... }` |  |
+| `Configuration(String)` |  |
+| `Authentication(String)` |  |
+
+**Methods**
+
+#### `is_retryable`
+
+```rust
+fn is_retryable(&self) -> bool
+```
+
+Check if error is retryable
+
+#### `is_auth_error`
+
+```rust
+fn is_auth_error(&self) -> bool
+```
+
+Check if error is due to authentication
+
+### `JsonRpcIncoming`
+
+Incoming JSON-RPC message types
+
+Represents all possible incoming JSON-RPC 2.0 messages that can be received
+and parsed. The enum uses serde's untagged feature to automatically detect
+the message type based on the presence of the `id` field.
+
+# Message Type Detection
+
+- **Request**: Has `id` field - expects a response
+- **Notification**: No `id` field - fire-and-forget
+- **Batch**: Array of requests/notifications (optional feature)
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Request(JsonRpcRequest)` | Standard JSON-RPC 2.0 request with ID |
+| `Notification(JsonRpcNotification)` | JSON-RPC 2.0 notification (no ID, no response expected) |
+
+## Functions
+
+### `sanitize_header_map`
+
+```rust
+fn sanitize_header_map(headers: &http::HeaderMap) -> ForwardedHeaders
+```
+
+
+### `sanitize_headers`
+
+```rust
+fn sanitize_headers(headers: &HashMap<String, String>) -> ForwardedHeaders
+```
+
+
+## Macros
+
+### `create_universal_server!`
+
+**SERVER MACRO** - Create universal server with protocol registration
+
+The key insight: Spin http_component functions are sync, but can call async operations internally

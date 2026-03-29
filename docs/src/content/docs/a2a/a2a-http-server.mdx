@@ -1,0 +1,70 @@
+---
+title: a2a_http_server
+description: A2A HTTP server — WASM default, native testing support
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Uses Spin SDK on WASM, Axum on native.</Aside>
+
+**Crate:** `a2a_http_server` · **Path:** `crates/a2a_http_server`  
+**Description** (`Cargo.toml`): *A2A HTTP server - WASM default, native testing support*
+
+## Role
+
+Target-adaptive A2A HTTP server: uses Spin SDK on WASM and Axum on native, with identical APIs. Handles JSON-RPC dispatch for all A2A v1.0 methods, SSE streaming, and agent card serving. Protocol instance injection with no global state.
+
+## Feature flags
+
+From `crates/a2a_http_server/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | Enables `core` |
+| `core` | Core A2A functionality (standard methods); enables `a2a_protocol_core/core` |
+| `observability` | Emit OTEL spans/metrics + W3C trace propagation |
+| `schema` | JSON schema generation via `schemars`; enables `a2a_protocol_core/spec-compliant` |
+| `discovery` | Extended agent discovery; enables `a2a_protocol_core/extended-discovery` |
+| `event-stream` | SSE streaming support; enables `a2a_protocol_core/event-stream` |
+| `streaming` | Alias for `event-stream` |
+| `files` | File handling; enables `a2a_protocol_core/file-handling` |
+| `push` | Push notifications; enables `a2a_protocol_core/push-notifications` |
+| `all` | Enables `schema`, `discovery`, `event-stream`, `files`, `push`, `observability` |
+
+## Public API (from `src/lib.rs`)
+
+**Module `method`** — A2A v1.0 JSON-RPC method name constants:
+
+- `PING`, `SEND_MESSAGE`, `SEND_STREAMING_MESSAGE`, `GET_AGENT_CARD`, `GET_EXTENDED_AGENT_CARD`, `GET_TASK`, `CANCEL_TASK`, `LIST_TASKS`
+
+**Core types:**
+
+- **`A2AHttpServer`** — the server instance (target-adaptive: Spin SDK or Axum)
+  - `A2AHttpServer::new_with_a2a_methods(agent_card)` — create with standard A2A routes
+  - `server.agent_id()` — get agent identifier
+  - `server.can_serve()` — check readiness (native)
+- **`A2AAppPort`** trait — application port for delegating methods to SDK layer (re-exported from `a2a_app_ports`)
+- **`A2AStreamingAppPort`** trait — streaming variant (native + `event-stream` feature)
+- **`init_logging(component_name)`** — convenience logging initializer
+- **`log_server_info(agent_id)`** — log server creation with target info
+
+**Re-exports:**
+
+- From `a2a_protocol_core`: `A2AProtocol`, `AgentCard`, `A2A_PROTOCOL_VERSION`
+- From `protocol_transport_core`: `JsonRpcIncoming`, `JsonRpcResponse`, `JSONRPC_VERSION`
+
+## Example sketch
+
+```rust
+use a2a_http_server::{A2AHttpServer, AgentCard, init_logging};
+
+init_logging("my-agent");
+
+let card = AgentCard::new("my-agent".to_string());
+let server = A2AHttpServer::new_with_a2a_methods(card);
+
+// On WASM: pass Spin HTTP request to server
+// On native: server exposes an Axum router
+```
+
+**Full API reference:** `cargo doc -p a2a_http_server --no-deps --all-features`

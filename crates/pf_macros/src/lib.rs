@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input, Ident, Item, LitStr, Path,
-    Result as SynResult, Token,
+    Ident, Item, LitStr, Path, Result as SynResult, Token, parse::Parse, parse::ParseStream,
+    parse_macro_input,
 };
 
 struct PfArgs {

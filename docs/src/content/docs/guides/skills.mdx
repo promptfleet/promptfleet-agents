@@ -1,0 +1,153 @@
+---
+title: Skills
+description: How to register skills with agent_sdk.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `agent-core` (included by default)</Aside>
+
+## What it does
+
+Skills are the core behavioural unit of an agent. Each skill carries metadata (name, description, tags, schema, examples) and an optional async handler. Skills appear on the agent's discovery card and can optionally be invoked by the LLM via a `read_skill` tool.
+
+## Enable the feature
+
+`agent-core` is a default feature — no extra flags needed:
+
+```toml
+[dependencies]
+agent_sdk = { path = "../../crates/agent_sdk" }
+```
+
+## How to use it
+
+<Steps>
+
+1. **Create the agent**
+
+   ```rust
+   let mut agent = Agent::new("my-agent")?;
+   ```
+
+2. **Register skills via the fluent builder**
+
+   Use `agent.add_skill("id")` for metadata-only skills or `agent.skill("id", handler)` to attach a handler in one call. Finalize every skill with `.register()`.
+
+   ```rust
+   use serde_json::{json, Value};
+
+   // Metadata-only skill (no handler — appears on the card)
+   agent
+       .add_skill("summarize")
+       .display_name("Summarize")
+       .description("Condense long documents into key points")
+       .tags(&["nlp", "summarization"])
+       .register()?;
+
+   // Skill with handler
+   agent
+       .skill("lookup", |params: Value| async move {
+           let query = params["query"].as_str().unwrap_or("");
+           Ok(json!({ "results": [format!("Result for '{query}'")] }))
+       })
+       .description("Search the knowledge base")
+       .schema(json!({
+           "type": "object",
+           "properties": {
+               "query": { "type": "string" }
+           },
+           "required": ["query"]
+       }))
+       .examples(vec!["Look up Rust async patterns".into()])
+       .register()?;
+   ```
+
+3. **Wire the agent to a protocol surface**
+
+   Skills are protocol-independent. Protocol adapters (A2A, MCP) read `SkillDefinition` values and convert them. See [A2A Serving](/promptfleet-agents/guides/a2a-serving/) for the next step.
+
+</Steps>
+
+## Complete example
+
+```rust
+use agent_sdk::Agent;
+use serde_json::{json, Value};
+
+fn main() -> agent_sdk::SdkResult<()> {
+    let mut agent = Agent::new("skill-demo")?;
+
+    // 1. Simple echo skill with handler
+    agent
+        .skill("echo", |params: Value| async move {
+            Ok(json!({ "echoed": params }))
+        })
+        .description("Echoes back the input as JSON")
+        .tags(&["utility", "debug"])
+        .register()?;
+
+    // 2. Skill with a JSON schema and LLM invocability
+    agent
+        .skill("weather", |params: Value| async move {
+            let city = params["city"].as_str().unwrap_or("unknown");
+            Ok(json!({ "city": city, "temp_c": 22, "condition": "sunny" }))
+        })
+        .display_name("Get Weather")
+        .description("Returns current weather for a city")
+        .schema(json!({
+            "type": "object",
+            "properties": {
+                "city": { "type": "string", "description": "City name" }
+            },
+            "required": ["city"]
+        }))
+        .example("What's the weather in Berlin?")
+        .llm_callable(true)
+        .register()?;
+
+    // 3. Internal-only skill (hidden from discovery card)
+    agent
+        .skill("health_check", |_params: Value| async move {
+            Ok(json!({ "status": "ok" }))
+        })
+        .description("Internal liveness check")
+        .expose(false)
+        .register()?;
+
+    println!("Registered skills: {:?}", agent.list_skills());
+    Ok(())
+}
+```
+
+## Builder methods
+
+| Method | Description | Default |
+|--------|-------------|---------|
+| `.handler(fn)` | Attach an async handler (`Fn(Value) → Future<Result<Value, String>>`) | None (metadata-only) |
+| `.display_name(s)` | Human-readable name | Skill ID |
+| `.description(s)` | Short description | Auto-generated |
+| `.schema(json)` | JSON Schema for input parameters | None |
+| `.examples(vec)` | Example prompts | None |
+| `.example(s)` | Append a single example | — |
+| `.tags(&[..])` | Categorisation tags | None |
+| `.tag(s)` | Append a single tag | — |
+| `.input_modes(&[..])` | Accepted MIME types | `["application/json", "text/plain"]` |
+| `.output_modes(&[..])` | Produced MIME types | `["application/json", "text/plain"]` |
+| `.json_only()` | Shorthand: set both modes to `application/json` | — |
+| `.text_only()` | Shorthand: set both modes to `text/plain` | — |
+| `.instructions(s)` | Behavioural guidance injected into LLM context | None |
+| `.expose(bool)` | Visible on the discovery card | `true` |
+| `.llm_callable(bool)` | LLM can invoke via `read_skill` tool | `false` |
+| `.register()` | Finalize and register — **must be called** | — |
+
+## Key types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `SkillEntryBuilder` | `agent_sdk::agent::skill` | Fluent builder returned by `Agent::add_skill` / `Agent::skill` |
+| `SkillDefinition` | `agent_sdk::agent::skill` | Protocol-independent skill metadata |
+| `SkillContext` | `agent_sdk::agent::skill` | Resolved skill state for LLM message injection |
+| `SkillRegistry` | `agent_sdk::agent::skill` | Internal registry managing handlers and definitions |
+| `SkillHandler` | `agent_sdk::agent::skill` | `Arc<dyn Fn(Value) → Pin<Box<dyn Future<Output = Result<Value, String>>>>>` |
+| `SkillError` | `agent_sdk::agent::skill` | `NotImplemented` or `ExecutionFailed` |

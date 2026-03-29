@@ -118,3 +118,46 @@ impl ObservabilityRuntime {
             .unwrap_or_else(|| Duration::from_millis(default_ms))
     }
 }
+
+#[cfg(all(test, feature = "agent-observability"))]
+mod tests {
+    use super::ObservabilityRuntime;
+    use observability::Obs;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
+
+    static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env test lock")
+    }
+
+    #[test]
+    fn maybe_flush_first_and_throttled() {
+        let _g = env_lock();
+        unsafe {
+            std::env::remove_var("PF_OBS_FLUSH_INTERVAL_MS");
+        }
+        let rt = ObservabilityRuntime::new(Obs::noop());
+        rt.maybe_flush();
+        rt.maybe_flush();
+    }
+
+    #[test]
+    fn flush_interval_from_env_custom() {
+        let _g = env_lock();
+        unsafe {
+            std::env::set_var("PF_OBS_FLUSH_INTERVAL_MS", "1");
+        }
+        let rt = ObservabilityRuntime::new(Obs::noop());
+        std::thread::sleep(Duration::from_millis(5));
+        rt.maybe_flush();
+        rt.maybe_flush();
+        unsafe {
+            std::env::remove_var("PF_OBS_FLUSH_INTERVAL_MS");
+        }
+    }
+}

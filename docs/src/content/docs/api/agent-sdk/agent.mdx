@@ -1,0 +1,1229 @@
+---
+title: "agent"
+description: "Agent Module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Agent Module
+
+This module provides the protocol-neutral runtime used by PromptFleet agents.
+
+## Module Structure
+
+- **config**: Agent configuration and communication patterns
+- **message**: Message types, contexts, and classification
+- **skill**: Skill registration, execution, and metadata management  
+- **core**: Main Agent struct and core functionality
+
+## Architecture Benefits
+
+- **Single Responsibility**: Each module handles one architectural concern
+- **Maintainability**: Smaller, focused modules (200-400 lines each)
+- **Testability**: Easier to test individual components in isolation
+- **Clean Dependencies**: Follows dependency inversion principles
+- **Extensibility**: Easy to add new features without affecting other areas
+
+## Type Aliases
+
+### `NotificationHandler`
+
+```rust
+type NotificationHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+Notification handler: fire-and-forget, no response.
+
+### `SkillHandler`
+
+```rust
+type SkillHandler = Arc<dyn Fn + Send + Sync>;
+```
+
+Skill handler: receives JSON parameters, returns JSON result.
+
+### `MessageHandlerFn`
+
+```rust
+type MessageHandlerFn = Arc<dyn Fn + Send + Sync>;
+```
+
+Unified message handler function type.
+
+## Structs
+
+### `AgentConfig`
+
+**Agent Configuration**
+
+Configuration for agent behavior, capabilities, and response patterns.
+
+# Response Modes
+
+The agent supports different response patterns:
+
+- **Stateful (default)**: Creates Task responses for conversation continuity
+- **Stateless**: Prefers lightweight Message responses for API-style interactions
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+// Default stateful agent
+let config = AgentConfig::default();
+
+// Stateless agent for API-style interactions
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `version` | `String` |  |
+| `storage_prefix` | `Option&lt;String&gt;` | Optional storage namespace prefix used by shared task-storage backends. |
+| `max_message_size` | `u64` |  |
+| `streaming` | `bool` |  |
+| `batch_processing` | `bool` |  |
+| `concurrent_tasks` | `Option&lt;u32&gt;` |  |
+| `stateless_methods` | `bool` | Prefer stateless responses (Message) over stateful (Task) for methods |
+| `base_url` | `Option&lt;String&gt;` | Base URL for constructing absolute `AgentInterface` URLs in the agent card. |
+| `history_policy` | `Option&lt;HistoryPolicyConfig&gt;` | Optional history policy used for durable continuation preparation. |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>, impl Into<String>>(name: impl Into, description: impl Into) -> Self
+```
+
+Create a new agent configuration
+
+# Arguments
+
+* `name` - Agent name
+* `description` - Agent description
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("my-agent", "My Agent Description");
+```
+
+#### `stateless`
+
+```rust
+fn stateless(self) -> Self
+```
+
+Configure agent for stateless method responses
+
+When enabled, methods will prefer lightweight Message responses
+over Task responses for API-style interactions.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::new("api-agent", "API Agent")
+    .stateless();
+```
+
+#### `stateful`
+
+```rust
+fn stateful(self) -> Self
+```
+
+Configure agent for stateful method responses (default)
+
+Methods will create Task responses for conversation continuity.
+
+# Examples
+
+```rust
+use agent_sdk::agent::AgentConfig;
+
+let config = AgentConfig::default()
+    .stateful(); // Explicit stateful (default behavior)
+```
+
+#### `with_base_url`
+
+```rust
+fn with_base_url<impl Into<String>>(self, url: impl Into) -> Self
+```
+
+Set the base URL for absolute `AgentInterface` URLs in the agent card.
+
+The A2A v1.0 spec requires absolute URLs in `AgentInterface.url`.
+When set, the SDK produces `{base_url}/jsonrpc` instead of `/jsonrpc`.
+
+#### `with_history_policy`
+
+```rust
+fn with_history_policy(self, policy: HistoryPolicyConfig) -> Self
+```
+
+Attach a history policy for pre/post-turn continuation preparation.
+
+### `HistoryPolicyConfig`
+
+Agent-level history policy configuration.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mode` | `HistoryPolicyMode` |  |
+| `strategy` | `HistoryStrategyKind` |  |
+| `context_window_tokens` | `u32` |  |
+| `max_output_tokens` | `u32` |  |
+| `enable_summarization` | `bool` |  |
+| `enable_long_term_memory` | `bool` |  |
+| `recall_top_k` | `usize` |  |
+| `memory_token_budget` | `u32` |  |
+
+### `Agent`
+
+Core Agent implementation
+
+The `Agent` struct is the main runtime entry point for registering skills,
+wiring handlers, and dispatching runtime messages. Protocol surfaces such as
+A2A and AG-UI compose around this type via adapter modules.
+
+**Methods**
+
+#### `new_runtime`
+
+```rust
+fn new_runtime(name: &str) -> SdkResult<Self>
+```
+
+Create a new runtime-first agent.
+
+#### `new`
+
+```rust
+fn new(name: &str) -> SdkResult<Self>
+```
+
+Create a new agent (alias of `new_runtime`)
+
+#### `new_with_config`
+
+```rust
+fn new_with_config(config: AgentConfig) -> SdkResult<Self>
+```
+
+Create agent with custom configuration
+
+#### `with_service`
+
+```rust
+fn with_service<T>(self, service: T) -> Self
+```
+
+
+#### `get_service`
+
+```rust
+fn get_service<T>(&self) -> Option<Arc<T>>
+```
+
+
+#### `has_service`
+
+```rust
+fn has_service<T>(&self) -> bool
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_>
+```
+
+Register a skill via the fluent builder (handler optional — omit for metadata-only).
+
+#### `skill`
+
+```rust
+fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a skill with a handler (`add_skill(name).handler(handler)`).
+
+#### `register_notification`
+
+```rust
+fn register_notification<F, Fut>(&mut self, name: &str, handler: F) -> SdkResult<()>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a notification handler.
+
+#### `config`
+
+```rust
+fn config(&self) -> &AgentConfig
+```
+
+
+#### `list_skills`
+
+```rust
+fn list_skills(&self) -> Vec<String>
+```
+
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+
+#### `skill_registry`
+
+```rust
+fn skill_registry(&self) -> &SkillRegistry
+```
+
+Get read-only reference to the skill registry.
+
+#### `set_message_handler`
+
+```rust
+fn set_message_handler<F, Fut>(&mut self, handler: F)
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+
+#### `dispatch_message`
+
+```rust
+async fn dispatch_message(&self, msg_ctx: MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Unified entrypoint to route a built MessageContext through the active handler.
+
+### `MessageContext`
+
+**Message Context for Immediate Processing**
+
+Contains all the information needed to process an incoming message,
+with pre-computed classifications and extractions.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `runtime_message` | `agent_core::AgentMessage` | Protocol-neutral message used by runtime logic. |
+| `message_type` | `MessageType` | Classified message type (Data/Text/Mixed/File) |
+| `text_content` | `Option&lt;String&gt;` | Extracted text content if present |
+| `skill_call` | `Option&lt;SkillCall&gt;` | Extracted skill call if present |
+| `skill_hints` | `HashMap&lt;String, serde_json::Value&gt;` | Skill hints from message part metadata |
+| `user_metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Message-level metadata |
+| `stateless_mode` | `bool` | Stateless mode preference |
+| `skill_executor` | `Option&lt;SkillExecutor&gt;` | **NEW: Skill execution capability for custom handlers** |
+
+**Methods**
+
+#### `from_agent_message`
+
+```rust
+fn from_agent_message(msg: AgentMessage) -> Self
+```
+
+Build a `MessageContext` from a protocol-agnostic `AgentMessage`.
+
+This is the primary entry point for consumers that don't want to
+import `a2a_protocol_core` types.
+
+#### `from_text`
+
+```rust
+fn from_text(text: &str) -> Self
+```
+
+Convenience: build from plain text (user role).
+
+```rust
+let ctx = MessageContext::from_text("What's the weather?");
+```
+
+#### `classify_runtime_message`
+
+```rust
+fn classify_runtime_message(message: &AgentMessage) -> MessageType
+```
+
+Classify message type based on runtime content parts.
+
+#### `extract_runtime_skill_call`
+
+```rust
+fn extract_runtime_skill_call(message: &AgentMessage) -> Option<SkillCall>
+```
+
+Extract skill call information from runtime data parts.
+
+#### `extract_runtime_text_content`
+
+```rust
+fn extract_runtime_text_content(message: &AgentMessage) -> Option<String>
+```
+
+Extract text content from runtime message parts.
+
+#### `from_runtime_message`
+
+```rust
+fn from_runtime_message(runtime_message: AgentMessage, skill_hints: HashMap<String, serde_json::Value>, user_metadata: HashMap<String, serde_json::Value>, stateless_mode: bool, skill_executor: Option<SkillExecutor>) -> Self
+```
+
+Build a runtime-native `MessageContext`.
+
+### `SkillCall`
+
+**Skill Call Information**
+
+Extracted from DataPart when a structured skill call is detected.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `skill_id` | `String` |  |
+| `parameters` | `serde_json::Value` |  |
+
+### `SkillExecutor`
+
+**Skill Execution Capability for Custom Handlers**
+
+Provides lightweight skill execution without requiring full agent access.
+This eliminates the architectural discrepancy between LLM and custom handlers.
+
+**Methods**
+
+#### `execute_text`
+
+```rust
+async fn execute_text(&self, skill_id: &str, parameters: Value) -> Result<SkillOutput, SkillError>
+```
+
+Transport-agnostic execution producing string-first output for prompt/context injection
+
+#### `execute_text_with_ctx`
+
+```rust
+async fn execute_text_with_ctx(&self, skill_id: &str, parameters: Value, message_ctx: MessageContext, task_ctx: Option<TaskContext>) -> Result<SkillOutput, SkillError>
+```
+
+Transport-agnostic execution with optional message/task context for handlers that need it
+
+#### `has_skill`
+
+```rust
+fn has_skill(&self, skill_id: &str) -> bool
+```
+
+Check if a skill exists in the registry
+
+#### `list_skills`
+
+```rust
+fn list_skills(&self) -> Vec<String>
+```
+
+Get list of available skills
+
+### `TaskContext`
+
+**Task Context for Conversation/Session State**
+
+Contains conversation history and task state information,
+provided only when conversation continuity is needed.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | `String` | Unique task identifier |
+| `context_id` | `Option&lt;String&gt;` | Optional conversation context identifier |
+| `runtime_history` | `Vec&lt;agent_core::AgentMessage&gt;` | Previous messages in conversation in protocol-neutral form. |
+| `task_phase` | `agent_core::TaskPhase` | Current task phase in protocol-neutral form. |
+| `artifacts` | `Vec&lt;RuntimeArtifact&gt;` | Task artifacts in runtime form. |
+| `task_metadata` | `HashMap&lt;String, serde_json::Value&gt;` | Task-level metadata |
+| `created_at` | `Option&lt;String&gt;` | Task creation timestamp (from status.timestamp) |
+| `updated_at` | `Option&lt;String&gt;` | Task last update timestamp (from status.timestamp) |
+| `continuation` | `Option&lt;ContinuationState&gt;` | Durable derived continuation metadata from the runtime snapshot store. |
+
+**Methods**
+
+#### `from_conversation`
+
+```rust
+fn from_conversation(ctx: ConversationContext) -> Self
+```
+
+Build a `TaskContext` from a protocol-agnostic `ConversationContext`.
+
+#### `from_text_turns`
+
+```rust
+fn from_text_turns(turns: &[(&str, &str)]) -> Self
+```
+
+Convenience: build from simple text turns.
+
+```rust
+let ctx = TaskContext::from_text_turns(&[
+    ("user", "hello"),
+    ("assistant", "hi there"),
+]);
+```
+
+#### `create_new`
+
+```rust
+fn create_new(context_id: Option<String>) -> Self
+```
+
+Create new task context with basic ISO 8601 timestamp
+
+### `SkillContext`
+
+Resolved skill context ready for LLM message injection.
+
+Produced by `SkillRegistry::resolve_skill_context()`. Contains the handler's
+output (if any) and the skill's instructions (if any).
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `skill_id` | `String` |  |
+| `handler_output` | `Option&lt;String&gt;` |  |
+| `instructions` | `Option&lt;String&gt;` |  |
+
+### `SkillDefinition`
+
+Protocol-independent skill definition.
+
+This is the single source of truth for skill metadata inside the SDK.
+Protocol adapters (A2A `AgentSkill`, MCP, etc.) convert from this type.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` |  |
+| `name` | `String` |  |
+| `description` | `String` |  |
+| `input_modes` | `Vec&lt;String&gt;` |  |
+| `output_modes` | `Vec&lt;String&gt;` |  |
+| `schema` | `Option&lt;serde_json::Value&gt;` |  |
+| `examples` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `tags` | `Option&lt;Vec&lt;String&gt;&gt;` |  |
+| `instructions` | `Option&lt;String&gt;` | Behavioral guidance injected into LLM context when this skill is activated. |
+| `expose` | `bool` | Whether the skill is visible on the discovery card (default: true). |
+| `llm_callable` | `bool` | Whether the LLM can invoke this skill's handler via `read_skill` tool (default: false). |
+
+### `SkillEntryBuilder`
+
+Fluent builder for skill registration.
+
+Created via [`SkillRegistry::add_skill`] / [`crate::Agent::add_skill`], or [`SkillRegistry::skill`] /
+[`crate::Agent::skill`] when providing a handler. Finalize with [`.register()`](Self::register).
+
+**Methods**
+
+#### `handler`
+
+```rust
+fn handler<F, Fut>(self, handler: F) -> Self
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Attach an async handler. Omit for metadata-only skills (discovery card + LLM awareness).
+
+#### `display_name`
+
+```rust
+fn display_name<S>(self, name: S) -> Self
+```
+
+
+#### `description`
+
+```rust
+fn description<S>(self, desc: S) -> Self
+```
+
+
+#### `schema`
+
+```rust
+fn schema(self, schema: Value) -> Self
+```
+
+
+#### `examples`
+
+```rust
+fn examples(self, examples: Vec<String>) -> Self
+```
+
+
+#### `example`
+
+```rust
+fn example<S>(self, example: S) -> Self
+```
+
+
+#### `tags`
+
+```rust
+fn tags(self, tags: &[&str]) -> Self
+```
+
+
+#### `tag`
+
+```rust
+fn tag<S>(self, tag: S) -> Self
+```
+
+
+#### `input_modes`
+
+```rust
+fn input_modes(self, modes: &[&str]) -> Self
+```
+
+
+#### `output_modes`
+
+```rust
+fn output_modes(self, modes: &[&str]) -> Self
+```
+
+
+#### `json_only`
+
+```rust
+fn json_only(self) -> Self
+```
+
+
+#### `text_only`
+
+```rust
+fn text_only(self) -> Self
+```
+
+
+#### `instructions`
+
+```rust
+fn instructions<S>(self, text: S) -> Self
+```
+
+Set behavioral instructions (injected into LLM context when skill is activated).
+
+#### `expose`
+
+```rust
+fn expose(self, visible: bool) -> Self
+```
+
+Control whether the skill is visible on the discovery card (default: true).
+
+#### `llm_callable`
+
+```rust
+fn llm_callable(self, callable: bool) -> Self
+```
+
+Control whether the LLM can invoke this skill via `read_skill` tool (default: false).
+
+#### `register`
+
+```rust
+fn register(self) -> SdkResult<()>
+```
+
+Finalize registration.
+
+### `SkillRegistry`
+
+Manages skill handlers, definitions, and notifications.
+
+Protocol-independent: no A2A types stored. Protocol adapters read
+`SkillDefinition` values via accessor methods.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `add_skill`
+
+```rust
+fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_>
+```
+
+Start registering a skill (optional handler — metadata-only if you omit `.handler()`).
+
+#### `skill`
+
+```rust
+fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+Register a skill with a handler (convenience — same as `add_skill(name).handler(handler)`).
+
+#### `execute_skill`
+
+```rust
+async fn execute_skill(&self, skill_id: &str, parameters: &Value) -> Result<Value, String>
+```
+
+Execute a skill by ID (simple handler path).
+
+#### `execute_skill_with_ctx`
+
+```rust
+async fn execute_skill_with_ctx(&self, skill_id: &str, parameters: &Value, exec_ctx: &SkillExecutionContext) -> Result<Value, String>
+```
+
+Execute with optional execution context (prefers context-aware handler).
+
+#### `execute_skill_text`
+
+```rust
+async fn execute_skill_text(&self, skill_id: &str, parameters: &Value) -> Result<SkillOutput, SkillError>
+```
+
+Execute and return string-first output.
+
+#### `execute_skill_text_with_ctx`
+
+```rust
+async fn execute_skill_text_with_ctx(&self, skill_id: &str, parameters: &Value, exec_ctx: &SkillExecutionContext) -> Result<SkillOutput, SkillError>
+```
+
+Execute with context and return string-first output.
+
+#### `resolve_skill_context`
+
+```rust
+async fn resolve_skill_context(&self, skill_id: &str, parameters: &Value) -> Option<SkillContext>
+```
+
+Resolve skill context: run handler (if present) and collect instructions.
+
+Returns `None` when neither handler output nor instructions exist
+(metadata-only skill — nothing to inject).
+
+#### `register_notification`
+
+```rust
+fn register_notification<F, Fut>(&mut self, name: &str, handler: F) -> SdkResult<()>
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+
+#### `list_skills`
+
+```rust
+fn list_skills(&self) -> Vec<String>
+```
+
+
+#### `list_notifications`
+
+```rust
+fn list_notifications(&self) -> Vec<String>
+```
+
+
+#### `get_skill_definitions`
+
+```rust
+fn get_skill_definitions(&self) -> &HashMap<String, SkillDefinition>
+```
+
+All skill definitions (protocol-independent).
+
+#### `get_exposed_skills`
+
+```rust
+fn get_exposed_skills(&self) -> Vec<&SkillDefinition>
+```
+
+Skills with `expose == true` (for discovery card adapters).
+
+#### `get_llm_callable_skills`
+
+```rust
+fn get_llm_callable_skills(&self) -> Vec<&SkillDefinition>
+```
+
+Skills with `llm_callable == true` (for read_skill tool generation).
+
+#### `get_instructions`
+
+```rust
+fn get_instructions(&self, skill_id: &str) -> Option<&str>
+```
+
+Get instructions for a skill.
+
+#### `get_skill_handlers`
+
+```rust
+fn get_skill_handlers(&self) -> &HashMap<String, SkillHandler>
+```
+
+
+#### `get_notification_handlers`
+
+```rust
+fn get_notification_handlers(&self) -> &HashMap<String, NotificationHandler>
+```
+
+
+### `MessageHandlerManager`
+
+Manages message handlers and coordinates message processing.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(skill_registry: Arc<SkillRegistry>) -> Self
+```
+
+
+#### `initialize_default_handler`
+
+```rust
+fn initialize_default_handler(&mut self)
+```
+
+Initialize default handler (skill dispatch + conversational fallback).
+
+#### `set_custom_handler`
+
+```rust
+fn set_custom_handler<F, Fut>(&mut self, handler: F)
+where
+    F: Fn + Send + Sync + ?,
+    Fut: Future + Send + ?
+```
+
+
+#### `handle_message`
+
+```rust
+async fn handle_message(&self, msg_ctx: MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Handle message using the active handler.
+
+### `Response`
+
+Explicit runtime response API.
+
+**Methods**
+
+#### `message_parts`
+
+```rust
+fn message_parts(parts: Vec<ContentPart>, msg_meta: Option<HashMap<String, Value>>, context_id: Option<String>) -> SdkResult<RuntimeResponse>
+```
+
+
+#### `message_text`
+
+```rust
+fn message_text<impl Into<String>>(text: impl Into, _part_meta: Option<HashMap<String, Value>>, msg_meta: Option<HashMap<String, Value>>, context_id: Option<String>) -> SdkResult<RuntimeResponse>
+```
+
+
+#### `task`
+
+```rust
+fn task(opts: TaskOpts, msg_ctx: &MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+
+### `RuntimeArtifact`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `data` | `serde_json::Value` |  |
+
+**Methods**
+
+#### `data`
+
+```rust
+fn data<impl Into<String>>(name: impl Into, data: Value) -> Self
+```
+
+
+### `RuntimeMessage`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `agent_core::AgentMessage` |  |
+| `context_id` | `Option&lt;String&gt;` |  |
+| `metadata` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+
+### `RuntimeTask`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | `String` |  |
+| `context_id` | `String` |  |
+| `history` | `Vec&lt;agent_core::AgentMessage&gt;` |  |
+| `artifacts` | `Vec&lt;RuntimeArtifact&gt;` |  |
+| `metadata` | `HashMap&lt;String, serde_json::Value&gt;` |  |
+| `phase` | `agent_core::TaskPhase` |  |
+| `status_text` | `Option&lt;String&gt;` |  |
+| `continuation_update` | `Option&lt;RuntimeContinuationUpdate&gt;` |  |
+
+### `TaskOpts`
+
+Options for constructing a runtime task response.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `artifacts` | `Vec&lt;RuntimeArtifact&gt;` |  |
+| `state` | `Option&lt;agent_core::TaskPhase&gt;` |  |
+| `status_text` | `Option&lt;String&gt;` |  |
+| `task_meta` | `Option&lt;HashMap&lt;String, serde_json::Value&gt;&gt;` |  |
+| `history_parts` | `Option&lt;Vec&lt;agent_core::ContentPart&gt;&gt;` |  |
+
+### `ResponseBuilder`
+
+**Response Builder**
+
+Provides static methods for creating different types of runtime responses.
+Follows the builder pattern and maintains consistency across response types.
+
+**Methods**
+
+#### `create_skill_success_response`
+
+```rust
+fn create_skill_success_response(skill_call: &SkillCall, result: Value, msg_ctx: &MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Create skill success response
+
+Generates a runtime response when a skill executes successfully.
+Handles both stateful (Task) and stateless (Message) response modes.
+
+#### `create_skill_not_implemented_response`
+
+```rust
+fn create_skill_not_implemented_response(skill_call: &SkillCall, _msg_ctx: &MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Create response for skill that's advertised but not implemented
+
+Provides a helpful conversational response when a skill is in the agent card
+but doesn't have an automated handler implementation.
+
+#### `create_conversational_response`
+
+```rust
+fn create_conversational_response(msg_ctx: &MessageContext, task_ctx: Option<TaskContext>) -> SdkResult<RuntimeResponse>
+```
+
+Create conversational response for non-skill messages
+
+Handles general conversational messages that don't involve skill calls.
+Provides appropriate responses based on stateful vs stateless mode.
+
+### `TaskManager`
+
+**Task Manager**
+
+Handles task context creation, retrieval, and persistence for conversation continuity.
+Provides a clean abstraction over the runtime task-store seam.
+
+### `ToolExecutionResult`
+
+Minimal tool execution result for MVP
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `output` | `serde_json::Value` |  |
+
+### `ToolRegistry`
+
+Minimal registry for LLM tools
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `register`
+
+```rust
+fn register(&mut self, tool: ToolSpec)
+```
+
+
+#### `get`
+
+```rust
+fn get(&self, name: &str) -> Option<&ToolSpec>
+```
+
+
+#### `list`
+
+```rust
+fn list(&self) -> Vec<&ToolSpec>
+```
+
+
+#### `merge`
+
+```rust
+fn merge(&mut self, other: ToolRegistry)
+```
+
+Merge another registry into this one.
+Later registrations overwrite earlier ones with the same name.
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+Number of registered tools.
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+Whether the registry is empty.
+
+#### `execute`
+
+```rust
+async fn execute(&self, name: &str, args: serde_json::Value) -> Result<ToolExecutionResult, String>
+```
+
+Execute a tool by name (serial MVP)
+
+### `ToolSpec`
+
+Tool specification exposed to the LLM (separate from skills)
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `description` | `Option&lt;String&gt;` |  |
+| `parameters` | `serde_json::Value` |  |
+| `strict` | `bool` | Hints |
+| `parallel_ok` | `bool` |  |
+| `executor` | `ToolExecutor` |  |
+
+### `AgentModuleDocumentation`
+
+**Agent Module Documentation**
+
+This module provides the core runtime implementation with the following capabilities:
+
+## Core Features
+
+- **Agent Creation**: Runtime-first constructors for different use cases
+- **Skill Management**: Register, execute, and manage agent skills
+- **Message Processing**: Route runtime messages and integrate optional LLM orchestration
+- **Response Modes**: Control response types (stateful vs stateless)
+- **Service Injection**: Type-safe dependency injection for external services
+
+## Quick Start Examples
+
+### Creating an Agent
+
+```rust
+use agent_sdk::agent::{Agent, AgentConfig};
+use serde_json::json;
+
+// Simple runtime agent
+let mut agent = Agent::new_runtime("my-agent")?;
+
+// Custom configuration
+let config = AgentConfig::new("api-agent", "API-only agent").stateless();
+let mut agent = Agent::new_with_config(config)?;
+# Ok::<(), agent_sdk::SdkError>(())
+```
+
+### Registering Skills
+
+```rust
+# use agent_sdk::agent::Agent;
+# use serde_json::json;
+# let mut agent = Agent::new_runtime("test")?;
+// Simple skill registration
+agent.skill("get_weather", |params| async move {
+    let location = params["location"].as_str().unwrap_or("unknown");
+    Ok(json!({"location": location, "temp": 22}))
+}).register()?;
+
+// Fluent builder with metadata
+agent.skill("analyze", |params| async move {
+    Ok(json!({"analysis": "complete"}))
+})
+.display_name("Data Analysis")
+.schema(json!({"type": "object", "properties": {"data": {"type": "string"}}}))
+.tags(&["analytics", "data"])
+.register()?;
+# Ok::<(), agent_sdk::SdkError>(())
+```
+
+### Response Modes
+
+```rust
+# use agent_sdk::agent::AgentConfig;
+// Stateful agent (default) - creates Tasks for conversation continuity
+let config = AgentConfig::default();
+
+// Stateless agent - prefers lightweight Message responses
+let config = AgentConfig::new("api-agent", "API Agent").stateless();
+```
+
+## Enums
+
+### `HistoryPolicyMode`
+
+History preparation mode for durable continuation.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `PassThrough` |  |
+| `HistoryManager` |  |
+
+### `HistoryStrategyKind`
+
+Strategy name exposed through SDK config without leaking `llm_context_core` types.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `SlidingWindow` |  |
+| `SlidingWindowWithSummary` |  |
+| `PriorityBased` |  |
+
+### `MessageType`
+
+**Message Type Classification**
+
+Classifies incoming messages based on their Part composition to determine
+the appropriate handling strategy (tool-like vs conversational vs hybrid).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Data` | Pure DataPart - structured tool calls |
+| `Text` | Pure TextPart - conversational interactions |
+| `Mixed` | Multiple part types - hybrid interactions |
+
+### `RuntimeResponse`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Message(RuntimeMessage)` |  |
+| `Task(RuntimeTask)` |  |
+
+**Methods**
+
+#### `text_content`
+
+```rust
+fn text_content(&self) -> Option<String>
+```
+
+
+### `ToolExecutor`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Simple(Arc<dyn Fn + Send + Sync>)` |  |

@@ -1,0 +1,354 @@
+---
+title: "domain"
+description: "Domain layer for observability core - Pure business logic"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Domain layer for observability core - Pure business logic
+
+This module contains ONLY pure business logic with no external dependencies.
+No WASM, HTTP, or framework-specific code should be here.
+
+## Type Aliases
+
+### `TraceContext`
+
+```rust
+type TraceContext = TraceCorrelation;
+```
+
+Backwards-compatible alias.
+
+## Traits
+
+### `LogProcessor`
+
+Core processor interface - transforms log entries
+
+**Required / Provided Methods**
+
+```rust
+fn process(&self, entry: LogEntry) -> ObservabilityResult<LogEntry>
+```
+
+Process and transform a log entry
+
+```rust
+fn name(&self) -> &''static str
+```
+
+Get processor name for debugging
+
+## Structs
+
+### `LogEntry`
+
+Core log entry - pure data structure
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `chrono::DateTime&lt;chrono::Utc&gt;` |  |
+| `level` | `LogLevel` |  |
+| `message` | `String` |  |
+| `fields` | `serde_json::Value` |  |
+| `trace_context` | `Option&lt;TraceContext&gt;` |  |
+| `source` | `LogSource` |  |
+
+### `LogSource`
+
+Source of the log entry
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `module` | `Option&lt;String&gt;` |  |
+| `file` | `Option&lt;String&gt;` |  |
+| `line` | `Option&lt;u32&gt;` |  |
+| `target` | `Option&lt;String&gt;` |  |
+
+### `TraceCorrelation`
+
+Serializable trace identifiers for log/metric correlation.
+
+Distinct from [`crate::context::TraceContext`] which is the runtime
+tracing context with sampling decisions and W3C conversion methods.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` |  |
+| `span_id` | `String` |  |
+| `parent_span_id` | `Option&lt;String&gt;` |  |
+
+### `ProcessorChain`
+
+Processor chain pattern (inspired by structlog)
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new empty processor chain
+
+#### `add_processor`
+
+```rust
+fn add_processor(self, processor: Box<dyn LogProcessor>) -> Self
+```
+
+Add a processor to the chain
+
+#### `process`
+
+```rust
+fn process(&self, entry: LogEntry) -> ObservabilityResult<LogEntry>
+```
+
+Process an entry through the entire chain
+
+#### `len`
+
+```rust
+fn len(&self) -> usize
+```
+
+Get number of processors in the chain
+
+#### `is_empty`
+
+```rust
+fn is_empty(&self) -> bool
+```
+
+Check if chain is empty
+
+### `TimestampProcessor`
+
+Processor that adds timestamps
+
+### `ContextEnricher`
+
+Processor that enriches with context
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_field`
+
+```rust
+fn with_field<impl Into<String>, impl Into<serde_json::Value>>(self, key: impl Into, value: impl Into) -> Self
+```
+
+
+### `StructuredFieldsProcessor`
+
+Processor that structures fields
+
+### `LevelFilter`
+
+Filter processor that filters out logs below certain level
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(min_level: LogLevel) -> Self
+```
+
+
+### `LogKvExtractor`
+
+Processor that extracts structured fields from log::kv
+
+This processor supports the log::info!("msg"; "key" => value) syntax
+by extracting key-value pairs from log::Record and adding them to LogEntry fields
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `extract_kv_from_record`
+
+```rust
+fn extract_kv_from_record(record: &log::Record<'_>) -> serde_json::Value
+```
+
+Extract key-value pairs from log::Record
+
+This function would be called by StandardLogAdapter when processing log::Record
+but we'll implement the interface here for the processor chain
+
+### `EnhancedContextEnricher`
+
+Enhanced processor that combines context enrichment with kv extraction
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_field`
+
+```rust
+fn with_field<impl Into<String>, impl Into<serde_json::Value>>(self, key: impl Into, value: impl Into) -> Self
+```
+
+
+#### `with_kv_extraction`
+
+```rust
+fn with_kv_extraction(self, extract_kv: bool) -> Self
+```
+
+
+### `MetricsEntry`
+
+Basic metric entry for correlation with logs
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` |  |
+| `value` | `f64` |  |
+| `metric_type` | `BasicMetricType` |  |
+| `timestamp` | `chrono::DateTime&lt;chrono::Utc&gt;` |  |
+| `trace_context` | `Option&lt;TraceContext&gt;` |  |
+| `source` | `MetricsSource` |  |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(name: impl Into, value: f64, metric_type: BasicMetricType) -> Self
+```
+
+Create a new metrics entry
+
+#### `with_trace_context`
+
+```rust
+fn with_trace_context(self, trace_context: TraceContext) -> Self
+```
+
+Add trace context for correlation
+
+#### `with_source`
+
+```rust
+fn with_source(self, module: Option<String>, component: Option<String>, operation: Option<String>) -> Self
+```
+
+Add source information
+
+#### `to_json`
+
+```rust
+fn to_json(&self) -> serde_json::Value
+```
+
+Convert to JSON for transport
+
+### `MetricsSource`
+
+Source of the metric
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `module` | `Option&lt;String&gt;` |  |
+| `component` | `Option&lt;String&gt;` |  |
+| `operation` | `Option&lt;String&gt;` |  |
+
+## Enums
+
+### `BasicMetricType`
+
+Simple metric types supported by core
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Counter` | Counter metric (monotonically increasing) |
+| `Histogram` | Histogram/timing metric (distribution of values) |
+| `Gauge` | Gauge metric (current value) |
+
+## Functions
+
+### `build_default_processor_chain`
+
+```rust
+fn build_default_processor_chain() -> ProcessorChain
+```
+
+Build a default processor chain with common processors
+
+### `build_enhanced_processor_chain`
+
+```rust
+fn build_enhanced_processor_chain() -> ProcessorChain
+```
+
+Build an enhanced processor chain with additional features
+
+### `create_log_entry`
+
+```rust
+fn create_log_entry<impl Into<String>>(level: LogLevel, message: impl Into, fields: serde_json::Value) -> LogEntry
+```
+
+Create a log entry from basic components
+
+### `create_counter_metric`
+
+```rust
+fn create_counter_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a counter metric
+
+### `create_histogram_metric`
+
+```rust
+fn create_histogram_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a histogram metric
+
+### `create_gauge_metric`
+
+```rust
+fn create_gauge_metric<impl Into<String>>(name: impl Into, value: f64) -> MetricsEntry
+```
+
+Convenience function to create a gauge metric

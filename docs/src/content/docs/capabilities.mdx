@@ -1,0 +1,102 @@
+---
+title: Capabilities Matrix
+description: Full feature matrix across the promptfleet-agents workspace.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="note">
+Feature names below match [`agent_sdk` `Cargo.toml`](https://github.com/promptfleet/promptfleet-agents/blob/main/crates/agent_sdk/Cargo.toml) unless the capability is crate-only. **WASM** / **Native** indicate where the capability is intended to run in supported configurations.
+</Aside>
+
+Deep dive on A2A JSON-RPC methods: [A2A v1.0 compliance](/promptfleet-agents/a2a/capabilities/).
+
+## Agent runtime
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| `AgentBuilder` config loading | `agent_sdk`, `pf_config` | `config-loader` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Skills & handlers | `agent_sdk`, `agent_core` | `agent-core` (default) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Message handler | `agent_sdk` | `agent-core` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Timeout policy | `agent_sdk` | `agent-core` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| History policy | `agent_sdk`, `llm_context_core` | `context-window` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+## LLM
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| OpenAI-compatible wire format | `llm_client` | — (always) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Anthropic Messages wire format | `llm_client` | — | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Azure OpenAI auth | `llm_client` | — | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Chat streaming | `llm_client` | — | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Model profiles (families, caps) | `llm_client` | — | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Tool calling (registry + execution) | `llm_tools`, `llm_tool_macros`, `agent_sdk` | `llm-engine` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Context window management | `llm_context_core` | `context-window` (via `agent_sdk`) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+<Aside type="tip">
+On **native**, `llm_client` uses incremental SSE (`reqwest` stream). On **WASM**, streaming responses are buffered then parsed (see `llm_client` crate docs).
+</Aside>
+
+## A2A protocol
+
+Summary only — see [A2A v1.0 compliance](/promptfleet-agents/a2a/capabilities/) for the method-by-method table.
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| Core JSON-RPC domain | `a2a_protocol_core` | `core` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| HTTP server (Spin / Axum) | `a2a_http_server`, `agent_sdk` | `a2a-server` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| HTTP client | `a2a_http_client`, `agent_sdk` | `a2a-client` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| SSE / streaming (HTTP + protocol) | `a2a_http_server`, `a2a_protocol_core` | `event-stream` / `streaming` | Partial | Yes | <Badge text="Feature-gated" variant="caution" /> |
+| Task storage (in-memory default; Redis native) | `agent_sdk`, `a2a_protocol_core` | `redis-storage` (optional, native) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+## Serving
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| WASM (Spin) A2A server | `agent_sdk`, `a2a_http_server` | `a2a-server` | Yes | — | <Badge text="Stable" variant="success" /> |
+| Native (Axum) A2A server | `agent_sdk`, `a2a_http_server` | `a2a-server` | — | Yes | <Badge text="Stable" variant="success" /> |
+| AG-UI streaming surface | `agent_sdk` | `agui-stream` (implies `event-stream`) | — | Yes | <Badge text="Stable" variant="success" /> |
+| Dual-protocol hosting (A2A + AG-UI) | `agent_sdk` | `dual-agent` | — | Yes | <Badge text="Stable" variant="success" /> |
+
+## Tools
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| LLM tool registry | `llm_tools` | `llm-engine` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| `#[llm_tool]` macro | `llm_tool_macros` | `llm-engine` (with `llm_tools`) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| MCP client | `agent_sdk`, `mcp_protocol` | `mcp-client` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Sub-agent delegation | `agent_sdk` | `sub-agents` | — | Yes | <Badge text="Stable" variant="success" /> |
+| A2A-native tools | `agent_sdk` | `a2a-tools` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Web search tool | `tool_web_search` | — | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Interactive tools (typed contracts) | `agent_sdk` | `interactive-tools` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+## Observability
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| Structured logging | `structured_logging`, `observability`, `observability_core` | `agent-observability` on `agent_sdk` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| OpenTelemetry | `otel`, `observability` | `agent-observability` enables `observability/otel` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Prometheus | `prometheus` (crate), `observability` | `prometheus` on `observability` dependency (not part of default `agent-observability`) | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+## Configuration
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| JSON config | `pf_config` | `config-loader` on `agent_sdk` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Environment variables | `pf_config` | `config-loader` | Yes | Yes | <Badge text="Stable" variant="success" /> |
+| Dotenv | `pf_config` | `pf_config/dotenv` on the `pf_config` dependency | Yes | Yes | <Badge text="Stable" variant="success" /> |
+
+## Testing
+
+| Capability | Crate(s) | Feature flag | WASM | Native | Status |
+|------------|----------|--------------|------|--------|--------|
+| Test harness (native) | `pf_test_harness` | default empty; enable integrations per feature | — | Yes | <Badge text="Stable" variant="success" /> |
+| LLM scenarios | `pf_test_harness` | `scenario` | — | Yes | <Badge text="Stable" variant="success" /> |
+| SSE capture / A2A HTTP helpers | `pf_test_harness` | `sse`, `a2a-http`, etc. | — | Yes | <Badge text="Stable" variant="success" /> |
+
+## Related docs
+
+- [agent_sdk](/promptfleet-agents/sdk/agent-sdk/)
+- [a2a_http_server](/promptfleet-agents/a2a/a2a-http-server/)
+- [llm_client](/promptfleet-agents/llm/llm-client/)
+- [pf_test_harness](/promptfleet-agents/support/pf-test-harness/)

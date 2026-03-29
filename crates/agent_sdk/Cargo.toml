@@ -1,10 +1,12 @@
 [package]
 name = "agent_sdk"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Runtime-first SDK for building PromptFleet agents with optional A2A and AG-UI adapters"
 readme = "README.md"
-repository = "https://github.com/promptfleet/promptfleet-agents.git"
 keywords = ["agent", "a2a", "agui", "sdk", "wasm"]
 categories = ["api-bindings", "asynchronous", "wasm"]
 
@@ -69,7 +71,9 @@ rmcp = { version = "0.14", features = ["client", "transport-child-process", "tra
 redis = { version = "0.28", optional = true }
 
 [dev-dependencies]
+tempfile = "3"
 tokio = { version = "1.0", features = ["macros", "rt", "time"] }
+tower = { version = "0.4", features = ["util"] }
 axum = { version = "0.7", features = ["json"] }
 rmcp = { version = "0.14", features = ["server", "transport-streamable-http-server", "schemars"] }
 mcp_protocol = { workspace = true, features = ["client"] }

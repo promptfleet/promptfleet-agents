@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use a2a_http_client::Client as HttpClient;
@@ -9,13 +9,13 @@ use agent_sdk::a2a::{
 };
 use agent_sdk::agent::{Response, RuntimeArtifact, TaskOpts};
 use agent_sdk::{Agent, SdkError};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use futures_util::StreamExt;
 use pf_test_harness::a2a_http::{
     call_jsonrpc, collect_send_subscribe_sse, jsonrpc_body, tasks_get_body,
 };
-use pf_test_harness::a2a_mock::{sse_status, MockA2AServerBuilder};
-use serde_json::{json, Value};
+use pf_test_harness::a2a_mock::{MockA2AServerBuilder, sse_status};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::oneshot;

@@ -1,0 +1,87 @@
+---
+title: "budget"
+description: "Context budget computation — tracks token allocation across the LLM"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Context budget computation — tracks token allocation across the LLM
+context window to prevent overflow and optimize utilization.
+
+## Structs
+
+### `ContextBudget`
+
+Token budget allocation for an LLM context window.
+
+Breaks the total context window into reserved zones and computes
+the remaining space available for conversation history.
+
+```text
+┌────────────────────────────────────────────────────┐
+│                  Context Window (total)             │
+├────────────┬────────────┬────────┬─────────────────┤
+│  System    │   Tools    │ Output │   Available     │
+│  (fixed)   │  (schemas) │ (gen)  │  for History    │
+└────────────┴────────────┴────────┴─────────────────┘
+```
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | `u32` | Total context window in tokens (from ModelCapabilities). |
+| `reserved_output` | `u32` | Tokens reserved for model output generation. |
+| `reserved_system` | `u32` | Tokens consumed by the system prompt. |
+| `reserved_tools` | `u32` | Tokens consumed by tool schema definitions. |
+| `available_for_history` | `u32` | Remaining tokens available for conversation history + memories. |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_window: u32, max_output_tokens: u32, system_message: Option<&str>, tools_json: &[serde_json::Value]) -> Self
+```
+
+Create a new budget from model capabilities and current context.
+
+# Parameters
+- `context_window`: Total tokens the model can accept
+- `max_output_tokens`: Tokens to reserve for generation
+- `system_message`: The system prompt text (will be estimated)
+- `tools_json`: Tool schema definitions (will be estimated)
+
+#### `history_usage`
+
+```rust
+fn history_usage(&self, history_messages: &[serde_json::Value]) -> u32
+```
+
+Compute how many tokens are actually used by a set of history messages.
+
+#### `would_exceed`
+
+```rust
+fn would_exceed(&self, history_messages: &[serde_json::Value]) -> bool
+```
+
+Check whether adding the given messages would exceed the history budget.
+
+#### `utilization`
+
+```rust
+fn utilization(&self, history_messages: &[serde_json::Value]) -> f32
+```
+
+Utilization ratio (0.0 to 1.0) of the full context window.
+
+#### `remaining`
+
+```rust
+fn remaining(&self, history_messages: &[serde_json::Value]) -> u32
+```
+
+Remaining tokens available after current history usage.

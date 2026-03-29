@@ -1,0 +1,96 @@
+---
+title: "error"
+description: "Common error types for all protocols"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Common error types for all protocols
+
+## Type Aliases
+
+### `TransportResult`
+
+```rust
+type TransportResult = Result<T, TransportError>;
+```
+
+**Result types**
+
+### `ProtocolResult`
+
+```rust
+type ProtocolResult = Result<T, ProtocolError>;
+```
+
+
+## Enums
+
+### `TransportError`
+
+**Universal Transport Error**
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Network(_)` |  |
+| `Serialization(String)` |  |
+| `Timeout(String)` |  |
+| `Http { ... }` |  |
+| `Configuration(String)` |  |
+| `Authentication(String)` |  |
+
+**Methods**
+
+#### `is_retryable`
+
+```rust
+fn is_retryable(&self) -> bool
+```
+
+Check if error is retryable
+
+#### `is_auth_error`
+
+```rust
+fn is_auth_error(&self) -> bool
+```
+
+Check if error is due to authentication
+
+### `ProtocolError`
+
+**Universal Protocol Error**  
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `UnsupportedProtocol(String)` |  |
+| `ProtocolNotFound(String)` |  |
+| `Validation(String)` |  |
+| `Parsing(String)` |  |
+| `Transport(TransportError)` |  |
+| `Serialization(serde_json::Error)` |  |
+| `Internal(String)` |  |
+
+**Methods**
+
+#### `internal_error`
+
+```rust
+fn internal_error(msg: &str) -> Self
+```
+
+Create internal error
+
+#### `is_retryable`
+
+```rust
+fn is_retryable(&self) -> bool
+```
+
+Check if error is retryable

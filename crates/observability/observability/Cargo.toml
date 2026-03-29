@@ -1,11 +1,14 @@
 [package]
 name = "observability"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "PromptFleet observability facade (happy path)"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [features]
 # Keep the default build lightweight: structured logging + context via observability_core.
@@ -37,5 +40,5 @@ web-time = { workspace = true }
 
 # Optional backend crates (renamed to avoid name collisions in dependents).
 otel = { path = "../otel", package = "otel", optional = true }
-obs_prometheus = { path = "../prometheus", package = "prometheus", optional = true }
+obs_prometheus = { path = "../prometheus", package = "pf_prometheus", optional = true }
 

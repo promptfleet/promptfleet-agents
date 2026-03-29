@@ -1,0 +1,261 @@
+---
+title: "resource"
+description: "Resource management patterns"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Resource management patterns
+
+This module provides patterns for safe resource acquisition, management, and release.
+Includes resource pools, connection management, and other resource patterns common
+in distributed systems and agent architectures.
+
+## Key Features
+
+- **Resource Pools**: Thread-safe resource pooling with automatic cleanup
+- **Resource Guards**: RAII-based resource acquisition and release
+- **Lease Management**: Time-based and usage-based resource leasing
+- **Health Checking**: Automatic resource health validation
+- **Graceful Degradation**: Fallback patterns when resources are unavailable
+
+## Traits
+
+### `ManagedResource`
+
+Trait for types that can be managed as resources
+
+**Associated Types**
+
+- `type Error` — 
+
+**Required / Provided Methods**
+
+```rust
+fn create() -> Result<Self, <Self as ?>::Error>
+```
+
+Create a new instance of this resource
+
+```rust
+fn is_healthy(&self) -> bool
+```
+
+Check if this resource is healthy
+
+```rust
+fn cleanup(self) -> Result<(), <Self as ?>::Error>
+```
+
+Clean up this resource (called when resource is dropped)
+
+```rust
+fn managed(self) -> ResourceGuard<Self>
+```
+
+Create a managed resource guard
+
+## Structs
+
+### `ResourceGuard`
+
+Resource guard that manages the lifetime of a resource
+
+This guard ensures that resources are properly returned to their pool
+or cleaned up when they're no longer needed.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<F>(resource: T, return_fn: F) -> Self
+where
+    F: FnOnce + Send + ?
+```
+
+Create a new resource guard
+
+# Arguments
+- `resource`: The resource to manage
+- `return_fn`: Function to call when returning the resource
+
+#### `resource`
+
+```rust
+fn resource(&self) -> &T
+```
+
+Get a reference to the managed resource
+
+#### `resource_mut`
+
+```rust
+fn resource_mut(&mut self) -> &mut T
+```
+
+Get a mutable reference to the managed resource
+
+#### `return_resource`
+
+```rust
+fn return_resource(self) -> Result<(), Box<dyn Error + Send + Sync>>
+```
+
+Manually return the resource (consumes the guard)
+
+#### `take_ownership`
+
+```rust
+fn take_ownership(self) -> T
+```
+
+Take ownership of the resource without returning it to the pool
+
+### `PoolConfig`
+
+Configuration for resource pools
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_size` | `usize` | Maximum number of resources in the pool |
+| `min_size` | `usize` | Minimum number of resources to keep in the pool |
+| `acquire_timeout` | `Duration` | Maximum time to wait for a resource to become available |
+| `max_idle_time` | `Duration` | Maximum idle time before a resource is considered expired |
+| `health_check_interval` | `Duration` | Interval for health checking idle resources |
+
+### `ResourcePool`
+
+A resource pool that manages the lifecycle of expensive resources
+
+This pool provides thread-safe access to resources with automatic
+cleanup, health checking, and graceful degradation.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<F>(config: PoolConfig, factory: F) -> Result<Self, Box<dyn Error + Send + Sync>>
+where
+    F: Fn + Send + Sync + ?
+```
+
+Create a new resource pool
+
+# Arguments
+- `config`: Pool configuration
+- `factory`: Function to create new resources
+
+# Example
+```rust
+use foundation_utils::resource::{ResourcePool, PoolConfig};
+
+let pool = ResourcePool::new(
+    PoolConfig::default(),
+    || Ok("new_resource".to_string())
+).unwrap();
+```
+
+#### `with_health_checker`
+
+```rust
+fn with_health_checker<F>(self, health_checker: F) -> Self
+where
+    F: Fn + Send + Sync + ?
+```
+
+Set a health checker function for resources
+
+The health checker is called periodically to validate that
+pooled resources are still healthy.
+
+#### `acquire`
+
+```rust
+fn acquire(&self) -> Result<ResourceGuard<T>, Box<dyn Error + Send + Sync>>
+```
+
+Acquire a resource from the pool
+
+This method will either return an existing resource from the pool
+or create a new one if the pool is not at capacity.
+
+# Returns
+A `ResourceGuard` that automatically returns the resource to the pool
+when dropped.
+
+#### `stats`
+
+```rust
+fn stats(&self) -> PoolStats
+```
+
+Get pool statistics
+
+#### `health_check`
+
+```rust
+fn health_check(&self) -> Result<usize, Box<dyn Error + Send + Sync>>
+```
+
+Perform health check on all idle resources
+
+### `PoolStats`
+
+Statistics about a resource pool
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_resources` | `usize` | Total number of resources (active + available) |
+| `available_resources` | `usize` | Number of available resources in the pool |
+| `active_resources` | `usize` | Number of actively used resources |
+| `max_size` | `usize` | Maximum pool size |
+| `min_size` | `usize` | Minimum pool size |
+
+**Methods**
+
+#### `utilization`
+
+```rust
+fn utilization(&self) -> f64
+```
+
+Get the pool utilization as a percentage (0.0 to 1.0)
+
+#### `is_at_capacity`
+
+```rust
+fn is_at_capacity(&self) -> bool
+```
+
+Check if the pool is at capacity
+
+#### `is_below_minimum`
+
+```rust
+fn is_below_minimum(&self) -> bool
+```
+
+Check if the pool is below minimum size
+
+## Functions
+
+### `managed_resource`
+
+```rust
+fn managed_resource<T, F>(resource: T, cleanup: F) -> ResourceGuard<T>
+where
+    F: FnOnce + Send + ?
+```
+
+Convenience function to create a simple resource guard
+
+This function creates a guard that will call the cleanup function
+when the resource is no longer needed.

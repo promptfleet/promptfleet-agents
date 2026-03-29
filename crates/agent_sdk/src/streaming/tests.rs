@@ -725,7 +725,7 @@ mod a2a_sse_tests {
 #[cfg(test)]
 mod a2a_sse_mapper {
     use crate::agent::trace::AgentTraceEvent;
-    use crate::streaming::mapper::{map_trace_to_stream_response, A2aSseContext};
+    use crate::streaming::mapper::{A2aSseContext, map_trace_to_stream_response};
     use a2a_protocol_core::streaming::StreamResponse;
     use serde_json::json;
 
@@ -844,7 +844,7 @@ mod broadcast_lag_tests {
     use crate::streaming::broadcast::StreamBroadcast;
     use futures::StreamExt;
     use tokio::sync::broadcast::error::RecvError;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_stream_broadcast_lagged_receiver_reports_lag() {
@@ -965,8 +965,8 @@ mod broadcast_lag_tests {
 
 #[cfg(test)]
 mod driver_tests {
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
 
     use futures::StreamExt;
     use serde_json::json;

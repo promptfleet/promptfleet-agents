@@ -1,0 +1,484 @@
+---
+title: "llm_client"
+description: "Provider-neutral LLM HTTP client: typed requests, streaming SSE events,"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Provider-neutral LLM HTTP client: typed requests, streaming SSE events,
+model profiles, and a [`LlmClient`] facade.
+
+# Quick start
+
+```rust
+use llm_client::auth::ApiKeyAuth;
+use llm_client::client::{LlmClient, WireFormat};
+use llm_client::{ChatMessage, LlmRequest};
+
+# async fn demo() -> Result<(), llm_client::LlmError> {
+let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    .base_url("https://api.openai.com/v1")
+    .auth(ApiKeyAuth::new(std::env::var("OPENAI_API_KEY").unwrap()))
+    .build()?;
+
+let resp = client
+    .chat(LlmRequest {
+        model: "gpt-4o-mini".into(),
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: Some("Hello".into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    })
+    .await?;
+# let _ = resp;
+# Ok(())
+# }
+```
+
+# Wire formats
+
+[`WireFormat`] selects JSON shape (OpenAI-compatible vs Anthropic Messages), not a
+single vendor — OpenRouter uses [`WireFormat::OpenAiCompat`]; Bedrock Claude
+often uses [`WireFormat::AnthropicMessages`].
+
+On native targets, streaming is incremental over SSE. On WASM, responses are
+buffered then parsed (see [`stream::sse_event_stream_from_buffer`]).
+
+## Type Aliases
+
+### `LlmResult`
+
+```rust
+type LlmResult = Result<T, LlmError>;
+```
+
+
+### `LlmEventStream`
+
+```rust
+type LlmEventStream = Pin<Box<dyn futures::Stream + Send>>;
+```
+
+A boxed, pinned, `Send` stream of [`StreamEvent`] results.
+
+This is the canonical return type for all streaming LLM methods.
+
+## Traits
+
+### `AuthProvider`
+
+Called before each HTTP request to inject or refresh authorization.
+
+**Required / Provided Methods**
+
+```rust
+fn authorize(&self, headers: &mut HashMap<String, String>) -> Result<(), LlmError>
+```
+
+Mutate `headers` in place (add or replace auth-related entries).
+
+```rust
+fn query_params(&self) -> Vec<(String, String)>
+```
+
+Optional query parameters appended to every request URL after the path.
+
+Default: none. Azure OpenAI uses this for `api-version`.
+
+## Structs
+
+### `AnthropicApiKeyAuth`
+
+Anthropic Messages API authentication (`x-api-key` + version header).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(key: impl Into) -> Self
+```
+
+
+#### `with_version`
+
+```rust
+fn with_version<impl Into<String>>(self, version: impl Into) -> Self
+```
+
+
+#### `into_arc`
+
+```rust
+fn into_arc(self) -> Arc<dyn AuthProvider>
+```
+
+
+### `ApiKeyAuth`
+
+Standard bearer token: `Authorization: Bearer <key>`.
+
+Covers OpenAI, OpenRouter, Together, Fireworks, vLLM gateways, etc.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(key: impl Into) -> Self
+```
+
+
+#### `into_arc`
+
+```rust
+fn into_arc(self) -> Arc<dyn AuthProvider>
+```
+
+
+### `AzureOpenAiAuth`
+
+Azure OpenAI: correct auth header plus `api-version` on every request.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new<impl Into<String>>(api_version: impl Into, credential: AzureCredential) -> Self
+```
+
+
+### `LlmClient`
+
+High-level LLM client (single entry point for apps).
+
+**Methods**
+
+#### `builder`
+
+```rust
+fn builder(wire_format: WireFormat) -> LlmClientBuilder
+```
+
+
+#### `azure_openai_builder`
+
+```rust
+fn azure_openai_builder(resource_name: &str, deployment_id: &str, api_version: &str, credential: AzureCredential) -> LlmClientBuilder
+```
+
+Convenience for Azure OpenAI chat deployments.
+
+#### `chat`
+
+```rust
+async fn chat(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>
+```
+
+
+#### `chat_stream`
+
+```rust
+async fn chat_stream(&self, req: LlmRequest) -> Result<LlmEventStream, LlmError>
+```
+
+
+#### `capabilities`
+
+```rust
+fn capabilities(&self) -> ClientCapabilities
+```
+
+
+### `LlmClientBuilder`
+
+Configures an [`LlmClient`].
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(wire_format: WireFormat) -> Self
+```
+
+
+#### `base_url`
+
+```rust
+fn base_url<impl Into<String>>(self, url: impl Into) -> Self
+```
+
+
+#### `auth`
+
+```rust
+fn auth<impl AuthProvider + 'static>(self, auth: impl AuthProvider + ?) -> Self
+```
+
+
+#### `api_mode`
+
+```rust
+fn api_mode(self, mode: ApiMode) -> Self
+```
+
+For OpenAI-compatible endpoints only. Ignored for Anthropic.
+
+#### `streaming_policy`
+
+```rust
+fn streaming_policy(self, policy: StreamingPolicy) -> Self
+```
+
+
+#### `default_headers`
+
+```rust
+fn default_headers(self, headers: HashMap<String, String>) -> Self
+```
+
+
+#### `openai_paths`
+
+```rust
+fn openai_paths(self, chat: String, responses: String) -> Self
+```
+
+Override OpenAI chat and responses URL paths (Azure uses `/chat/completions`, etc.).
+
+#### `build`
+
+```rust
+fn build(self) -> Result<LlmClient, LlmError>
+```
+
+
+### `ClientCapabilities`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `streaming` | `bool` |  |
+| `tool_calling` | `bool` |  |
+| `structured_output` | `bool` |  |
+
+### `ModelCapabilities`
+
+Capability metadata for a specific model — context window, output limits,
+feature support, and optional cost information.
+
+Use [`ModelCapabilities::lookup`] to resolve capabilities from the built-in
+registry, or construct manually for custom/self-hosted models.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `context_window` | `u32` | Maximum input tokens the model can accept (context window size). |
+| `max_output_tokens` | `u32` | Maximum tokens the model can generate in a single response. |
+| `supports_tools` | `bool` | Whether the model supports function/tool calling. |
+| `supports_vision` | `bool` | Whether the model supports vision (image) inputs. |
+| `supports_streaming` | `bool` | Whether the model supports streaming responses. |
+| `cost_per_1k_input` | `Option&lt;f64&gt;` | Cost per 1K input tokens (USD), if known. Used for budget tracking. |
+| `cost_per_1k_output` | `Option&lt;f64&gt;` | Cost per 1K output tokens (USD), if known. |
+
+**Methods**
+
+#### `lookup`
+
+```rust
+fn lookup(model_id: &str) -> Self
+```
+
+Look up capabilities for a model by its ID string.
+
+Matches known model prefixes (e.g. "gpt-4o" matches "gpt-4o-2024-08-06").
+Returns [`UNKNOWN_DEFAULT`](Self::UNKNOWN_DEFAULT) if no match is found.
+
+#### `available_for_history`
+
+```rust
+fn available_for_history(&self, reserved_output: Option<u32>, system_tokens: u32, tools_tokens: u32) -> u32
+```
+
+Compute available budget for conversation history after reserving
+space for output, system prompt, and tool schemas.
+
+### `ModelConfig`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model_id` | `String` |  |
+| `family` | `ModelFamily` |  |
+| `profile` | `ModelProfile` |  |
+| `capabilities` | `Option&lt;ModelCapabilities&gt;` | Optional explicit capabilities override. When `None`, capabilities |
+| `extensions` | `BTreeMap&lt;String, serde_json::Value&gt;` |  |
+
+**Methods**
+
+#### `resolve_capabilities`
+
+```rust
+fn resolve_capabilities(&self) -> ModelCapabilities
+```
+
+Resolve capabilities — explicit override takes priority, then static
+registry lookup, then conservative defaults for unknown models.
+
+### `SseParser`
+
+Stateful SSE line parser.
+
+Feeds raw bytes from the HTTP response body and emits complete
+`data:` payloads as strings. Handles line buffering across chunk
+boundaries and supports both data-only and typed event consumption.
+
+Use [`next_event`] for data-only payloads (OpenAI-compatible) or
+[`next_typed_event`] for `(event_type, data)` pairs (Anthropic-compatible).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `feed`
+
+```rust
+fn feed(&mut self, bytes: &[u8])
+```
+
+Feed a chunk of bytes from the response body.
+
+#### `next_event`
+
+```rust
+fn next_event(&mut self) -> Option<String>
+```
+
+Get the next complete SSE data payload, if available.
+
+Returns data-only strings, ignoring `event:` fields.
+Use this for OpenAI-compatible streams.
+
+#### `next_typed_event`
+
+```rust
+fn next_typed_event(&mut self) -> Option<(Option<String>, String)>
+```
+
+Get the next `(event_type, data)` pair, if available.
+
+The `event_type` is `Some` when the data line was preceded by an
+`event:` SSE field, `None` otherwise.
+Use this for Anthropic-style streams that require the event type
+to dispatch parsing.
+
+## Enums
+
+### `AzureCredential`
+
+Azure OpenAI credential: static `api-key` header or Entra ID bearer token.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `ApiKey(String)` | Sent as `api-key: {key}`. |
+| `BearerToken(String)` | Sent as `Authorization: Bearer {token}`. Refresh externally before expiry. |
+
+### `WireFormat`
+
+JSON schema family for the remote endpoint.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `OpenAiCompat` | OpenAI chat completions / responses shape (incl. Azure OpenAI, OpenRouter, vLLM, …). |
+| `AnthropicMessages` | Anthropic Messages API shape (incl. Bedrock / Vertex Claude when routed that way). |
+
+### `LlmError`
+
+Errors surfaced by [`crate::LlmClient`] and streaming helpers.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Transport(protocol_transport_core::TransportError)` |  |
+| `Protocol(protocol_transport_core::ProtocolError)` |  |
+| `Serialization(serde_json::Error)` |  |
+| `Config(String)` |  |
+
+### `ApiMode`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Chat` |  |
+| `Responses` |  |
+| `Auto` |  |
+
+### `ModelFamily`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `OpenAI` |  |
+| `Gpt5` |  |
+| `Qwen3` |  |
+| `Claude` |  |
+| `Gemini` |  |
+| `DeepSeek` |  |
+| `Llama` |  |
+| `Mistral` |  |
+
+### `ModelProfile`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `Generic` |  |
+| `Gpt5 { ... }` |  |
+| `Qwen3 { ... }` |  |
+
+### `StreamEvent`
+
+A single event from an LLM streaming response.
+
+Events are emitted in real-time as the provider generates tokens.
+Variants cover content deltas, native reasoning/CoT deltas (never
+fabricated), incremental tool-call fragments, and lifecycle signals.
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `StreamStart { ... }` | Stream started. Emitted once from the first chunk that contains a role. |
+| `ContentDelta { ... }` | A text content delta from the assistant. |
+| `ReasoningDelta { ... }` | A reasoning/thinking delta from reasoning models. |
+| `ToolCallStart { ... }` | A new tool call started in the stream. |
+| `ToolCallDelta { ... }` | An arguments JSON fragment for an in-progress tool call. |
+| `Done { ... }` | The stream completed. |
+| `Error { ... }` | An error occurred during streaming. |

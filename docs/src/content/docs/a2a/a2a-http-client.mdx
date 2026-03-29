@@ -1,0 +1,69 @@
+---
+title: a2a_http_client
+description: A2A HTTP client — WASM default, native testing support
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Uses Spin SDK on WASM, Reqwest on native.</Aside>
+
+**Crate:** `a2a_http_client` · **Path:** `crates/a2a_http_client`  
+**Description** (`Cargo.toml`): *A2A HTTP client - WASM default, native testing support*
+
+## Role
+
+Target-adaptive A2A HTTP client: uses Spin SDK on WASM and Reqwest on native, with identical public APIs across both targets. Includes activation-aware retry logic for KEDA scale-to-zero cold starts with exponential backoff and idempotency keys.
+
+## Feature flags
+
+From `crates/a2a_http_client/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | No features enabled by default |
+| `observability` | Emit OTEL spans/metrics + W3C trace propagation (via `observability` crate) |
+| `streaming` | SSE streaming support (native only: `futures-util`, `async-stream`, `a2a_protocol_core/event-stream`) |
+
+## Public API (from `src/lib.rs`)
+
+**Modules:** `activation` (always), `wasm_client` / `native_client` (target-selected)
+
+**Core types:**
+
+- **`Client`** — A2A HTTP client (target-adaptive: Spin SDK or Reqwest)
+  - `Client::external(url)` — create client for a remote endpoint
+  - `client.call(method, params)` — send a JSON-RPC request
+  - `client.call_with_activation(method, params, config, request_id)` — call with cold-start retry
+  - `client.with_header(key, value)` — add custom header
+- **`ClientError`** / **`RpcError`** — error types
+- **`ActivationConfig`** — retry configuration (max retries, backoff, cold-start timeout)
+- **`activation_delay`**, **`idempotency_key`**, **`retry_with_activation`** — retry helpers
+- **`check_connectivity`** — probe server reachability
+
+**Re-exports:**
+
+- From `a2a_protocol_core`: `Message`, `Task`, `A2A_PROTOCOL_VERSION`
+- From `protocol_transport_core`: `JsonRpcError`, `JsonRpcId`, `JsonRpcRequest`, `JsonRpcResponse`, `StreamingPolicy`, `JSONRPC_VERSION`
+
+## Example sketch
+
+```rust
+use a2a_http_client::{Client, ActivationConfig};
+use serde_json::json;
+
+let client = Client::external("http://my-agent.default.agentmesh/a2a")
+    .with_header("Authorization".into(), "Bearer token".into());
+
+// Simple call
+let result = client.call("message/send", json!({
+    "message": { "role": "user", "parts": [{"text": "Hello"}] }
+})).await?;
+
+// With KEDA activation-aware retries
+let config = ActivationConfig::default();
+let result = client.call_with_activation(
+    "message/send", params, &config, "req-123"
+).await?;
+```
+
+**Full API reference:** `cargo doc -p a2a_http_client --no-deps`

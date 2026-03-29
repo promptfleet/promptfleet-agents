@@ -1,0 +1,38 @@
+---
+title: otel
+description: OpenTelemetry integration — OTLP-oriented helpers, sampling, resource attributes, optional auto-instrumentation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Supports Spin SDK, browser WASM, and native tokio environments.</Aside>
+
+**Crate:** `otel` · **Path:** `crates/observability/otel`  
+**Description** (`Cargo.toml`): *OpenTelemetry extension for SpinKube WASM environments.*
+
+## Feature flags
+
+From `crates/observability/otel/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `structured-logging` |
+| `otel-2025` | `opentelemetry`, `opentelemetry-otlp`, `opentelemetry-semantic-conventions` |
+| `auto-instrumentation` | `otel-2025` |
+| `grpc-tonic` / `grpc-sys` | Passed through to `opentelemetry-otlp` |
+| `structured-logging` | `serde_json`, `observability_core/structured-logging`, `opentelemetry-proto`, `prost` |
+
+## Public API (from `src/lib.rs`)
+
+- **`Otel`**, **`OtelBuilder`**, **`OtelConfig`**, **`OtelConfigBuilder`**
+- **`CollectorClient`**, span/log/metric data types
+- **`AutoInstrumentedHttpClient`**, **`FunctionInstrumentation`**, **`TraceContextPropagator`**
+- **`ResourceAttributeManager`**, **`SamplingStrategy`**
+- **`OtelExtensionConfig`**, **`OtelManager`**
+- Re-exports **`observability_core`** traits/types (`ObservabilityPlugin`, `TraceContext`, …)
+- **`create_otel_manager`**, **`create_otel_manager_from_config`**
+- Constants: **`VERSION`**, **`DEFAULT_OTLP_ENDPOINT`**, **`DEFAULT_BATCH_SIZE`**, **`DEFAULT_EXPORT_TIMEOUT_SECS`**
+
+Dependencies include **`reqwest`** and (on non-WASM) **`tokio`** — see `Cargo.toml` `target.'cfg(...)'` sections.
+
+**Full API reference:** `cargo doc -p otel --no-deps --features otel-2025` (add features you use).

@@ -1,0 +1,68 @@
+---
+title: mcp_protocol
+description: "Model Context Protocol (MCP) implementation for PromptFleet — JSON-RPC 2.0 compatible."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Uses Spin SDK on WASM, Reqwest/Tokio on native.</Aside>
+
+**Crate:** `mcp_protocol` · **Path:** `crates/mcp_protocol`  
+**Description** (`Cargo.toml`): *Model Context Protocol (MCP) implementation for PromptFleet - JSON-RPC 2.0 compatible*
+
+## Role
+
+Standards-compliant MCP implementation for PromptFleet agents. Provides JSON-RPC 2.0 wire format, HTTP/HTTPS transport with OAuth 2.1 Bearer token support, tool discovery (`tools/list`) and tool execution (`tools/call`), and interoperability with Python FastMCP and TypeScript MCP SDKs. Built on top of `protocol_transport_core`.
+
+## Feature flags
+
+From `crates/mcp_protocol/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `client`, `server`, `proxy` |
+| `client` | MCP client module |
+| `server` | MCP server module |
+| `proxy` | Connect to external MCP servers outside Kubernetes |
+| `sse-client` | Direct SSE client — avoids proxy hop for performance (enables `client`) |
+| `sse-server` | Direct SSE server — accepts direct SSE connections (enables `server`) |
+
+## Public API (from `src/lib.rs`)
+
+Modules: `auth`, `client`, `error`, `handler`, `server`, `types`, `proxy` (feature-gated).
+
+Key types and traits:
+
+- **`McpProtocolHandler`** — main handler; implements both `ProtocolHandler` and `AsyncProtocolHandler` from `protocol_transport_core`
+- **`ToolProvider`** trait — async trait for tool listing and execution (`list_tools`, `call_tool`)
+- **`QueryMode`** — `Single` (standard) or `Aggregate` (multi-provider tool listing)
+- **`AuthHandler`** — authentication strategy trait (re-exported from `auth`)
+
+Re-exports from `types`: `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`, `Tool`, `CallToolRequest`, `CallToolResult`, `Content`, `InitializeRequest`, `InitializeResult`, `ServerCapabilities`, `ServerInfo`, `ListToolsResult`.
+
+Re-exports from `error`: MCP error types.
+
+Convenience functions:
+
+- **`create_mcp_handler()`** — quick setup with default capabilities
+- **`create_mcp_handler_with_capabilities(capabilities)`** — quick setup with custom capabilities
+
+Constants: **`MCP_PROTOCOL_VERSION`** (`"2025-06-18"`), **`JSONRPC_VERSION`** (`"2.0"`).
+
+## Example sketch
+
+```rust
+use mcp_protocol::{McpProtocolHandler, ServerCapabilities, create_mcp_handler};
+
+// Quick setup with defaults
+let handler = create_mcp_handler();
+
+// Or with builder pattern
+let handler = McpProtocolHandler::new()
+    .with_capabilities(ServerCapabilities::default())
+    .with_query_mode(mcp_protocol::QueryMode::Single);
+```
+
+See the [MCP guide](/promptfleet-agents/guides/mcp/) for end-to-end examples of connecting to external MCP servers.
+
+**Full API reference:** `cargo doc -p mcp_protocol --no-deps --all-features`

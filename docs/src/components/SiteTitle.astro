@@ -1,0 +1,30 @@
+---
+import type { Props } from '@astrojs/starlight/props';
+---
+
+<a href={Astro.props.siteTitleHref} class="site-title sl-flex">
+  <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="" class="logo" />
+  <span class="title-text">
+    promptfleet <span class="title-accent">Agents</span>
+  </span>
+</a>
+
+<style>
+  .site-title {
+    gap: 0.5rem;
+    align-items: center;
+    text-decoration: none;
+    color: var(--sl-color-white);
+    font-weight: 700;
+    font-size: var(--sl-text-lg);
+    white-space: nowrap;
+  }
+  .logo {
+    height: 2rem;
+    width: auto;
+  }
+  .title-accent {
+    color: hsl(187, 100%, 50%);
+    font-weight: 300;
+  }
+</style>

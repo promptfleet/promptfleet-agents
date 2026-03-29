@@ -1,0 +1,154 @@
+---
+title: "client"
+description: "# MCP Client"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Client
+
+MCP client implementation for connecting to MCP servers over either
+Streamable HTTP or the older direct SSE feature path.
+
+## Structs
+
+### `McpClient`
+
+**MCP Client** - Connect to MCP servers
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new MCP client
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Configure authentication
+
+#### `with_streamable_http_server`
+
+```rust
+fn with_streamable_http_server(self, endpoint: &str) -> Self
+```
+
+Connect to MCP server via Streamable HTTP.
+
+#### `with_streamable_http_server_auth`
+
+```rust
+fn with_streamable_http_server_auth(self, endpoint: &str, auth_token: &str) -> Self
+```
+
+Connect to MCP server via Streamable HTTP with bearer authentication.
+
+#### `with_streamable_http_headers`
+
+```rust
+fn with_streamable_http_headers(self, headers: HashMap<String, String>) -> Self
+```
+
+Add extra HTTP headers to the Streamable HTTP transport.
+
+#### `with_streamable_http_client_info`
+
+```rust
+fn with_streamable_http_client_info(self, client_info: ClientInfo) -> Self
+```
+
+Override the Streamable HTTP client identity used during initialize.
+
+#### `list_tools_async`
+
+```rust
+async fn list_tools_async(&self) -> Result<Vec<Tool>, ProtocolError>
+```
+
+List tools from server.
+
+#### `call_tool_async`
+
+```rust
+async fn call_tool_async(&self, name: &str, arguments: Option<serde_json::Value>) -> Result<CallToolResult, ProtocolError>
+```
+
+Call tool on server.
+
+#### `call_tool_with_meta_async`
+
+```rust
+async fn call_tool_with_meta_async(&self, name: &str, arguments: Option<serde_json::Value>, meta: Option<serde_json::Value>) -> Result<CallToolResult, ProtocolError>
+```
+
+
+#### `initialize_async`
+
+```rust
+async fn initialize_async(&self) -> Result<(), ProtocolError>
+```
+
+Initialize the current Streamable HTTP transport explicitly.
+
+#### `health_check`
+
+```rust
+async fn health_check(&self) -> Result<(), ProtocolError>
+```
+
+Check server health.
+
+### `McpClientBuilder`
+
+**MCP Client Builder** - Convenient client configuration
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new client builder
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Set authentication handler
+
+#### `with_streamable_http_server`
+
+```rust
+fn with_streamable_http_server(self, endpoint: &str) -> Self
+```
+
+Configure Streamable HTTP transport.
+
+#### `with_streamable_http_auth_token`
+
+```rust
+fn with_streamable_http_auth_token(self, token: &str) -> Self
+```
+
+Set bearer token for Streamable HTTP transport.
+
+#### `build`
+
+```rust
+fn build(self) -> McpClient
+```
+
+Build the MCP client

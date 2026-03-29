@@ -37,7 +37,7 @@ pub struct ActivationConfig {
 impl Default for ActivationConfig {
     fn default() -> Self {
         Self {
-            max_cold_start_timeout: Duration::from_secs(60),
+            max_cold_start_timeout: Duration::from_mins(1),
             initial_backoff: Duration::from_millis(100),
             max_backoff: Duration::from_secs(2),
             max_retries: 3,
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn default_config_values() {
         let config = ActivationConfig::default();
-        assert_eq!(config.max_cold_start_timeout, Duration::from_secs(60));
+        assert_eq!(config.max_cold_start_timeout, Duration::from_mins(1));
         assert_eq!(config.initial_backoff, Duration::from_millis(100));
         assert_eq!(config.max_backoff, Duration::from_secs(2));
         assert_eq!(config.max_retries, 3);
@@ -254,8 +254,8 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     mod retry_tests {
         use super::*;
-        use std::sync::atomic::{AtomicU32, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         fn fast_config(max_retries: u32) -> ActivationConfig {
             ActivationConfig {

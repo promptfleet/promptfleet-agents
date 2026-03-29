@@ -1,0 +1,110 @@
+---
+title: UMAO Orchestration
+description: How PromptFleet implements the UMAO coordination layer for multi-agent workflows.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## What is UMAO?
+
+[Unified Multi-Agent Orchestration (UMAO)](https://github.com/umao-spec/umao-spec) is a coordination layer for multi-agent systems. It defines composable primitives and a graph-based intermediate representation for orchestrating agents that communicate via the [A2A protocol](/promptfleet-agents/concepts/a2a-protocol/) or equivalent transports.
+
+UMAO sits **above** A2A and MCP — it answers "what should agents do together" while A2A and MCP answer "how they communicate."
+
+```
+┌─────────────────────────────────────────────────────────┐
+│               Application Goals & Tasks                 │
+├─────────────────────────────────────────────────────────┤
+│   UMAO Coordination Layer                               │
+│   Select · Delegate · Aggregate · Monitor · FlowControl │
+├─────────────────────────────────────────────────────────┤
+│   A2A Protocol  │  MCP Tool Access                      │
+├─────────────────────────────────────────────────────────┤
+│   HTTP / SSE / JSON-RPC Transport                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Specification & Reference Implementation
+
+UMAO is developed as an open specification with a companion Rust reference implementation:
+
+| Project | Description | License |
+|---------|-------------|---------|
+| [umao-spec](https://github.com/umao-spec/umao-spec) | Normative specification — primitives, Graph IR, state model, conformance levels | [Community Specification License 1.0](https://github.com/umao-spec/umao-spec/blob/main/LICENSE.md) |
+| [umao-rs](https://github.com/umao-spec/umao-rs) | Vendor-neutral Rust reference implementation | Apache 2.0 |
+
+The `umao-rs` implementation provides three crates:
+
+| Crate | Role | WASM-safe |
+|-------|------|-----------|
+| `umao_core` | Graph IR, validation, scheduling, events, planner types | Yes |
+| `umao_executor` | Reference orchestrator loop, `NodeExecutor` / `AsyncNodeExecutor` traits | No (native) |
+| `umao_a2a` | A2A protocol binding — SSE mapper, task state mapping | No (native) |
+
+<Aside type="note">
+On-wire version marker: `"umao-1.0"` (Community Preview). The spec is complete and implementable, open for review and contribution.
+</Aside>
+
+## Five Coordination Primitives
+
+Every UMAO workflow is composed from five primitives:
+
+| Primitive | Role | Input → Output |
+|-----------|------|----------------|
+| **Select** | Agent selection | `task_spec` → `selected_agents` |
+| **Delegate** | Task dispatch to agents | `selected_agents, task_spec` → `task_results` |
+| **Aggregate** | Result collection and synthesis | `task_results` → `aggregate_result` |
+| **Monitor** | Anomaly sensing | `observations, coordination_state` → `anomaly_event` |
+| **FlowControl** | Exceptional routing | `anomaly_event, aggregate_result` → `next_coord_action` |
+
+These primitives compose into patterns like sequential pipelines, fan-out/fan-in, monitored workflows, reflection loops, and human-in-the-loop flows.
+
+## Two-Phase Graph Model
+
+UMAO uses a two-phase graph model for workflow execution:
+
+1. **Raw Planner Graph** — Delegate nodes only, produced by an LLM planner or defined statically
+2. **Normalized Graph** — Verified Delegate bindings plus optional Monitor/FlowControl infrastructure anchors injected by the normalization layer
+
+The graph is expressed in **Graph IR** — a JSON-based intermediate representation with typed nodes, directed edges, and metadata. Graphs are validated against the [UMAO JSON Schema](https://github.com/umao-spec/umao-spec/tree/main/schemas) before execution.
+
+## How PromptFleet Uses UMAO
+
+PromptFleet implements UMAO through the [`umao_agents`](/promptfleet-agents/support/umao-agents/) crate, which bridges the vendor-neutral UMAO orchestration engine with the promptfleet agent SDK:
+
+```
+umao-spec (specification)
+    ↓ implements
+umao-rs (umao_core + umao_executor + umao_a2a)
+    ↓ depends on
+umao_agents (bridges UMAO → promptfleet agent_sdk)
+    ↓ dispatches to
+Real A2A agents via agent_sdk::A2aClient
+```
+
+The `PromptFleetExecutor` struct implements `AsyncNodeExecutor` from `umao_executor` and handles each primitive type:
+
+- **Delegate** nodes are routed to registered A2A agents via `A2aClient::send_message`
+- **Select**, **Aggregate**, **Monitor**, and **FlowControl** nodes use deterministic responses from `umao_core`
+
+```rust
+use umao_agents::PromptFleetExecutor;
+
+let mut executor = PromptFleetExecutor::new();
+executor.register("researcher", "http://localhost:3001");
+executor.register("synthesizer", "http://localhost:3002");
+
+// Load a UMAO graph and execute via the orchestrator
+// let result = orchestrator::execute_async(&graph, &executor, None).await;
+```
+
+<Aside type="tip">
+`promptfleet-agents` is listed as a [reference implementation](https://github.com/umao-spec/umao-spec#reference-implementations) in the UMAO specification.
+</Aside>
+
+## Related
+
+- [UMAO Specification](https://github.com/umao-spec/umao-spec) — normative spec, primer, conformance fixtures
+- [umao-rs](https://github.com/umao-spec/umao-rs) — vendor-neutral Rust reference implementation
+- [`umao_agents` crate](/promptfleet-agents/support/umao-agents/) — API reference and dispatch table
+- [A2A Protocol](/promptfleet-agents/concepts/a2a-protocol/) — the agent communication layer UMAO coordinates

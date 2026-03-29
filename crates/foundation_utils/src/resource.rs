@@ -53,11 +53,12 @@ impl<T> ResourceGuard<T> {
 
     /// Manually return the resource (consumes the guard)
     pub fn return_resource(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let (Some(resource), Some(return_fn)) = (self.resource.take(), self.return_fn.take()) {
-            return_fn(resource);
-            Ok(())
-        } else {
-            Err("Resource already returned".into())
+        match (self.resource.take(), self.return_fn.take()) {
+            (Some(resource), Some(return_fn)) => {
+                return_fn(resource);
+                Ok(())
+            }
+            _ => Err("Resource already returned".into()),
         }
     }
 

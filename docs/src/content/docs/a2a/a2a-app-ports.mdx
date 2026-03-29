@@ -1,0 +1,57 @@
+---
+title: a2a_app_ports
+description: Application layer ports for A2A servers (clean architecture)
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Pure trait definitions with no transport dependencies.</Aside>
+
+**Crate:** `a2a_app_ports` · **Path:** `crates/a2a_app_ports`  
+**Description** (`Cargo.toml`): *Application layer ports for A2A servers (clean architecture)*
+
+## Role
+
+Defines the application-facing port traits that the infrastructure layer (HTTP server) uses to delegate A2A methods to the SDK/application layer. This is the clean-architecture boundary: the server depends on these traits, and the SDK implements them.
+
+## Feature flags
+
+No feature flags — this crate has no `[features]` section.
+
+## Public API (from `src/lib.rs`)
+
+**Type alias:**
+
+- **`AppFuture<'a>`** — pinned boxed future returning `A2AResult<SendMessageResponse>`. On WASM it is `!Send`; on native it is `Send`.
+
+**Traits:**
+
+- **`A2AAppPort`** (sync) — `Send + Sync`
+  - `build_agent_card(&self) -> AgentCard`
+  - `handle_send_message(&self, params: SendMessageRequest) -> A2AResult<SendMessageResponse>`
+- **`A2AAppPortAsync`** (async) — `Send + Sync`
+  - `build_agent_card(&self) -> AgentCard`
+  - `handle_send_message_async<'a>(&'a self, params: SendMessageRequest) -> AppFuture<'a>`
+
+## Example sketch
+
+```rust
+use a2a_app_ports::{A2AAppPort, A2AAppPortAsync};
+use a2a_protocol_core::{AgentCard, A2AResult};
+use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
+
+struct MyAgent { /* ... */ }
+
+impl A2AAppPort for MyAgent {
+    fn build_agent_card(&self) -> AgentCard {
+        AgentCard::new("my-agent".into())
+    }
+
+    fn handle_send_message(&self, params: SendMessageRequest) -> A2AResult<SendMessageResponse> {
+        // process the message and return a response
+        todo!()
+    }
+}
+```
+
+**Full API reference:** `cargo doc -p a2a_app_ports --no-deps`

@@ -273,11 +273,9 @@ where
             if self.drop_on_overflow {
                 self.dropped_count.fetch_add(1, Ordering::Relaxed);
                 return false;
-            } else {
-                if let Some(old_item) = self.buffer.pop_front() {
-                    let old_size = old_item.estimated_size();
-                    self.current_memory.fetch_sub(old_size, Ordering::Relaxed);
-                }
+            } else if let Some(old_item) = self.buffer.pop_front() {
+                let old_size = old_item.estimated_size();
+                self.current_memory.fetch_sub(old_size, Ordering::Relaxed);
             }
         }
 
@@ -604,7 +602,7 @@ mod tests {
         let config = BatchingConfig {
             max_batch_size: 5,
             min_batch_size: 10, // Set high to avoid auto-flush
-            flush_interval: Duration::from_secs(3600), // Set very high to avoid time-based flush
+            flush_interval: Duration::from_hours(1), // Set very high to avoid time-based flush
             ..Default::default()
         };
 

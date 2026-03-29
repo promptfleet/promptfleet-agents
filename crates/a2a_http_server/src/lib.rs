@@ -12,6 +12,7 @@ use log::{debug, info};
 
 /// A2A v1.0 JSON-RPC method names.
 pub mod method {
+    pub const PING: &str = "Ping";
     pub const SEND_MESSAGE: &str = "SendMessage";
     pub const SEND_STREAMING_MESSAGE: &str = "SendStreamingMessage";
     pub const GET_AGENT_CARD: &str = "GetAgentCard";
@@ -36,8 +37,8 @@ use native_server as implementation;
 pub use implementation::A2AHttpServer;
 
 // Re-export core types for convenience
-pub use a2a_protocol_core::{A2AProtocol, AgentCard, A2A_PROTOCOL_VERSION};
-pub use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION};
+pub use a2a_protocol_core::{A2A_PROTOCOL_VERSION, A2AProtocol, AgentCard};
+pub use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
 
 // Adapter trait for delegating selected methods to application layer (SDK)
 pub use a2a_app_ports::A2AAppPort;

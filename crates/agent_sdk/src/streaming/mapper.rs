@@ -522,9 +522,10 @@ mod tests {
             StreamResponse::StatusUpdate(ev) => {
                 assert_eq!(ev.status.state, TaskState::Working);
                 let msg = ev.status.message.as_ref().expect("expected message");
-                assert!(msg
-                    .get_text_content()
-                    .contains("\"_type\":\"agent_handoff\""));
+                assert!(
+                    msg.get_text_content()
+                        .contains("\"_type\":\"agent_handoff\"")
+                );
             }
             _ => panic!("expected StatusUpdate"),
         }
@@ -545,9 +546,10 @@ mod tests {
             StreamResponse::StatusUpdate(ev) => {
                 assert_eq!(ev.status.state, TaskState::Working);
                 let msg = ev.status.message.as_ref().expect("expected message");
-                assert!(msg
-                    .get_text_content()
-                    .contains("\"_type\":\"progress_update\""));
+                assert!(
+                    msg.get_text_content()
+                        .contains("\"_type\":\"progress_update\"")
+                );
             }
             _ => panic!("expected StatusUpdate"),
         }
@@ -590,9 +592,10 @@ mod tests {
             StreamResponse::StatusUpdate(ev) => {
                 assert_eq!(ev.status.state, TaskState::Working);
                 let msg = ev.status.message.as_ref().expect("expected message");
-                assert!(msg
-                    .get_text_content()
-                    .contains("\"name\":\"coord.graph_created\""));
+                assert!(
+                    msg.get_text_content()
+                        .contains("\"name\":\"coord.graph_created\"")
+                );
             }
             _ => panic!("expected StatusUpdate"),
         }
@@ -623,9 +626,10 @@ mod tests {
             StreamResponse::StatusUpdate(ev) => {
                 assert_eq!(ev.status.state, TaskState::InputRequired);
                 let msg = ev.status.message.as_ref().expect("expected message");
-                assert!(msg
-                    .get_text_content()
-                    .contains("\"_type\":\"interaction_requested\""));
+                assert!(
+                    msg.get_text_content()
+                        .contains("\"_type\":\"interaction_requested\"")
+                );
             }
             _ => panic!("expected StatusUpdate"),
         }

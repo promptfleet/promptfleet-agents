@@ -1,21 +1,22 @@
 //! WASM A2A HTTP Server using Spin SDK
 
 use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION, A2AProtocol, AgentCard,
     services::{InMemoryTaskStorage, TaskStorage},
-    A2AProtocol, AgentCard, A2A_PROTOCOL_VERSION,
 };
 use anyhow::Result;
 use log::{debug, error, info, trace, warn};
-use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION};
+use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
 use serde_json::json;
 use spin_sdk::http::{Method, Request as SpinRequest, Response as SpinResponse};
 use std::sync::Arc;
+#[cfg(feature = "observability")]
 use web_time::Instant;
 
 #[cfg(feature = "observability")]
 use observability::{
-    attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-    ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+    ObsHandle, SpanStatus, TraceContext, W3CTraceContext, attr, clear_current_context,
+    get_current_context, metric, set_current_context, span, value, with_context_future,
 };
 
 const STATUS_OK: &str = "ok";
@@ -264,7 +265,16 @@ impl A2AHttpServer {
                             .get("id")
                             .cloned()
                             .unwrap_or(serde_json::Value::Null);
-                        let response = match app.handle_send_message_async(params).await {
+                        let response_future = app.handle_send_message_async(params);
+                        #[cfg(feature = "observability")]
+                        let response_result = if let Some(current_context) = get_current_context() {
+                            with_context_future(current_context, response_future).await
+                        } else {
+                            response_future.await
+                        };
+                        #[cfg(not(feature = "observability"))]
+                        let response_result = response_future.await;
+                        let response = match response_result {
                             Ok(result) => {
                                 let result_value =
                                     if let a2a_protocol_core::methods::params::MessageSendResponse::Task(
@@ -449,7 +459,18 @@ impl A2AHttpServer {
         let method = req.method().to_string();
         let agent_id = self.agent_id();
 
-        debug!("Incoming request: {} {} for agent: {} (app_present={}, app_async_present={}, storage_ptr={})", method, path, agent_id, self.app.is_some(), self.app_async.is_some(), self.task_storage.as_ref().map(|s| format!("{:p}", Arc::as_ptr(s))).unwrap_or_else(|| "<none>".to_string()));
+        debug!(
+            "Incoming request: {} {} for agent: {} (app_present={}, app_async_present={}, storage_ptr={})",
+            method,
+            path,
+            agent_id,
+            self.app.is_some(),
+            self.app_async.is_some(),
+            self.task_storage
+                .as_ref()
+                .map(|s| format!("{:p}", Arc::as_ptr(s)))
+                .unwrap_or_else(|| "<none>".to_string())
+        );
         trace!("Request headers: <omitted>");
 
         let result = match path.as_str() {
@@ -547,8 +568,13 @@ impl A2AHttpServer {
                 )
                 .build());
         }
-        debug!("Parsing JSON-RPC request for agent: {} (size: {} bytes) app_present={} app_async_present={}", 
-               agent_id, request_str.len(), self.app.is_some(), self.app_async.is_some());
+        debug!(
+            "Parsing JSON-RPC request for agent: {} (size: {} bytes) app_present={} app_async_present={}",
+            agent_id,
+            request_str.len(),
+            self.app.is_some(),
+            self.app_async.is_some()
+        );
         trace!("JSON-RPC request body: {}", request_str);
 
         let root_val: serde_json::Value = match serde_json::from_str(request_str) {
@@ -957,5 +983,85 @@ mod tests {
         let storage: Arc<dyn TaskStorage> = Arc::new(InMemoryTaskStorage::new());
         let server = A2AHttpServer::new_with_storage(agent_card, storage);
         assert_eq!(server.agent_id(), "test-agent");
+    }
+
+    #[cfg(feature = "observability")]
+    #[tokio::test]
+    async fn test_wasm_server_preserves_w3c_trace_context_for_app_adapter() {
+        use a2a_app_ports::{A2AAppPortAsync, AppFuture};
+        use a2a_protocol_core::data::{Message, MessageRole};
+        use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
+        use observability::{TraceContext, get_current_context};
+
+        #[derive(Clone)]
+        struct TraceCapturingApp {
+            seen: std::sync::Arc<std::sync::Mutex<Option<TraceContext>>>,
+        }
+
+        impl A2AAppPortAsync for TraceCapturingApp {
+            fn build_agent_card(&self) -> AgentCard {
+                AgentCard::new("test-agent".to_string())
+            }
+
+            fn handle_send_message_async<'a>(
+                &'a self,
+                _params: SendMessageRequest,
+            ) -> AppFuture<'a> {
+                Box::pin(async move {
+                    *self.seen.lock().unwrap() = get_current_context();
+                    Ok(SendMessageResponse::Message(Message::text(
+                        MessageRole::Agent,
+                        "ok",
+                        "task-1".to_string(),
+                    )))
+                })
+            }
+        }
+
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let app = TraceCapturingApp { seen: seen.clone() };
+
+        let mut obs_cfg = observability::ObservabilityConfig::default();
+        obs_cfg.otel.enabled = true;
+        obs_cfg.otel.otlp_endpoint = "http://otel:4317".to_string();
+        let obs = observability::Obs::init(obs_cfg).unwrap();
+
+        let server = A2AHttpServer::new_with_a2a_methods(AgentCard::new("test-agent".to_string()))
+            .with_app_adapter_async(std::sync::Arc::new(app))
+            .with_observability(obs);
+
+        let req = SpinRequest::builder()
+            .method(Method::Post)
+            .uri("/jsonrpc")
+            .header("content-type", "application/json")
+            .header(
+                "traceparent",
+                "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+            )
+            .body(
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": "trace-test",
+                    "method": crate::method::SEND_MESSAGE,
+                    "params": {
+                        "message": {
+                            "messageId": "msg-1",
+                            "role": "ROLE_USER",
+                            "parts": [{"text": "hello"}]
+                        }
+                    }
+                })
+                .to_string(),
+            )
+            .build();
+
+        let response = server.serve_request_async(req).await.unwrap();
+        assert_eq!(*response.status(), 200);
+
+        let ctx = seen.lock().unwrap().clone().expect("trace context");
+        assert_eq!(ctx.trace_id, "0af7651916cd43dd8448eb211c80319c");
+        assert_eq!(ctx.parent_span_id.as_deref(), Some("b7ad6b7169203331"));
+        assert_ne!(ctx.span_id, "b7ad6b7169203331");
+        assert_eq!(ctx.span_id.len(), 16);
     }
 }

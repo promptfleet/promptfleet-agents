@@ -1,0 +1,56 @@
+---
+title: "a2a_app_ports"
+description: "Application Ports for A2A HTTP Server (v1.0)"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Application Ports for A2A HTTP Server (v1.0)
+
+Defines the application-facing port that infrastructure (HTTP server)
+uses to delegate A2A methods to the SDK/application layer.
+
+## Type Aliases
+
+### `AppFuture`
+
+```rust
+type AppFuture = Pin<Box<dyn Future + Send>>;
+```
+
+
+## Traits
+
+### `A2AAppPort`
+
+Synchronous application port for A2A servers.
+
+**Required / Provided Methods**
+
+```rust
+fn build_agent_card(&self) -> AgentCard
+```
+
+
+```rust
+fn handle_send_message(&self, params: SendMessageRequest) -> A2AResult<SendMessageResponse>
+```
+
+
+### `A2AAppPortAsync`
+
+Async variant of the application port.
+
+**Required / Provided Methods**
+
+```rust
+fn build_agent_card(&self) -> AgentCard
+```
+
+
+```rust
+fn handle_send_message_async<'a>(&self, params: SendMessageRequest) -> AppFuture<'a>
+```
+

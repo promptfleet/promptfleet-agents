@@ -159,7 +159,7 @@ impl MetricsPort for MockMetricsPort {
 }
 
 /// Additional test to demonstrate the Prometheus plugin MetricsPort implementation
-#[cfg(feature = "prometheus-federation")]
+#[cfg(any())]
 fn test_prometheus_plugin_integration() -> Result<(), Box<dyn std::error::Error>> {
     use prometheus_plugin_2025::{PrometheusConfig2025, PrometheusPlugin2025};
 

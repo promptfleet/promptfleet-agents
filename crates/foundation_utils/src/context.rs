@@ -73,7 +73,7 @@ impl ThreadLocalContext {
     }
 
     /// Create a scoped context guard for a typed value
-    pub fn scoped<T: 'static + Clone>(&self, value: T) -> Guard<T, impl FnOnce(T)> {
+    pub fn scoped<T: 'static + Clone>(&self, value: T) -> Guard<T, impl FnOnce(T) + use<T>> {
         let previous = self.get::<T>();
         self.set(value.clone());
 
@@ -324,7 +324,7 @@ macro_rules! context_key {
 /// ```
 #[macro_export]
 macro_rules! with_context_scoped {
-    ($key:expr, $value:expr, $block:block) => {
+    ($key:expr_2021, $value:expr_2021, $block:block) => {
         $crate::context::with_context_value($value, || $block)
     };
 }

@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn single_word() {
         let t = estimate_tokens("hello");
-        assert!(t >= 1 && t <= 3, "expected 1-3, got {}", t);
+        assert!((1..=3).contains(&t), "expected 1-3, got {}", t);
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
         let text = "The quick brown fox jumps over the lazy dog. This is a typical English sentence that should tokenize to roughly 20-25 tokens.";
         let t = estimate_tokens(text);
         // Actual cl100k_base: ~28 tokens. Our estimate should be in range.
-        assert!(t >= 20 && t <= 40, "expected 20-40, got {}", t);
+        assert!((20..=40).contains(&t), "expected 20-40, got {}", t);
     }
 
     #[test]

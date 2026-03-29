@@ -1,7 +1,14 @@
+//! Compose protocol adapters (A2A, optional AG-UI) around a shared [`crate::Agent`].
+//!
+//! **When to use [`AgentHost`] vs [`crate::a2a::A2aApp`] alone:** use [`crate::a2a::A2aApp`] when you only
+//! expose A2A. Use [`AgentHostBuilder`] when you want **one HTTP router** that merges A2A routes
+//! with optional AG-UI routes (native + `event-stream`).
+
 use std::sync::Arc;
 
 use crate::{Agent, SdkError, SdkResult};
 
+/// Builder for [`AgentHost`] — enable A2A and/or AG-UI adapters before [`Self::build`].
 #[derive(Default, Clone)]
 pub struct AgentHostBuilder {
     agent: Option<Arc<Agent>>,
@@ -12,6 +19,7 @@ pub struct AgentHostBuilder {
 }
 
 impl AgentHostBuilder {
+    /// Start from a fully built [`crate::Agent`].
     pub fn new(agent: Agent) -> Self {
         Self {
             agent: Some(Arc::new(agent)),
@@ -22,18 +30,21 @@ impl AgentHostBuilder {
         }
     }
 
+    /// Mount the A2A HTTP surface (JSON-RPC, agent card, health). Requires `a2a-server`.
     #[cfg(feature = "a2a-server")]
     pub fn with_a2a(mut self) -> Self {
         self.enable_a2a = true;
         self
     }
 
+    /// Mount AG-UI streaming routes. Native only; requires `event-stream`.
     #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
     pub fn with_agui(mut self, config: crate::agui::AgUiConfig) -> Self {
         self.agui_config = Some(config);
         self
     }
 
+    /// Finish configuration. Fails if no adapter was enabled (A2A and/or AG-UI).
     pub fn build(self) -> SdkResult<AgentHost> {
         let agent = self
             .agent
@@ -83,6 +94,7 @@ impl AgentHostBuilder {
         Ok(host)
     }
 
+    /// Convenience: [`Self::build`] then [`AgentHost::build_router`] (native Axum).
     #[cfg(all(
         not(target_arch = "wasm32"),
         any(feature = "a2a-server", feature = "event-stream")
@@ -91,12 +103,14 @@ impl AgentHostBuilder {
         self.build()?.build_router()
     }
 
+    /// Convenience: [`Self::build`] then [`AgentHost::build_router`] (Spin on WASM).
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     pub fn build_router(self) -> SdkResult<spin_sdk::http::Router> {
         self.build()?.build_router()
     }
 }
 
+/// Single host value combining the shared [`crate::Agent`] with enabled protocol adapters.
 pub struct AgentHost {
     agent: Arc<Agent>,
     #[cfg(all(feature = "a2a-server", not(target_arch = "wasm32")))]
@@ -134,6 +148,7 @@ impl AgentHost {
         false
     }
 
+    /// Merge enabled adapters into one Axum router (A2A routes, AG-UI routes, etc.).
     #[cfg(all(
         not(target_arch = "wasm32"),
         any(feature = "a2a-server", feature = "event-stream")
@@ -154,16 +169,19 @@ impl AgentHost {
         Ok(router)
     }
 
+    /// Spin HTTP router for WASM A2A hosting.
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     pub fn build_router(&self) -> SdkResult<spin_sdk::http::Router> {
         self.build_spin_router()
     }
 
+    /// Dispatch one request through the Spin router (synchronous).
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     pub fn serve(&self, req: spin_sdk::http::Request) -> SdkResult<spin_sdk::http::Response> {
         Ok(self.build_spin_router()?.handle(req))
     }
 
+    /// Async dispatch for Spin (preferred for I/O-heavy handlers).
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     pub async fn serve_async(
         &self,
@@ -172,6 +190,7 @@ impl AgentHost {
         Ok(self.build_spin_router()?.handle_async(req).await)
     }
 
+    /// Like [`Self::serve_async`], flushes observability when `agent-observability` is enabled.
     #[cfg(all(target_arch = "wasm32", feature = "a2a-server"))]
     pub async fn serve_async_flushed(
         &self,
@@ -229,9 +248,10 @@ mod tests {
             .build()
             .err()
             .expect("host without adapters should fail");
-        assert!(err
-            .to_string()
-            .contains("requires at least one protocol adapter"));
+        assert!(
+            err.to_string()
+                .contains("requires at least one protocol adapter")
+        );
     }
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "a2a-server"))]

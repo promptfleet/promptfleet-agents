@@ -1,0 +1,278 @@
+---
+title: LLM Client
+description: How to build, authenticate, and stream with any LLM provider using llm_client.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+The `llm_client` crate is a provider-neutral HTTP client for LLM chat completions. It handles authentication, wire format differences, model profiles, and SSE streaming — on both native and WASM targets.
+
+## What it does
+
+`LlmClient` sends chat requests to any OpenAI-compatible or Anthropic Messages endpoint and returns typed responses or real-time `StreamEvent` streams. It is pulled in automatically through the `llm-engine` feature of `agent_sdk`.
+
+## Wire formats
+
+`WireFormat` selects the JSON shape, not a specific vendor:
+
+| Variant | Endpoints |
+|---|---|
+| `WireFormat::OpenAiCompat` | OpenAI, Azure OpenAI, OpenRouter, vLLM, Together, Fireworks |
+| `WireFormat::AnthropicMessages` | Anthropic direct, Bedrock Claude, Vertex Claude |
+
+## Build a client
+
+<Steps>
+
+1. **Choose a wire format** — `OpenAiCompat` for OpenAI-shaped APIs, `AnthropicMessages` for Anthropic.
+
+2. **Set base URL and auth** — point at the provider's endpoint and supply credentials.
+
+3. **Optionally configure** API mode, streaming policy, default headers, or custom paths.
+
+4. **Call `.build()`** to get an `LlmClient`.
+
+</Steps>
+
+<Tabs>
+<TabItem label="OpenAI">
+
+```rust
+use llm_client::{LlmClient, WireFormat, ApiKeyAuth};
+
+let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    .base_url("https://api.openai.com/v1")
+    .auth(ApiKeyAuth::new(std::env::var("OPENAI_API_KEY")?))
+    .build()?;
+```
+
+</TabItem>
+<TabItem label="Anthropic">
+
+```rust
+use llm_client::{LlmClient, WireFormat, AnthropicApiKeyAuth};
+
+let client = LlmClient::builder(WireFormat::AnthropicMessages)
+    .base_url("https://api.anthropic.com")
+    .auth(AnthropicApiKeyAuth::new(std::env::var("ANTHROPIC_API_KEY")?))
+    .build()?;
+```
+
+</TabItem>
+<TabItem label="Azure OpenAI">
+
+```rust
+use llm_client::{LlmClient, AzureCredential};
+
+let client = LlmClient::azure_openai_builder(
+    "my-resource",                // Azure resource name
+    "gpt-4o",                     // deployment ID
+    "2024-06-01",                 // API version
+    AzureCredential::ApiKey(std::env::var("AZURE_KEY")?),
+).build()?;
+```
+
+</TabItem>
+<TabItem label="OpenRouter / vLLM">
+
+```rust
+use llm_client::{LlmClient, WireFormat, ApiKeyAuth};
+
+let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    .base_url("https://openrouter.ai/api/v1")
+    .auth(ApiKeyAuth::new(std::env::var("OPENROUTER_KEY")?))
+    .build()?;
+```
+
+</TabItem>
+</Tabs>
+
+## Builder methods
+
+| Method | Description |
+|---|---|
+| `LlmClient::builder(wire_format)` | Start building with `WireFormat::OpenAiCompat` or `WireFormat::AnthropicMessages` |
+| `.base_url(url)` | Provider base URL (required) |
+| `.auth(provider)` | Auth provider — any type implementing `AuthProvider` (required) |
+| `.api_mode(mode)` | `ApiMode::Chat`, `ApiMode::Responses`, or `ApiMode::Auto` (OpenAI only) |
+| `.streaming_policy(policy)` | `StreamingPolicy { connect_ms, first_byte_ms, idle_ms }` timeout knobs |
+| `.default_headers(map)` | Extra headers merged into every request |
+| `.openai_paths(chat, responses)` | Override path segments (Azure uses `/chat/completions`, not `/v1/chat/completions`) |
+| `LlmClient::azure_openai_builder(...)` | Convenience shortcut that sets base URL, auth, and paths for Azure deployments |
+
+## Authentication providers
+
+| Type | Header | Use case |
+|---|---|---|
+| `ApiKeyAuth` | `Authorization: Bearer <key>` | OpenAI, OpenRouter, vLLM, Together, Fireworks |
+| `AnthropicApiKeyAuth` | `x-api-key` + `anthropic-version` | Anthropic direct API |
+| `AzureOpenAiAuth` | `api-key` or `Authorization: Bearer` + `?api-version=` | Azure OpenAI (key or Entra token) |
+| Custom `impl AuthProvider` | Any | Custom auth schemes |
+
+`AzureCredential` is an enum with two variants:
+- `AzureCredential::ApiKey(String)` — sent as `api-key` header
+- `AzureCredential::BearerToken(String)` — sent as `Authorization: Bearer` header
+
+## Sending requests
+
+### Non-streaming
+
+```rust
+use llm_client::{LlmRequest, ChatMessage};
+
+let response = client.chat(LlmRequest {
+    model: "gpt-4o".into(),
+    messages: vec![ChatMessage {
+        role: "user".into(),
+        content: Some("Explain WASM in one sentence.".into()),
+        ..Default::default()
+    }],
+    ..Default::default()
+}).await?;
+```
+
+### Streaming
+
+```rust
+use futures::StreamExt;
+
+let mut stream = client.chat_stream(LlmRequest {
+    model: "gpt-4o".into(),
+    messages: vec![ChatMessage {
+        role: "user".into(),
+        content: Some("Hello".into()),
+        ..Default::default()
+    }],
+    ..Default::default()
+}).await?;
+
+while let Some(event) = stream.next().await {
+    match event? {
+        StreamEvent::ContentDelta { delta } => print!("{}", delta),
+        StreamEvent::Done { finish_reason, usage } => {
+            println!("\nDone: {:?}, usage: {:?}", finish_reason, usage);
+            break;
+        }
+        _ => {}
+    }
+}
+```
+
+<Aside type="tip">
+On **native** targets, streaming is incremental over SSE (real-time token delivery).
+On **WASM**, responses are buffered then parsed as a batch — true incremental streaming is deferred until WASI 0.3.
+</Aside>
+
+## StreamEvent variants
+
+The stream emits these events in order:
+
+| Variant | Fields | When |
+|---|---|---|
+| `StreamStart` | `id`, `model` | First chunk (carries `role`) |
+| `ContentDelta` | `delta: String` | Each text token |
+| `ReasoningDelta` | `delta: String` | Reasoning models (Qwen3, DeepSeek R1) — never fabricated |
+| `ToolCallStart` | `index`, `id`, `name` | New function call begins |
+| `ToolCallDelta` | `index`, `arguments_delta` | Arguments JSON fragment |
+| `Done` | `finish_reason`, `usage` | Generation complete (`"stop"`, `"tool_calls"`, `"length"`) |
+| `Error` | `message` | Streaming error |
+
+**Typical sequences:**
+- Text: `StreamStart → ContentDelta* → Done`
+- Tool calls: `StreamStart → ToolCallStart → ToolCallDelta* → Done`
+- Reasoning models: `StreamStart → ReasoningDelta* → ContentDelta* → Done`
+
+## Model profiles
+
+`ModelConfig` combines model identity, family-specific behavior, and capabilities:
+
+```rust
+use llm_client::profile::{ModelConfig, ModelFamily, ModelProfile, ModelCapabilities};
+
+let config = ModelConfig {
+    model_id: "gpt-5".to_string(),
+    family: ModelFamily::Gpt5,
+    profile: ModelProfile::Gpt5 {
+        reasoning_effort: Some("high".into()),
+        responses_text_verbosity: None,
+        responses_reasoning_object: Some(true),
+    },
+    capabilities: None,  // auto-resolved from registry
+    extensions: Default::default(),
+};
+
+let caps = config.resolve_capabilities();
+assert_eq!(caps.context_window, 256_000);
+```
+
+### Model families
+
+`ModelFamily`: `OpenAI`, `Gpt5`, `Qwen3`, `Claude`, `Gemini`, `DeepSeek`, `Llama`, `Mistral`
+
+### Model profile variants
+
+| Variant | Extra fields | Purpose |
+|---|---|---|
+| `ModelProfile::Generic` | (none) | Default for most models |
+| `ModelProfile::Gpt5` | `reasoning_effort`, `responses_text_verbosity`, `responses_reasoning_object` | GPT-5 specific knobs |
+| `ModelProfile::Qwen3` | `enable_thinking`, `tool_call_parser`, `reasoning_parser`, `auto_tool_choice`, `template_kwargs` | Qwen3 / vLLM tuning |
+
+### Capability lookup
+
+`ModelCapabilities::lookup("gpt-4o")` resolves from a built-in registry of known models. For unknown models, it returns conservative defaults (8K context window). Override by setting `capabilities` on `ModelConfig`.
+
+| Field | Type | Description |
+|---|---|---|
+| `context_window` | `u32` | Max input tokens |
+| `max_output_tokens` | `u32` | Max output tokens |
+| `supports_tools` | `bool` | Function/tool calling |
+| `supports_vision` | `bool` | Image inputs |
+| `supports_streaming` | `bool` | Streaming responses |
+| `cost_per_1k_input` | `Option<f64>` | USD per 1K input tokens |
+| `cost_per_1k_output` | `Option<f64>` | USD per 1K output tokens |
+
+## Request preparation pipeline
+
+The `prepare` module provides a mutator/validator pipeline for model-specific request shaping:
+
+- **`Gpt5Mutator`** — strips `temperature` (unsupported), maps `max_tokens` → `max_completion_tokens`, injects `reasoning_effort`
+- **`QwenVllmExtras`** — injects `chat_template_kwargs`, `tool_call_parser`, `reasoning_parser` for vLLM-hosted Qwen3
+- **`ProfileCapabilityValidator`** — validates request fields against model profile (`Strict` rejects, `Permissive` warns)
+
+```rust
+use llm_client::prepare::{prepare_request, Gpt5Mutator, ProfileCapabilityValidator, Policy};
+
+let shaped_request = prepare_request(
+    &model_config,
+    raw_request,
+    &[Box::new(Gpt5Mutator)],
+    &[Box::new(ProfileCapabilityValidator)],
+    Policy::Permissive,
+)?;
+```
+
+## Key types reference
+
+| Type | Module | Description |
+|---|---|---|
+| `LlmClient` | `llm_client::client` | Main facade — `.chat()`, `.chat_stream()`, `.capabilities()` |
+| `LlmClientBuilder` | `llm_client::client` | Builder with `.base_url()`, `.auth()`, `.api_mode()`, etc. |
+| `WireFormat` | `llm_client::client` | `OpenAiCompat` or `AnthropicMessages` |
+| `ApiMode` | `llm_client::model_client` | `Chat`, `Responses`, or `Auto` |
+| `StreamEvent` | `llm_client::stream` | Streaming event vocabulary |
+| `LlmEventStream` | `llm_client::stream` | `Pin<Box<dyn Stream<Item = Result<StreamEvent, LlmError>>>>` |
+| `SseParser` | `llm_client::stream` | Low-level SSE line parser |
+| `StreamingPolicy` | `protocol_transport_core` | `connect_ms`, `first_byte_ms`, `idle_ms` timeouts |
+| `AuthProvider` | `llm_client::auth` | Trait: `authorize(&self, headers)` + optional `query_params()` |
+| `ApiKeyAuth` | `llm_client::auth` | `Authorization: Bearer` auth |
+| `AnthropicApiKeyAuth` | `llm_client::auth` | `x-api-key` + `anthropic-version` auth |
+| `AzureOpenAiAuth` | `llm_client::auth` | Azure `api-key` or Entra bearer + `api-version` query param |
+| `AzureCredential` | `llm_client::auth` | `ApiKey(String)` or `BearerToken(String)` |
+| `ModelConfig` | `llm_client::profile` | Model identity + family + profile + optional capabilities |
+| `ModelFamily` | `llm_client::profile` | Model vendor enum |
+| `ModelProfile` | `llm_client::profile` | Family-specific parameter variants |
+| `ModelCapabilities` | `llm_client::profile` | Context window, limits, feature flags, costs |
+| `ClientCapabilities` | `llm_client::model_client` | `streaming`, `tool_calling`, `structured_output` flags |
+| `LlmRequest` | `llm_client::types` | Chat request: model, messages, temperature, max_tokens, tools, etc. |
+| `LlmResponse` | `llm_client::types` | Non-streaming response |
+| `ChatMessage` | `llm_client::types` | Role + content + optional tool_calls |

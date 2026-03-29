@@ -1,9 +1,11 @@
+use crate::auth::AuthProvider;
+use crate::error::LlmError;
 use protocol_transport_core::{
-    ProtocolError, StreamingPolicy, Transport, TransportError, TransportFactory, UniversalRequest,
-    UniversalResponse,
+    StreamingPolicy, Transport, TransportError, TransportFactory, UniversalRequest,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ApiMode {
@@ -15,18 +17,6 @@ pub enum ApiMode {
     Auto,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ClientConfig {
-    pub base_url: String,
-    pub api_key: Option<String>,
-    pub default_headers: HashMap<String, String>,
-    #[serde(default)]
-    pub api_mode: Option<ApiMode>,
-    /// Streaming timeout policy. `None` uses built-in defaults.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub streaming: Option<StreamingPolicy>,
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ClientCapabilities {
     pub streaming: bool,
@@ -34,84 +24,98 @@ pub struct ClientCapabilities {
     pub structured_output: bool,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ClientError {
-    #[error("transport error: {0}")]
-    Transport(#[from] TransportError),
-    #[error("protocol error: {0}")]
-    Protocol(#[from] ProtocolError),
-    #[error("serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
-    #[error("invalid configuration: {0}")]
-    Config(String),
-}
+pub type ClientResult<T> = Result<T, LlmError>;
 
-pub type ClientResult<T> = Result<T, ClientError>;
-
-/// Minimal provider-agnostic client API
-pub trait ModelClient: Send + Sync {
-    fn capabilities(&self) -> ClientCapabilities;
-
-    /// Generic non-streaming LLM request (chat, tools, structured output)
-    fn llm_request(
-        &self,
-        request: serde_json::Value,
-    ) -> impl std::future::Future<Output = ClientResult<serde_json::Value>> + Send;
-}
-
-/// Default HTTP-backed client (provider-agnostic JSON)
+/// HTTP transport with per-request authorization (dual-target WASM / native).
 #[derive(Clone)]
-pub struct HttpModelClient {
-    config: ClientConfig,
+pub(crate) struct HttpModelClient {
+    base_url: String,
+    default_headers: HashMap<String, String>,
+    /// Used by native `post_sse` for connect timeout; WASM uses `rest_http` only (no reqwest).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    streaming: Option<StreamingPolicy>,
+    auth: Arc<dyn AuthProvider>,
 }
 
 impl HttpModelClient {
-    pub fn new(config: ClientConfig) -> Self {
-        log::debug!("HttpModelClient::new base_url={}", config.base_url);
-        Self { config }
+    pub(crate) fn new(
+        base_url: String,
+        default_headers: HashMap<String, String>,
+        streaming: Option<StreamingPolicy>,
+        auth: Arc<dyn AuthProvider>,
+    ) -> Self {
+        log::debug!("HttpModelClient::new base_url={}", base_url);
+        Self {
+            base_url,
+            default_headers,
+            streaming,
+            auth,
+        }
     }
 
-    pub fn config(&self) -> &ClientConfig {
-        &self.config
-    }
-
-    fn make_headers(&self) -> HashMap<String, String> {
-        let mut headers = self.config.default_headers.clone();
+    fn make_headers(&self) -> Result<HashMap<String, String>, LlmError> {
+        let mut headers = self.default_headers.clone();
         headers
             .entry("content-type".to_string())
             .or_insert("application/json".to_string());
-        if let Some(key) = &self.config.api_key {
-            headers
-                .entry("authorization".to_string())
-                .or_insert(format!("Bearer {}", key));
-        }
-        log::debug!("HttpModelClient::make_headers count={}", headers.len());
-        headers
+        self.auth.authorize(&mut headers)?;
+        Ok(headers)
     }
 
-    fn build_universal_request(&self, path: &str, body: Vec<u8>) -> UniversalRequest {
-        let url = if path.starts_with("http") {
+    fn build_full_url(&self, path: &str) -> String {
+        let base = if path.starts_with("http") {
             path.to_string()
         } else {
-            format!("{}{}", self.config.base_url, path)
+            format!(
+                "{}/{}",
+                self.base_url.trim_end_matches('/'),
+                path.trim_start_matches('/')
+            )
         };
+
+        let params = self.auth.query_params();
+        if params.is_empty() {
+            return base;
+        }
+        let sep = if base.contains('?') { '&' } else { '?' };
+        let tail: String = params
+            .iter()
+            .enumerate()
+            .map(|(i, (k, v))| {
+                let prefix = if i == 0 {
+                    String::new()
+                } else {
+                    "&".to_string()
+                };
+                format!("{prefix}{k}={v}")
+            })
+            .collect();
+        format!("{base}{sep}{tail}")
+    }
+
+    fn build_universal_request(
+        &self,
+        path: &str,
+        body: Vec<u8>,
+    ) -> Result<UniversalRequest, LlmError> {
+        let url = self.build_full_url(path);
         log::debug!(
             "HttpModelClient::build_universal_request path={} url={} body_len={}",
             path,
             url,
             body.len()
         );
-        UniversalRequest {
+        Ok(UniversalRequest {
             method: "POST".to_string(),
             uri: url,
-            headers: self.make_headers(),
+            headers: self.make_headers()?,
             body,
             protocol: "REST".to_string(),
             correlation_id: uuid::Uuid::new_v4().to_string(),
-        }
+        })
     }
 
-    pub async fn post_json(
+    pub(crate) async fn post_json(
         &self,
         path: &str,
         payload: serde_json::Value,
@@ -122,7 +126,7 @@ impl HttpModelClient {
             payload.as_object().map(|o| o.len()).unwrap_or(0)
         );
         let body = serde_json::to_vec(&payload)?;
-        let uni_req = self.build_universal_request(path, body);
+        let uni_req = self.build_universal_request(path, body)?;
         let transport = TransportFactory::rest_http();
         let resp_res = transport.send(uni_req).await;
         match resp_res {
@@ -140,7 +144,7 @@ impl HttpModelClient {
                         preview,
                         resp.headers
                     );
-                    return Err(ClientError::Transport(TransportError::Http {
+                    return Err(LlmError::Transport(TransportError::Http {
                         status: resp.status,
                         message: format!("HTTP {} error", resp.status),
                         body: Some(resp.body),
@@ -152,80 +156,29 @@ impl HttpModelClient {
             }
             Err(e) => {
                 log::warn!("HttpModelClient::post_json transport error: {}", e);
-                Err(ClientError::Transport(e))
+                Err(LlmError::Transport(e))
             }
         }
     }
-}
 
-impl ModelClient for HttpModelClient {
-    fn capabilities(&self) -> ClientCapabilities {
+    pub(crate) fn capabilities(&self) -> ClientCapabilities {
         ClientCapabilities {
-            // Streaming is only available on native targets (reqwest + tokio)
-            streaming: cfg!(not(target_arch = "wasm32")),
+            streaming: true,
             tool_calling: true,
             structured_output: true,
         }
     }
-
-    async fn llm_request(&self, request: serde_json::Value) -> ClientResult<serde_json::Value> {
-        log::debug!("HttpModelClient::llm_request dispatching to /v1/chat/completions");
-        let body = serde_json::to_vec(&request)?;
-        let uni_req = self.build_universal_request("/v1/chat/completions", body);
-
-        // Use dual-target HTTP from protocol_transport_core
-        let transport = TransportFactory::rest_http();
-        let resp: UniversalResponse = transport.send(uni_req).await?;
-        log::debug!(
-            "HttpModelClient::llm_request status={} resp_body_len={}",
-            resp.status,
-            resp.body.len()
-        );
-
-        if resp.status >= 400 {
-            let preview = String::from_utf8_lossy(&resp.body);
-            log::warn!(
-                "HttpModelClient::llm_request error status={} body={} headers={:?}",
-                resp.status,
-                preview,
-                resp.headers
-            );
-            return Err(ClientError::Transport(TransportError::Http {
-                status: resp.status,
-                message: "HTTP error".to_string(),
-                body: Some(resp.body),
-                headers: Some(resp.headers),
-            }));
-        }
-        let json: serde_json::Value = serde_json::from_slice(&resp.body)?;
-        Ok(json)
-    }
 }
-
-// ---------------------------------------------------------------------------
-// Native-only: SSE streaming transport
-// ---------------------------------------------------------------------------
 
 #[cfg(not(target_arch = "wasm32"))]
 impl HttpModelClient {
-    /// POST a JSON payload and return the raw `reqwest::Response` for SSE
-    /// streaming.
-    ///
-    /// Uses streaming-first client construction: `connect_timeout` only,
-    /// no total `.timeout()`. The caller should use `IdleTimeoutStream`
-    /// on the response body stream for per-chunk idle enforcement.
-    pub async fn post_sse(
+    pub(crate) async fn post_sse(
         &self,
         path: &str,
         payload: serde_json::Value,
     ) -> ClientResult<reqwest::Response> {
-        let url = if path.starts_with("http") {
-            path.to_string()
-        } else {
-            format!("{}{}", self.config.base_url, path)
-        };
-
-        let policy = self.config.streaming.clone().unwrap_or_default();
+        let url = self.build_full_url(path);
+        let policy = self.streaming.clone().unwrap_or_default();
 
         log::debug!(
             "HttpModelClient::post_sse url={} payload_keys={} connect_ms={}",
@@ -238,23 +191,21 @@ impl HttpModelClient {
             .connect_timeout(policy.connect_timeout())
             .build()
             .map_err(|e| {
-                ClientError::Transport(TransportError::Network(format!(
+                LlmError::Transport(TransportError::Network(format!(
                     "failed to build reqwest client: {}",
                     e
                 )))
             })?;
 
         let mut builder = client.post(&url);
-
-        for (k, v) in self.make_headers() {
+        for (k, v) in self.make_headers()? {
             builder = builder.header(&k, &v);
         }
-
         builder = builder.header("accept", "text/event-stream");
 
         let response = builder.json(&payload).send().await.map_err(|e| {
             log::warn!("HttpModelClient::post_sse connection error: {}", e);
-            ClientError::Transport(TransportError::Network(e.to_string()))
+            LlmError::Transport(TransportError::Network(e.to_string()))
         })?;
 
         let status = response.status().as_u16();
@@ -271,7 +222,7 @@ impl HttpModelClient {
                 status,
                 preview
             );
-            return Err(ClientError::Transport(TransportError::Http {
+            return Err(LlmError::Transport(TransportError::Http {
                 status,
                 message: format!("HTTP {} error", status),
                 body,
@@ -281,9 +232,376 @@ impl HttpModelClient {
 
         Ok(response)
     }
+}
 
-    /// Get the effective streaming policy for this client.
-    pub fn streaming_policy(&self) -> StreamingPolicy {
-        self.config.streaming.clone().unwrap_or_default()
+#[cfg(target_arch = "wasm32")]
+impl HttpModelClient {
+    pub(crate) async fn post_sse_buffered(
+        &self,
+        path: &str,
+        payload: serde_json::Value,
+    ) -> ClientResult<Vec<u8>> {
+        log::debug!(
+            "HttpModelClient::post_sse_buffered path={} payload_keys={}",
+            path,
+            payload.as_object().map(|o| o.len()).unwrap_or(0)
+        );
+        let body = serde_json::to_vec(&payload)?;
+        let mut uni_req = self.build_universal_request(path, body)?;
+        uni_req
+            .headers
+            .insert("accept".to_string(), "text/event-stream".to_string());
+        let transport = TransportFactory::rest_http();
+        let resp = transport.send(uni_req).await?;
+        if resp.status >= 400 {
+            let preview = String::from_utf8_lossy(&resp.body);
+            log::warn!(
+                "HttpModelClient::post_sse_buffered error status={} body={}",
+                resp.status,
+                preview
+            );
+            return Err(LlmError::Transport(TransportError::Http {
+                status: resp.status,
+                message: format!("HTTP {} error", resp.status),
+                body: Some(resp.body),
+                headers: Some(resp.headers),
+            }));
+        }
+        Ok(resp.body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::ApiKeyAuth;
+
+    fn test_auth() -> Arc<dyn AuthProvider> {
+        Arc::new(ApiKeyAuth::new("sk-test"))
+    }
+
+    #[test]
+    fn test_make_headers_default_content_type() {
+        let client = HttpModelClient::new(
+            String::new(),
+            HashMap::new(),
+            None,
+            Arc::new(ApiKeyAuth::new("")),
+        );
+        let headers = client.make_headers().unwrap();
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/json")
+        );
+    }
+
+    #[test]
+    fn test_make_headers_existing_content_type_preserved() {
+        let mut default_headers = HashMap::new();
+        default_headers.insert(
+            "content-type".to_string(),
+            "application/vnd.custom+json".to_string(),
+        );
+        let client = HttpModelClient::new(String::new(), default_headers, None, test_auth());
+        let headers = client.make_headers().unwrap();
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/vnd.custom+json")
+        );
+    }
+
+    #[test]
+    fn test_make_headers_api_key_bearer() {
+        let client = HttpModelClient::new(String::new(), HashMap::new(), None, test_auth());
+        let headers = client.make_headers().unwrap();
+        assert_eq!(
+            headers.get("authorization").map(String::as_str),
+            Some("Bearer sk-test")
+        );
+    }
+
+    #[test]
+    fn test_build_request_relative_path() {
+        let client = HttpModelClient::new(
+            "https://api.example.com".to_string(),
+            HashMap::new(),
+            None,
+            test_auth(),
+        );
+        let req = client
+            .build_universal_request("/v1/chat", vec![1, 2, 3])
+            .unwrap();
+        assert_eq!(req.uri, "https://api.example.com/v1/chat");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.body, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_build_request_absolute_url() {
+        let client = HttpModelClient::new(
+            "https://api.example.com".to_string(),
+            HashMap::new(),
+            None,
+            test_auth(),
+        );
+        let url = "https://other.example.com/v1/x";
+        let req = client.build_universal_request(url, vec![]).unwrap();
+        assert_eq!(req.uri, url);
+    }
+
+    #[test]
+    fn test_capabilities_values() {
+        let client = HttpModelClient::new(String::new(), HashMap::new(), None, test_auth());
+        let caps = client.capabilities();
+        assert!(caps.tool_calling);
+        assert!(caps.structured_output);
+        assert!(caps.streaming);
+    }
+
+    #[test]
+    fn test_build_url_appends_query_params_from_auth() {
+        use crate::auth::AzureCredential;
+        use crate::auth::AzureOpenAiAuth;
+        let client = HttpModelClient::new(
+            "https://myresource.openai.azure.com/openai/deployments/gpt4".to_string(),
+            HashMap::new(),
+            None,
+            Arc::new(AzureOpenAiAuth::new(
+                "2024-02-15-preview",
+                AzureCredential::ApiKey("k".into()),
+            )),
+        );
+        let url = client.build_full_url("/chat/completions");
+        assert!(url.contains("api-version=2024-02-15-preview"), "url={url}");
+        assert!(url.starts_with("https://myresource.openai.azure.com/"));
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod transport_integration_tests {
+    use super::*;
+    use crate::auth::ApiKeyAuth;
+    use crate::error::LlmError;
+    use axum::{
+        Router,
+        http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
+        response::Response,
+        routing::post,
+    };
+    use protocol_transport_core::TransportError;
+    use serde_json::json;
+    use tokio::{net::TcpListener, task::JoinHandle};
+
+    async fn spawn_server(router: Router) -> (String, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test listener");
+        let addr = listener.local_addr().expect("listener local_addr");
+        let handle = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("serve test router");
+        });
+        (format!("http://{addr}"), handle)
+    }
+
+    fn build_client(base_url: String) -> HttpModelClient {
+        HttpModelClient::new(
+            base_url,
+            HashMap::new(),
+            None,
+            Arc::new(ApiKeyAuth::new("")),
+        )
+    }
+
+    async fn json_http_error_handler() -> Response<String> {
+        let mut response =
+            Response::new(r#"{"error":"rate_limited","retry_after":30}"#.to_string());
+        *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+        response
+            .headers_mut()
+            .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        response
+            .headers_mut()
+            .insert("x-ratelimit-reset", HeaderValue::from_static("1735689600"));
+        response
+    }
+
+    async fn invalid_json_handler() -> Response<String> {
+        let mut response = Response::new("not-json".to_string());
+        *response.status_mut() = StatusCode::OK;
+        response
+    }
+
+    async fn sse_http_error_handler() -> Response<String> {
+        let mut response = Response::new("upstream unavailable".to_string());
+        *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+        response
+    }
+
+    async fn anthropic_shaped_bad_gateway() -> Response<String> {
+        let mut response = Response::new(
+            "{\"type\":\"error\",\"error\":{\"type\":\"overloaded\",\"message\":\"upstream\"}}"
+                .to_string(),
+        );
+        *response.status_mut() = StatusCode::BAD_GATEWAY;
+        response
+            .headers_mut()
+            .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        response
+    }
+
+    #[tokio::test]
+    async fn test_post_json_http_error_maps_transport_and_preserves_payload() {
+        let app = Router::new().route("/http-error", post(json_http_error_handler));
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let err = client
+            .post_json("/http-error", json!({"hello":"world"}))
+            .await
+            .expect_err("HTTP 429 must map to LlmError::Transport");
+        server.abort();
+
+        match err {
+            LlmError::Transport(TransportError::Http {
+                status,
+                message,
+                body,
+                headers,
+            }) => {
+                assert_eq!(status, 429);
+                assert!(
+                    message.contains("429"),
+                    "expected normalized HTTP status in message, got {message}"
+                );
+                let body = body.expect("HTTP body should be preserved");
+                let body_text = String::from_utf8_lossy(&body);
+                assert!(
+                    body_text.contains("rate_limited"),
+                    "expected error payload to be preserved, got {body_text}"
+                );
+
+                let headers = headers.expect("HTTP headers should be preserved");
+                assert!(
+                    headers
+                        .iter()
+                        .any(|(k, v)| k.eq_ignore_ascii_case("x-ratelimit-reset")
+                            && v == "1735689600"),
+                    "expected x-ratelimit-reset header to be preserved, got {headers:?}"
+                );
+            }
+            other => panic!("expected HTTP transport error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_post_json_invalid_json_maps_to_serialization_error() {
+        let app = Router::new().route("/invalid-json", post(invalid_json_handler));
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let err = client
+            .post_json("/invalid-json", json!({"probe":"value"}))
+            .await
+            .expect_err("invalid JSON body must fail");
+        server.abort();
+
+        assert!(
+            matches!(err, LlmError::Serialization(_)),
+            "expected serialization error, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_post_sse_http_error_maps_transport_with_body() {
+        let app = Router::new().route("/sse-error", post(sse_http_error_handler));
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let err = client
+            .post_sse("/sse-error", json!({"stream": true}))
+            .await
+            .expect_err("HTTP 503 must map to LlmError::Transport");
+        server.abort();
+
+        match err {
+            LlmError::Transport(TransportError::Http {
+                status,
+                message,
+                body,
+                headers,
+            }) => {
+                assert_eq!(status, 503);
+                assert_eq!(message, "HTTP 503 error");
+                assert!(
+                    String::from_utf8_lossy(&body.expect("body should be preserved"))
+                        .contains("upstream unavailable")
+                );
+                assert!(
+                    headers.is_none(),
+                    "post_sse currently normalizes HTTP errors with no headers"
+                );
+            }
+            other => panic!("expected HTTP transport error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_post_json_anthropic_shaped_error_maps_transport() {
+        let app = Router::new().route("/v1/messages", post(anthropic_shaped_bad_gateway));
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let err = client
+            .post_json(
+                "/v1/messages",
+                json!({"model":"claude-3","messages":[],"max_tokens":1}),
+            )
+            .await
+            .expect_err("HTTP 502 must map to transport");
+        server.abort();
+
+        match err {
+            LlmError::Transport(TransportError::Http { status, body, .. }) => {
+                assert_eq!(status, 502);
+                let body = body.expect("body");
+                let txt = String::from_utf8_lossy(&body);
+                assert!(
+                    txt.contains("overloaded"),
+                    "expected anthropic error JSON in body: {txt}"
+                );
+            }
+            other => panic!("expected HTTP transport error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_post_sse_anthropic_shaped_error_maps_transport() {
+        let app = Router::new().route("/v1/messages", post(anthropic_shaped_bad_gateway));
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let err = client
+            .post_sse(
+                "/v1/messages",
+                json!({"model":"claude-3","messages":[],"max_tokens":1}),
+            )
+            .await
+            .expect_err("HTTP 502 on SSE path must map to transport");
+        server.abort();
+
+        match err {
+            LlmError::Transport(TransportError::Http { status, body, .. }) => {
+                assert_eq!(status, 502);
+                let body = body.expect("body");
+                let txt = String::from_utf8_lossy(&body);
+                assert!(
+                    txt.contains("overloaded"),
+                    "expected anthropic error JSON in body: {txt}"
+                );
+            }
+            other => panic!("expected HTTP transport error, got {other:?}"),
+        }
     }
 }

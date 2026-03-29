@@ -43,7 +43,7 @@ pub mod scoped;
 pub use context::{ContextManager, ThreadLocalContext};
 pub use raii::{Guard, ScopedGuard};
 pub use resource::{ResourceGuard, ResourcePool};
-pub use scoped::{with_context, ScopedBuilder, ScopedCallback};
+pub use scoped::{ScopedBuilder, ScopedCallback, with_context};
 
 /// Version of the foundation utils
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -91,7 +91,7 @@ where
 {
     let resource = setup();
     let _guard = guard(resource, cleanup);
-    work(&_guard.resource())
+    work(_guard.resource())
 }
 
 #[cfg(test)]

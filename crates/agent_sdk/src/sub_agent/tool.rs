@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::{future::Future, pin::Pin};
 
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 
 use crate::agent::tools::{ToolExecutor, ToolSpec};
 

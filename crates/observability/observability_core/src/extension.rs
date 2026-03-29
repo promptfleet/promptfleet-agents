@@ -12,7 +12,45 @@ use crate::error::{ObservabilityError, ObservabilityResult};
 use crate::ports::{StandardLoggingPort, TransportPort};
 use crate::traits::LogLevel;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+struct ForwardingLogger;
+
+static FORWARDING_LOGGER: ForwardingLogger = ForwardingLogger;
+static FORWARDING_ADAPTER: OnceLock<Arc<StandardLogAdapter>> = OnceLock::new();
+static LOGGER_REGISTRATION: OnceLock<LoggerRegistration> = OnceLock::new();
+
+enum LoggerRegistration {
+    InstalledByProxy,
+    AlreadySet(String),
+}
+
+impl log::Log for ForwardingLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        FORWARDING_ADAPTER
+            .get()
+            .is_some_and(|adapter| log::Log::enabled(adapter.as_ref(), metadata))
+    }
+
+    fn log(&self, record: &log::Record) {
+        if let Some(adapter) = FORWARDING_ADAPTER.get() {
+            log::Log::log(adapter.as_ref(), record);
+        }
+    }
+
+    fn flush(&self) {
+        if let Some(adapter) = FORWARDING_ADAPTER.get() {
+            log::Log::flush(adapter.as_ref());
+        }
+    }
+}
+
+fn install_forwarding_logger() -> &'static LoggerRegistration {
+    LOGGER_REGISTRATION.get_or_init(|| match log::set_logger(&FORWARDING_LOGGER) {
+        Ok(()) => LoggerRegistration::InstalledByProxy,
+        Err(error) => LoggerRegistration::AlreadySet(error.to_string()),
+    })
+}
 
 /// Singleton global logger that initializes once and is shared across all extension instances
 pub struct GlobalLoggerSingleton {
@@ -27,39 +65,14 @@ impl GlobalLoggerSingleton {
     pub fn get_or_init(
         config: ObservabilityConfig,
     ) -> ObservabilityResult<&'static GlobalLoggerSingleton> {
-        static INSTANCE: std::sync::OnceLock<GlobalLoggerSingleton> = std::sync::OnceLock::new();
-        static INIT_ERROR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        static INSTANCE: OnceLock<Result<GlobalLoggerSingleton, String>> = OnceLock::new();
 
-        // Check if we have an existing instance
-        if let Some(instance) = INSTANCE.get() {
-            return Ok(instance);
-        }
-
-        // Check if we had a previous initialization error
-        if let Some(error) = INIT_ERROR.get() {
-            return Err(ObservabilityError::logging(format!(
+        match INSTANCE.get_or_init(|| Self::create_instance(config).map_err(|e| e.to_string())) {
+            Ok(instance) => Ok(instance),
+            Err(error) => Err(ObservabilityError::logging(format!(
                 "Singleton initialization failed: {}",
                 error
-            )));
-        }
-
-        // Try to initialize
-        match Self::create_instance(config) {
-            Ok(instance) => {
-                // This will succeed only for the first caller
-                match INSTANCE.set(instance) {
-                    Ok(()) => Ok(INSTANCE.get().unwrap()), // Safe: we just set it
-                    Err(_) => {
-                        // Another thread won the race - use their instance
-                        Ok(INSTANCE.get().unwrap()) // Safe: the other thread set it
-                    }
-                }
-            }
-            Err(e) => {
-                // Store the error for future calls
-                let _ = INIT_ERROR.set(e.to_string());
-                Err(e)
-            }
+            ))),
         }
     }
 
@@ -92,14 +105,12 @@ impl GlobalLoggerSingleton {
 
         let adapter_arc = Arc::new(adapter);
 
-        // Set up standard Rust logging (happens exactly once)
-        let adapter_ptr = Arc::as_ptr(&adapter_arc) as *const StandardLogAdapter;
-        unsafe {
-            // Handle the case where the logger is already initialized (e.g., by tests)
-            if let Err(e) = log::set_logger(&*adapter_ptr) {
-                // If the logger is already initialized, that's fine - it means another
-                // instance or test already set it up
-                log::warn!("Global Rust logger already initialized: {}", e);
+        match install_forwarding_logger() {
+            LoggerRegistration::InstalledByProxy => {
+                let _ = FORWARDING_ADAPTER.set(adapter_arc.clone());
+            }
+            LoggerRegistration::AlreadySet(error) => {
+                eprintln!("Global Rust logger already initialized: {}", error);
             }
         }
 
@@ -212,7 +223,7 @@ impl ObservabilityConfig {
                 return Err(ObservabilityError::configuration(format!(
                     "Invalid format: {}. Must be 'json', 'compact', or 'plain'",
                     self.format
-                )))
+                )));
             }
         }
 

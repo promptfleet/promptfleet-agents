@@ -1,0 +1,233 @@
+---
+title: "context"
+description: "Basic trace context foundation for observability core"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Basic trace context foundation for observability core
+
+Provides W3C trace context implementation and basic context management ports.
+Domain-specific implementations (LLM, A2A, etc.) are provided by higher-level crates.
+
+## Structs
+
+### `W3CTraceContext`
+
+W3C Trace Context implementation for distributed tracing
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` | W3C trace ID (32 hex characters) |
+| `parent_id` | `String` | W3C span ID (16 hex characters)   |
+| `trace_flags` | `String` | Trace flags (2 hex characters) |
+| `trace_state` | `Option&lt;String&gt;` | Additional trace state |
+
+**Methods**
+
+#### `new_root`
+
+```rust
+fn new_root() -> Self
+```
+
+Create a new root trace context
+
+#### `new_child`
+
+```rust
+fn new_child(&self) -> Self
+```
+
+Create a child span context
+
+#### `from_traceparent`
+
+```rust
+fn from_traceparent(header: &str) -> ObservabilityResult<Self>
+```
+
+Create from W3C traceparent header
+
+#### `from_headers`
+
+```rust
+fn from_headers(headers: &HashMap<String, String>) -> ObservabilityResult<Option<Self>>
+```
+
+Create from W3C headers
+
+#### `to_traceparent`
+
+```rust
+fn to_traceparent(&self) -> String
+```
+
+Generate W3C traceparent header value
+
+#### `to_headers`
+
+```rust
+fn to_headers(&self) -> HashMap<String, String>
+```
+
+Generate W3C headers for propagation
+
+#### `is_sampled`
+
+```rust
+fn is_sampled(&self) -> bool
+```
+
+Check if the trace is sampled
+
+#### `set_sampled`
+
+```rust
+fn set_sampled(&mut self, sampled: bool)
+```
+
+Set sampling flag
+
+#### `add_trace_state`
+
+```rust
+fn add_trace_state(&mut self, key: &str, value: &str)
+```
+
+Add or update trace state
+
+#### `get_trace_state`
+
+```rust
+fn get_trace_state(&self, key: &str) -> Option<String>
+```
+
+Get value from trace state
+
+### `TraceContext`
+
+Simplified trace context for internal use
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trace_id` | `String` |  |
+| `span_id` | `String` |  |
+| `parent_span_id` | `Option&lt;String&gt;` |  |
+| `sampled` | `bool` |  |
+
+**Methods**
+
+#### `new_root`
+
+```rust
+fn new_root() -> Self
+```
+
+Create a new root trace context
+
+#### `new_child`
+
+```rust
+fn new_child(&self) -> Self
+```
+
+Create a child span
+
+#### `to_w3c`
+
+```rust
+fn to_w3c(&self) -> W3CTraceContext
+```
+
+Convert to W3C trace context
+
+#### `from_w3c`
+
+```rust
+fn from_w3c(w3c: &W3CTraceContext) -> Self
+```
+
+Create from W3C trace context
+
+### `ContextFuture`
+
+Future wrapper that restores trace context across async poll boundaries.
+
+### `HeaderInjector`
+
+Header injector for W3C trace context propagation
+
+**Methods**
+
+#### `inject`
+
+```rust
+fn inject(&mut self, context: &W3CTraceContext)
+```
+
+
+### `HeaderExtractor`
+
+Header extractor for W3C trace context propagation
+
+**Methods**
+
+#### `extract`
+
+```rust
+fn extract(&self) -> ObservabilityResult<Option<W3CTraceContext>>
+```
+
+
+## Functions
+
+### `set_current_context`
+
+```rust
+fn set_current_context(context: TraceContext)
+```
+
+Set the current trace context for this thread
+
+### `get_current_context`
+
+```rust
+fn get_current_context() -> Option<TraceContext>
+```
+
+Get the current trace context for this thread
+
+### `clear_current_context`
+
+```rust
+fn clear_current_context()
+```
+
+Clear the current trace context
+
+### `with_context`
+
+```rust
+fn with_context<F, R>(context: TraceContext, f: F) -> R
+where
+    F: FnOnce
+```
+
+Execute a function with a specific trace context
+
+### `with_context_future`
+
+```rust
+fn with_context_future<F>(context: TraceContext, future: F) -> ContextFuture<F>
+where
+    F: Future
+```
+
+Execute a future with a specific trace context re-applied on every poll.

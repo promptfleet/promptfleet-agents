@@ -7,12 +7,12 @@
 use a2a_protocol_core::data::{Message, MessageRole, Part};
 use agent_core::{ContentPart, TaskPhase};
 use agent_sdk::{
+    Agent, SdkError,
     a2a::A2aClient,
     a2a::A2aServer,
     agent::{Response, RuntimeArtifact, TaskOpts},
-    Agent, SdkError,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
 fn extract_task(value: &Value) -> &Value {
@@ -104,8 +104,8 @@ async fn spawn_sdk_skill_server() -> (
 }
 
 #[tokio::test]
-async fn test_message_send_reused_task_returns_delta_artifacts_while_get_task_returns_full_artifacts(
-) {
+async fn test_message_send_reused_task_returns_delta_artifacts_while_get_task_returns_full_artifacts()
+ {
     let (endpoint, handle, shutdown_tx) = spawn_sdk_skill_server().await;
     let client = A2aClient::direct(&endpoint).expect("create direct client");
 

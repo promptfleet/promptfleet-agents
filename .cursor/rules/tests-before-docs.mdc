@@ -1,0 +1,21 @@
+---
+description: Always run tests before updating documentation or changelog
+alwaysApply: true
+---
+
+# Tests Before Docs
+
+## Order of operations (mandatory)
+
+1. **Make changes**
+2. **Run relevant tests** — `cargo test -p <crate>`
+3. **Verify tests pass** — do not proceed if any test fails
+4. **Update `ai_changelogs.md`** — only after tests pass
+5. **Commit** (if requested)
+
+## Rules
+
+- Never update `ai_changelogs.md` before verifying tests pass
+- Never skip tests to save time
+- If tests fail, fix the issue first — do not document broken code
+- Include test results in the changelog entry

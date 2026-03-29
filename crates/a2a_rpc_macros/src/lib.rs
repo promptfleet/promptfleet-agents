@@ -53,7 +53,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::quote;
 use std::sync::Mutex;
-use syn::{parse_macro_input, spanned::Spanned, ItemFn, ItemStruct, LitStr};
+use syn::{ItemFn, ItemStruct, LitStr, parse_macro_input, spanned::Spanned};
 
 /// Global command registry for compile-time collection
 /// Format: (method_name, handler_function_name, method_type_str, is_async)
@@ -413,7 +413,13 @@ pub fn generate_a2a_commands(_input: TokenStream) -> TokenStream {
 
 /// **HELPER**: Parse method name and optional type from TokenStream
 fn parse_method_args(args: TokenStream) -> Result<(String, String), syn::Error> {
-    use syn::{parse::Parse, parse::ParseStream, Ident, LitStr, Token};
+    parse_method_args_tokens(proc_macro2::TokenStream::from(args))
+}
+
+fn parse_method_args_tokens(
+    args: proc_macro2::TokenStream,
+) -> Result<(String, String), syn::Error> {
+    use syn::{Ident, LitStr, Token, parse::Parse, parse::ParseStream};
 
     // Define a struct to parse the arguments
     struct MethodArgs {
@@ -468,7 +474,7 @@ fn parse_method_args(args: TokenStream) -> Result<(String, String), syn::Error> 
     }
 
     // Parse the arguments
-    let parsed = syn::parse::<MethodArgs>(args)?;
+    let parsed = syn::parse2::<MethodArgs>(args)?;
     Ok((parsed.method_name, parsed.method_type))
 }
 
@@ -704,16 +710,16 @@ mod tests {
     #[test]
     fn test_extract_method_name() {
         // Test valid method name
-        assert!(parse_method_args("\"ping\"".parse().unwrap()).is_ok());
+        assert!(parse_method_args_tokens("\"ping\"".parse().unwrap()).is_ok());
 
         // Test invalid method names would be tested here
-        assert!(parse_method_args("\"\"".parse().unwrap()).is_err());
+        assert!(parse_method_args_tokens("\"\"".parse().unwrap()).is_err());
     }
 
     #[test]
     fn test_method_name_validation() {
         // Test that invalid method names are rejected
-        assert!(parse_method_args("\"rpc.reserved\"".parse().unwrap()).is_err());
-        assert!(parse_method_args("\"method with spaces\"".parse().unwrap()).is_err());
+        assert!(parse_method_args_tokens("\"rpc.reserved\"".parse().unwrap()).is_err());
+        assert!(parse_method_args_tokens("\"method with spaces\"".parse().unwrap()).is_err());
     }
 }

@@ -1,0 +1,245 @@
+---
+title: Quickstart
+description: Build and run your first A2A agent in under 5 minutes.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">
+This tutorial builds a simple echo agent that receives A2A messages and replies with the same text. It takes about 5 minutes.
+</Aside>
+
+## Prerequisites
+
+- [Rust](https://rustup.rs/) (latest stable)
+- For WASM: [Spin CLI](https://developer.fermyon.com/spin/install) v3+
+
+<Steps>
+
+1. **Create a new project**
+
+   <Tabs>
+   <TabItem label="Native">
+
+   ```bash
+   cargo new a2a-echo && cd a2a-echo
+   ```
+
+   </TabItem>
+   <TabItem label="WASM (Spin)">
+
+   ```bash
+   cargo new --lib a2a-echo-wasm && cd a2a-echo-wasm
+   ```
+
+   </TabItem>
+   </Tabs>
+
+2. **Add dependencies**
+
+   <Tabs>
+   <TabItem label="Native">
+
+   ```toml
+   [dependencies]
+   agent_sdk = { workspace = true, features = ["a2a-server", "event-stream"] }
+   tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+   anyhow = "1.0"
+   ```
+
+   <Aside type="note">
+   These lines match [`examples/a2a-echo-native`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-native). `workspace = true` applies when your crate is a member of the `promptfleet-agents` workspace. For a standalone crate, depend on `agent_sdk` with a `path = "…/crates/agent_sdk"` (or a published version when available) and the same `features`.
+   </Aside>
+
+   </TabItem>
+   <TabItem label="WASM (Spin)">
+
+   ```toml
+   [dependencies]
+   agent_sdk = { workspace = true, features = ["a2a-server"], default-features = false }
+   spin-sdk = "5.2"
+   anyhow = "1.0"
+
+   [target.'cfg(target_arch = "wasm32")'.dependencies]
+   agent_sdk = { workspace = true, features = ["a2a-server"], default-features = false }
+   ```
+
+   Also set `crate-type = ["cdylib"]` under `[lib]` in `Cargo.toml`, as in the example.
+
+   <Aside type="note">
+   Same as the native tab: `workspace = true` matches the library repo layout. The crate is not a member of the root `promptfleet-agents` workspace, so a plain `cargo build` from that folder alone will not resolve `workspace.dependencies` unless you add a workspace root or switch to `path` dependencies on `agent_sdk`. Copy [`examples/a2a-echo-wasm`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-wasm) into your own repo layout or depend on `agent_sdk` by path as you wire Spin.
+   </Aside>
+
+   </TabItem>
+   </Tabs>
+
+3. **Write the agent**
+
+   <Tabs>
+   <TabItem label="Native">
+
+   ```rust
+   use agent_sdk::{
+       a2a::A2aApp,
+       agent::{AgentConfig, MessageContext, Response, TaskContext},
+       Agent,
+   };
+
+   #[tokio::main]
+   async fn main() -> anyhow::Result<()> {
+       let mut config = AgentConfig::new("a2a-echo-native", "A2A v1.0 echo agent (native)")
+           .with_base_url("http://127.0.0.1:3000");
+       config.streaming = true;
+
+       let mut agent = Agent::new_with_config(config)?;
+       agent
+           .add_skill("echo")
+           .description("Echoes back user messages")
+           .register()?;
+       agent.set_message_handler(echo_handler);
+
+       let app = A2aApp::from_agent(agent)?;
+       println!("A2A echo agent (native) listening on http://127.0.0.1:3000");
+       app.serve("127.0.0.1:3000").await
+   }
+
+   async fn echo_handler(
+       msg_ctx: MessageContext,
+       task_ctx: Option<TaskContext>,
+   ) -> agent_sdk::SdkResult<agent_sdk::agent::RuntimeResponse> {
+       let input = msg_ctx.text_content.as_deref().unwrap_or("(empty)");
+       Response::message_text(
+           format!("Echo: {input}"),
+           None,
+           None,
+           task_ctx.and_then(|t| t.context_id),
+       )
+   }
+   ```
+
+   </TabItem>
+   <TabItem label="WASM (Spin)">
+
+   ```rust
+   use agent_sdk::{
+       a2a::A2aApp,
+       agent::{AgentConfig, Response},
+       Agent,
+   };
+   use spin_sdk::http_component;
+
+   static APP: std::sync::OnceLock<A2aApp> = std::sync::OnceLock::new();
+
+   #[http_component]
+   async fn handle_request(
+       req: spin_sdk::http::Request,
+   ) -> anyhow::Result<spin_sdk::http::Response> {
+       let app = APP.get_or_init(|| {
+           let config = AgentConfig::new("a2a-echo-wasm", "A2A v1.0 echo agent (WASM)")
+               .with_base_url("http://127.0.0.1:3001");
+           let mut agent = Agent::new_with_config(config).expect("agent init");
+           agent
+               .add_skill("echo")
+               .description("Echoes back user messages")
+               .register()
+               .expect("register echo skill");
+           agent.set_message_handler(|msg_ctx, task_ctx| async move {
+               let input = msg_ctx.text_content.as_deref().unwrap_or("(empty)");
+               Response::message_text(
+                   format!("Echo: {input}"),
+                   None,
+                   None,
+                   task_ctx.and_then(|t| t.context_id),
+               )
+           });
+           A2aApp::from_agent(agent).expect("app init")
+       });
+       Ok(app.serve_async(req).await?)
+   }
+   ```
+
+   </TabItem>
+   </Tabs>
+
+4. **Run it**
+
+   <Tabs>
+   <TabItem label="Native">
+
+   ```bash
+   cargo run
+   ```
+
+   The agent listens on `http://127.0.0.1:3000`.
+
+   </TabItem>
+   <TabItem label="WASM (Spin)">
+
+   Add a `spin.toml` next to `Cargo.toml` (from [`examples/a2a-echo-wasm/spin.toml`](https://github.com/promptfleet/promptfleet-agents/blob/main/examples/a2a-echo-wasm/spin.toml)):
+
+   ```toml
+   spin_manifest_version = 2
+
+   [application]
+   name = "a2a-echo-wasm"
+   version = "1.0.0"
+   description = "Minimal A2A v1.0 echo agent — WASM (Spin)"
+
+   [[trigger.http]]
+   route = "/..."
+   component = "echo-agent"
+
+   [component.echo-agent]
+   source = "target/wasm32-wasip1/release/a2a_echo_wasm.wasm"
+   allowed_outbound_hosts = []
+   key_value_stores = ["default"]
+   [component.echo-agent.build]
+   command = "cargo build --target wasm32-wasip1 --release"
+   ```
+
+   Then build and run the app locally:
+
+   ```bash
+   spin build --up
+   ```
+
+   Spin prints the local base URL (often `http://127.0.0.1:3000`). Use that host and port in the curl step below. The `AgentConfig::with_base_url` value in the example (`http://127.0.0.1:3001`) is the advertised base URL in metadata (e.g. agent card); adjust it if you want it to match the URL Spin assigns.
+
+   </TabItem>
+   </Tabs>
+
+5. **Test with curl**
+
+   ```bash
+   curl -X POST http://127.0.0.1:3000 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "jsonrpc": "2.0",
+       "id": "1",
+       "method": "SendMessage",
+       "params": {
+         "message": {
+           "role": "user",
+           "parts": [{"text": "Hello, agent!"}]
+         }
+       }
+     }'
+   ```
+
+   <Aside type="caution">
+   For the Spin tab, replace `http://127.0.0.1:3000` with the URL shown when `spin build --up` starts (port may differ).
+   </Aside>
+
+</Steps>
+
+## What just happened?
+
+You configured an [`Agent`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html) with [`AgentConfig`](https://docs.rs/agent_sdk/latest/agent_sdk/agent/struct.AgentConfig.html) and [`Agent::new_with_config`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.new_with_config), registered a skill with [`add_skill`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.add_skill), and installed a user message handler with [`set_message_handler`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.set_message_handler). That runtime is protocol-neutral. [`A2aApp::from_agent`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.from_agent) wraps it as an **A2A v1** HTTP app: native code calls [`serve`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve) on Tokio, while the Spin path uses [`#[http_component]`](https://developer.fermyon.com/spin/http-trigger) and [`serve_async`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve_async) with a [`OnceLock<A2aApp>`](https://doc.rust-lang.org/std/sync/struct.OnceLock.html) so the agent is built once per process.
+
+For config-first setups (JSON or files), the SDK also offers [`AgentBuilder`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.AgentBuilder.html); this tutorial uses explicit `AgentConfig` to keep the example small.
+
+## Next steps
+
+- [SDK Guide](/promptfleet-agents/guides/) — capabilities and crate map
+- [A2A Protocol](/promptfleet-agents/concepts/a2a-protocol/) — protocol details
+- [WASM vs Native](/promptfleet-agents/concepts/wasm-vs-native/) — deployment targets

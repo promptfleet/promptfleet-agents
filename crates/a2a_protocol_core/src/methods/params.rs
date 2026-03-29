@@ -1,7 +1,7 @@
 //! A2A v1.0 Request/Response Parameter Types
 
 use crate::data::notification::TaskPushNotificationConfig;
-use crate::{data::message::Message, A2AError, A2AResult};
+use crate::{A2AError, A2AResult, data::message::Message};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

@@ -1,0 +1,56 @@
+---
+title: pf_macros
+description: "PromptFleet macros: pf_agent attribute for Spin/A2aApp wiring."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">Proc-macro crate — runs at compile time on the host. Generated code is WASM-compatible and gated behind `#[cfg(target_arch = "wasm32")]`.</Aside>
+
+**Crate:** `pf_macros` · **Path:** `crates/pf_macros`  
+**Description** (`Cargo.toml`): *PromptFleet macros: pf_agent attribute for Spin/A2aApp wiring*
+
+## Role
+
+Proc-macro crate that provides the `#[pf_agent]` attribute macro. It generates the Spin `#[http_component]` boilerplate for WASM agents, eliminating manual wiring between your agent init function and the A2A server entry point.
+
+## Feature flags
+
+This crate has **no feature flags**. It is a pure proc-macro crate depending only on `proc-macro2`, `quote`, and `syn`.
+
+## Public API (from `src/lib.rs`)
+
+- **`#[pf_agent(init = <path>)]`** — attribute macro applied to any item (typically a module or function). Takes an `init` argument pointing to a function that returns `Result<Agent, _>`. Generates:
+  - A `OnceLock<A2aApp>` static for lazy init
+  - A `__pf_get_app()` helper that calls your init function once and wraps the result in an `A2aApp`
+  - A `#[spin_sdk::http_component]` entry point (`handle_request`) that delegates to the A2A app
+
+The `init` argument accepts either a path expression or a string literal: `init = my_module::build_agent` or `init = "my_module::build_agent"`.
+
+The generated code is gated behind `#[cfg(target_arch = "wasm32")]` — on native targets the attribute is a no-op (the annotated item is preserved as-is).
+
+## Example sketch
+
+```rust
+use pf_macros::pf_agent;
+use agent_sdk::{AgentBuilder, Agent, SdkResult};
+use serde_json::json;
+
+fn build_agent() -> SdkResult<Agent> {
+    let mut agent = AgentBuilder::new("echo-agent")?.build()?;
+    agent
+        .add_skill("echo")
+        .handler(|params| async move {
+            Ok(json!({"echo": params}))
+        })
+        .register()?;
+    Ok(agent)
+}
+
+#[pf_agent(init = build_agent)]
+mod agent {}
+```
+
+On WASM this expands to the full Spin HTTP component entry point. On native the `mod agent {}` is left untouched.
+
+**Full API reference:** `cargo doc -p pf_macros --no-deps`

@@ -1,0 +1,95 @@
+---
+title: "strategy"
+description: "Context window management strategies."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Context window management strategies.
+
+Each strategy implements [`ContextStrategy`] and decides which messages
+to keep when the conversation history exceeds the token budget.
+
+## Traits
+
+### `ContextStrategy`
+
+Trait for context window management strategies.
+
+Implementations decide which messages to retain when the conversation
+history exceeds the available token budget. The contract:
+
+- Input: full message history (OpenAI JSON format) + budget
+- Output: trimmed message list that fits within `budget.available_for_history`
+- Ordering must be preserved (messages keep their chronological order)
+
+**Required / Provided Methods**
+
+```rust
+fn apply(&self, messages: &[serde_json::Value], budget: &ContextBudget) -> Vec<serde_json::Value>
+```
+
+Apply this strategy to trim messages to fit within budget.
+
+Returns a new `Vec` containing only the messages that should be
+sent to the LLM. The caller owns the returned vector.
+
+```rust
+fn name(&self) -> &''static str
+```
+
+Human-readable name for logging and diagnostics.
+
+## Structs
+
+### `SlidingWindow`
+
+Keeps the most recent messages that fit within the token budget.
+
+This is the simplest and most predictable strategy. It always retains
+the newest context, which is usually the most relevant. Messages are
+dropped from the beginning (oldest first).
+
+If a system message is present at position 0, it is always retained.
+
+### `PriorityBased`
+
+Scores messages by importance and keeps the highest-scoring within budget.
+
+Scoring heuristics:
+- System messages: always retained (infinite priority)
+- User messages: high priority (recency-weighted)
+- Assistant messages with tool_calls: medium-high priority
+- Tool result messages: medium priority (paired with their tool_call)
+- Assistant text messages: medium priority (recency-weighted)
+
+Within each priority tier, more recent messages score higher.
+
+## Enums
+
+### `ContextStrategyKind`
+
+Selects which context strategy to use (serializable for config).
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `SlidingWindow` | Keep the most recent messages that fit within budget. |
+| `SlidingWindowWithSummary` | Sliding window, but prepend a summary of evicted messages. |
+| `PriorityBased` | Score messages by importance; keep highest-scoring within budget. |
+
+## Functions
+
+### `create_strategy`
+
+```rust
+fn create_strategy(kind: &ContextStrategyKind) -> Box<dyn ContextStrategy>
+```
+
+Create a boxed strategy from a [`ContextStrategyKind`].
+
+For `SlidingWindowWithSummary`, falls back to `SlidingWindow` since
+summarization requires an external `Summarizer` (see [`HistoryManager`]).

@@ -7,7 +7,7 @@ mod tool_engine_tests {
     use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
     use futures::StreamExt;
-    use llm_client::model_client::ClientError;
+    use llm_client::LlmError;
     use std::sync::Arc;
 
     struct MockStreamInvoker {
@@ -23,7 +23,7 @@ mod tool_engine_tests {
     }
 
     impl LlmStreamInvoker for MockStreamInvoker {
-        fn request_stream(&self, _payload: serde_json::Value) -> LlmStreamFuture {
+        fn request_stream(&self, _req: llm_client::LlmRequest) -> LlmStreamFuture {
             let events = {
                 let mut guard = self.turns.lock().unwrap();
                 if guard.is_empty() {
@@ -33,7 +33,7 @@ mod tool_engine_tests {
                 }
             };
             Box::pin(async move {
-                let stream = futures::stream::iter(events.into_iter().map(Ok::<_, ClientError>));
+                let stream = futures::stream::iter(events.into_iter().map(Ok::<_, LlmError>));
                 Ok(Box::pin(stream) as llm_client::LlmEventStream)
             })
         }
@@ -625,6 +625,8 @@ mod core_loop_tests {
     use crate::agent::engine::types::*;
     use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
+    use llm_client::ChatMessage;
+    use llm_client::LlmRequest;
     use std::sync::{Arc, Mutex};
 
     struct MockTurnInvoker {
@@ -640,7 +642,7 @@ mod core_loop_tests {
     }
 
     impl LlmTurnInvoker for MockTurnInvoker {
-        fn invoke_turn(&self, _payload: serde_json::Value) -> TurnFuture {
+        fn invoke_turn(&self, _request: LlmRequest) -> TurnFuture {
             let result = {
                 let mut guard = self.turns.lock().unwrap();
                 if guard.is_empty() {
@@ -692,7 +694,11 @@ mod core_loop_tests {
             ev.lock().unwrap().push(e);
         };
 
-        let mut messages = vec![serde_json::json!({"role":"user","content":"Hi"})];
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("Hi".into()),
+            ..Default::default()
+        }];
         let result = core_loop::execute(
             &invoker,
             "test",
@@ -713,15 +719,18 @@ mod core_loop_tests {
         assert!(result.stop_signal.is_none());
 
         let ev = events.lock().unwrap();
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::TurnStarted { turn: 1, .. })));
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::TurnCompleted { turn: 1, .. })));
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::Completed { .. })));
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::TurnStarted { turn: 1, .. }))
+        );
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::TurnCompleted { turn: 1, .. }))
+        );
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::Completed { .. }))
+        );
     }
 
     #[tokio::test]
@@ -746,7 +755,11 @@ mod core_loop_tests {
             },
         ]);
 
-        let mut messages = vec![serde_json::json!({"role":"user","content":"echo hello"})];
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("echo hello".into()),
+            ..Default::default()
+        }];
         let result = core_loop::execute(
             &invoker,
             "test",
@@ -793,7 +806,11 @@ mod core_loop_tests {
             ..Default::default()
         };
 
-        let mut messages = vec![serde_json::json!({"role":"user","content":"test"})];
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("test".into()),
+            ..Default::default()
+        }];
         let result = core_loop::execute(
             &invoker,
             "test",
@@ -841,7 +858,11 @@ mod core_loop_tests {
             })),
         });
 
-        let mut messages = vec![serde_json::json!({"role":"user","content":"stop"})];
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("stop".into()),
+            ..Default::default()
+        }];
         let result = core_loop::execute(
             &invoker,
             "test",
@@ -886,7 +907,11 @@ mod core_loop_tests {
             ..Default::default()
         };
 
-        let mut messages = vec![serde_json::json!({"role":"user","content":"test"})];
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("test".into()),
+            ..Default::default()
+        }];
         let _ = core_loop::execute(
             &invoker,
             "test",

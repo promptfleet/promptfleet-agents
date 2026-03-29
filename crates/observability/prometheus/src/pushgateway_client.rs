@@ -1,7 +1,7 @@
 //! Push Gateway client for batch metrics export
 
 use observability_core::{ObservabilityError, ObservabilityResult};
-use prometheus::{Encoder, Registry, TextEncoder};
+use prometheus_crate::{Encoder, Registry, TextEncoder};
 use std::sync::Arc;
 use web_time::Duration;
 
@@ -214,7 +214,7 @@ impl BatchPushClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prometheus::Counter;
+    use prometheus_crate::Counter;
 
     #[test]
     fn test_push_client_creation() {

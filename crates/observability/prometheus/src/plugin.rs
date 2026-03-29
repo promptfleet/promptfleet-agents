@@ -1,9 +1,9 @@
 //! Main Prometheus 2025 plugin implementation
 
 use observability_core::{
-    ports::MetricsPort,
-    traits::{SpanGuard, SpanStatus, METRIC_LABEL_ALLOWLIST},
     ObservabilityError, ObservabilityPlugin, ObservabilityResult,
+    ports::MetricsPort,
+    traits::{METRIC_LABEL_ALLOWLIST, SpanGuard, SpanStatus},
 };
 
 #[cfg(feature = "cardinality-reduction")]
@@ -16,7 +16,15 @@ use std::sync::{Arc, Mutex};
 use web_time::{Duration, Instant};
 
 #[cfg(feature = "prometheus-federation")]
-use prometheus::{CounterVec, GaugeVec, HistogramVec, Registry};
+use prometheus_crate::{CounterVec, GaugeVec, HistogramVec, Registry};
+
+#[cfg(feature = "prometheus-federation")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetricFamilyKind {
+    Counter,
+    Histogram,
+    Gauge,
+}
 
 /// Configuration for Prometheus extension
 #[derive(Debug, Clone)]
@@ -171,14 +179,46 @@ struct PluginMetrics {
 
 #[cfg(feature = "prometheus-federation")]
 impl Prometheus {
+    fn metric_family_kind(name: &str) -> MetricFamilyKind {
+        if name.ends_with("_total") || name.ends_with("_count") || name.ends_with("_counter") {
+            MetricFamilyKind::Counter
+        } else if name.contains("_latency")
+            || name.contains("_duration")
+            || name.ends_with("_ms")
+            || name.ends_with("_seconds")
+        {
+            MetricFamilyKind::Histogram
+        } else {
+            MetricFamilyKind::Gauge
+        }
+    }
+
+    fn metric_help(name: &str, kind: MetricFamilyKind) -> String {
+        match kind {
+            MetricFamilyKind::Counter => format!("Counter metric: {}", name),
+            MetricFamilyKind::Histogram => format!("Histogram metric: {}", name),
+            MetricFamilyKind::Gauge => format!("Gauge metric: {}", name),
+        }
+    }
+
+    fn label_values_for_allowlist<'a>(labels: &'a HashMap<String, String>) -> Vec<&'a str> {
+        METRIC_LABEL_ALLOWLIST
+            .iter()
+            .map(|&label| labels.get(label).map(|s| s.as_str()).unwrap_or("unknown"))
+            .collect()
+    }
+
     /// Create a new Prometheus extension with configuration
     pub fn new(config: PrometheusConfig) -> ObservabilityResult<Self> {
         let registry = Arc::new(Registry::new());
 
         // Initialize core metrics
         let span_duration = HistogramVec::new(
-            prometheus::HistogramOpts::new("span_duration_seconds", "Duration of spans in seconds")
-                .buckets(vec![0.001, 0.01, 0.1, 1.0, 10.0]),
+            prometheus_crate::HistogramOpts::new(
+                "span_duration_seconds",
+                "Duration of spans in seconds",
+            )
+            .buckets(vec![0.001, 0.01, 0.1, 1.0, 10.0]),
             METRIC_LABEL_ALLOWLIST,
         )
         .map_err(|e| {
@@ -186,7 +226,7 @@ impl Prometheus {
         })?;
 
         let span_count = CounterVec::new(
-            prometheus::Opts::new("span_total", "Total number of spans"),
+            prometheus_crate::Opts::new("span_total", "Total number of spans"),
             METRIC_LABEL_ALLOWLIST,
         )
         .map_err(|e| {
@@ -194,7 +234,7 @@ impl Prometheus {
         })?;
 
         let metric_count = CounterVec::new(
-            prometheus::Opts::new("metric_total", "Total number of metrics recorded"),
+            prometheus_crate::Opts::new("metric_total", "Total number of metrics recorded"),
             METRIC_LABEL_ALLOWLIST,
         )
         .map_err(|e| {
@@ -202,7 +242,7 @@ impl Prometheus {
         })?;
 
         let log_count = CounterVec::new(
-            prometheus::Opts::new("log_total", "Total number of log messages"),
+            prometheus_crate::Opts::new("log_total", "Total number of log messages"),
             &["level", "component"],
         )
         .map_err(|e| {
@@ -282,9 +322,10 @@ impl Prometheus {
 
     /// Add a custom counter metric
     pub fn add_counter(&self, name: &str, help: &str, labels: &[&str]) -> ObservabilityResult<()> {
-        let counter = CounterVec::new(prometheus::Opts::new(name, help), labels).map_err(|e| {
-            ObservabilityError::metric(format!("Failed to create counter {}: {}", name, e))
-        })?;
+        let counter =
+            CounterVec::new(prometheus_crate::Opts::new(name, help), labels).map_err(|e| {
+                ObservabilityError::metric(format!("Failed to create counter {}: {}", name, e))
+            })?;
 
         self.registry
             .register(Box::new(counter.clone()))
@@ -301,7 +342,7 @@ impl Prometheus {
     pub fn record_metric_with_labels(
         &self,
         name: &str,
-        _value: f64,
+        value: f64,
         labels: &HashMap<String, String>,
     ) -> ObservabilityResult<()> {
         #[cfg(feature = "cardinality-reduction")]
@@ -312,13 +353,111 @@ impl Prometheus {
             }
         }
 
-        // Update core metric counter
+        let label_values = Self::label_values_for_allowlist(labels);
+        let metric_kind = Self::metric_family_kind(name);
+
         {
-            let metrics = self.metrics.lock().unwrap();
-            let label_values: Vec<&str> = METRIC_LABEL_ALLOWLIST
-                .iter()
-                .map(|&label| labels.get(label).map(|s| s.as_str()).unwrap_or("unknown"))
-                .collect();
+            let mut metrics = self.metrics.lock().unwrap();
+
+            match metric_kind {
+                MetricFamilyKind::Counter => {
+                    if !metrics.custom_counters.contains_key(name) {
+                        let counter = CounterVec::new(
+                            prometheus_crate::Opts::new(
+                                name,
+                                &Self::metric_help(name, metric_kind),
+                            ),
+                            METRIC_LABEL_ALLOWLIST,
+                        )
+                        .map_err(|e| {
+                            ObservabilityError::metric(format!(
+                                "Failed to create counter {}: {}",
+                                name, e
+                            ))
+                        })?;
+
+                        self.registry
+                            .register(Box::new(counter.clone()))
+                            .map_err(|e| {
+                                ObservabilityError::metric(format!(
+                                    "Failed to register counter {}: {}",
+                                    name, e
+                                ))
+                            })?;
+                        metrics.custom_counters.insert(name.to_string(), counter);
+                    }
+
+                    if let Some(counter) = metrics.custom_counters.get(name) {
+                        counter.with_label_values(&label_values).inc_by(value);
+                    }
+                }
+                MetricFamilyKind::Histogram => {
+                    if !metrics.custom_histograms.contains_key(name) {
+                        let histogram = HistogramVec::new(
+                            prometheus_crate::HistogramOpts::new(
+                                name,
+                                &Self::metric_help(name, metric_kind),
+                            )
+                            .buckets(vec![0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]),
+                            METRIC_LABEL_ALLOWLIST,
+                        )
+                        .map_err(|e| {
+                            ObservabilityError::metric(format!(
+                                "Failed to create histogram {}: {}",
+                                name, e
+                            ))
+                        })?;
+
+                        self.registry
+                            .register(Box::new(histogram.clone()))
+                            .map_err(|e| {
+                                ObservabilityError::metric(format!(
+                                    "Failed to register histogram {}: {}",
+                                    name, e
+                                ))
+                            })?;
+                        metrics
+                            .custom_histograms
+                            .insert(name.to_string(), histogram);
+                    }
+
+                    if let Some(histogram) = metrics.custom_histograms.get(name) {
+                        histogram.with_label_values(&label_values).observe(value);
+                    }
+                }
+                MetricFamilyKind::Gauge => {
+                    if !metrics.custom_gauges.contains_key(name) {
+                        let gauge = GaugeVec::new(
+                            prometheus_crate::Opts::new(
+                                name,
+                                &Self::metric_help(name, metric_kind),
+                            ),
+                            METRIC_LABEL_ALLOWLIST,
+                        )
+                        .map_err(|e| {
+                            ObservabilityError::metric(format!(
+                                "Failed to create gauge {}: {}",
+                                name, e
+                            ))
+                        })?;
+
+                        self.registry
+                            .register(Box::new(gauge.clone()))
+                            .map_err(|e| {
+                                ObservabilityError::metric(format!(
+                                    "Failed to register gauge {}: {}",
+                                    name, e
+                                ))
+                            })?;
+                        metrics.custom_gauges.insert(name.to_string(), gauge);
+                    }
+
+                    if let Some(gauge) = metrics.custom_gauges.get(name) {
+                        gauge.with_label_values(&label_values).set(value);
+                    }
+                }
+            }
+
             metrics.metric_count.with_label_values(&label_values).inc();
         }
 
@@ -532,7 +671,7 @@ impl MetricsPort for Prometheus {
             .entry(name.to_string())
             .or_insert_with(|| {
                 CounterVec::new(
-                    prometheus::Opts::new(name, &format!("Counter metric: {}", name)),
+                    prometheus_crate::Opts::new(name, &format!("Counter metric: {}", name)),
                     &["component", "operation"],
                 )
                 .unwrap()
@@ -565,8 +704,11 @@ impl MetricsPort for Prometheus {
             .entry(name.to_string())
             .or_insert_with(|| {
                 HistogramVec::new(
-                    prometheus::HistogramOpts::new(name, &format!("Histogram metric: {}", name))
-                        .buckets(vec![0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]),
+                    prometheus_crate::HistogramOpts::new(
+                        name,
+                        &format!("Histogram metric: {}", name),
+                    )
+                    .buckets(vec![0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]),
                     &["component", "operation"],
                 )
                 .unwrap()
@@ -599,7 +741,7 @@ impl MetricsPort for Prometheus {
             .entry(name.to_string())
             .or_insert_with(|| {
                 GaugeVec::new(
-                    prometheus::Opts::new(name, &format!("Gauge metric: {}", name)),
+                    prometheus_crate::Opts::new(name, &format!("Gauge metric: {}", name)),
                     &["component", "operation"],
                 )
                 .unwrap()
@@ -659,5 +801,80 @@ mod tests {
         let config = PrometheusConfig::default();
         let plugin = Prometheus::new(config);
         assert!(plugin.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "prometheus-federation")]
+    fn test_record_metric_with_labels_routes_by_name_and_keeps_allowlist() {
+        use prometheus_crate::proto::MetricType;
+
+        let plugin = Prometheus::new(PrometheusConfig::default()).expect("plugin");
+
+        let counter_labels = HashMap::from([
+            ("component".to_string(), "sdk".to_string()),
+            ("operation".to_string(), "requests".to_string()),
+            ("extra".to_string(), "ignored".to_string()),
+        ]);
+        plugin
+            .record_metric_with_labels("requests_total", 3.0, &counter_labels)
+            .expect("counter record");
+
+        let histogram_labels = HashMap::from([
+            ("component".to_string(), "sdk".to_string()),
+            ("operation".to_string(), "latency".to_string()),
+        ]);
+        plugin
+            .record_metric_with_labels("request_duration_seconds", 1.5, &histogram_labels)
+            .expect("histogram record");
+
+        let gauge_labels = HashMap::from([
+            ("component".to_string(), "sdk".to_string()),
+            ("operation".to_string(), "inflight".to_string()),
+        ]);
+        plugin
+            .record_metric_with_labels("inflight_requests", 7.0, &gauge_labels)
+            .expect("gauge record");
+
+        let families = plugin.registry().gather();
+
+        let counter_family = families
+            .iter()
+            .find(|family| family.get_name() == "requests_total")
+            .expect("counter family");
+        assert_eq!(counter_family.get_field_type(), MetricType::COUNTER);
+        assert_eq!(counter_family.get_metric().len(), 1);
+        let counter_metric = &counter_family.get_metric()[0];
+        assert_eq!(counter_metric.get_counter().get_value(), 3.0);
+        assert!(
+            counter_metric
+                .get_label()
+                .iter()
+                .any(|label| label.get_name() == "component" && label.get_value() == "sdk")
+        );
+        assert!(
+            !counter_metric
+                .get_label()
+                .iter()
+                .any(|label| label.get_name() == "extra")
+        );
+
+        let histogram_family = families
+            .iter()
+            .find(|family| family.get_name() == "request_duration_seconds")
+            .expect("histogram family");
+        assert_eq!(histogram_family.get_field_type(), MetricType::HISTOGRAM);
+        assert_eq!(
+            histogram_family.get_metric()[0]
+                .get_histogram()
+                .get_sample_count(),
+            1
+        );
+
+        let gauge_family = families
+            .iter()
+            .find(|family| family.get_name() == "inflight_requests")
+            .expect("gauge family");
+        assert_eq!(gauge_family.get_field_type(), MetricType::GAUGE);
+        assert_eq!(gauge_family.get_metric()[0].get_gauge().get_value(), 7.0);
     }
 }

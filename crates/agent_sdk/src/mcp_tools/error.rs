@@ -33,3 +33,38 @@ impl fmt::Display for McpToolError {
 }
 
 impl std::error::Error for McpToolError {}
+
+#[cfg(test)]
+mod tests {
+    use super::McpToolError;
+
+    #[test]
+    fn display_all_variants() {
+        let cases: Vec<(McpToolError, &str)> = vec![
+            (
+                McpToolError::ServerNotFound("s".into()),
+                "MCP server not found: s",
+            ),
+            (
+                McpToolError::ListToolsFailed("e".into()),
+                "Failed to list MCP tools: e",
+            ),
+            (
+                McpToolError::CallToolFailed("e".into()),
+                "MCP tool call failed: e",
+            ),
+            (McpToolError::ConfigError("e".into()), "MCP config error: e"),
+            (
+                McpToolError::ConnectionError("e".into()),
+                "MCP connection error: e",
+            ),
+            (
+                McpToolError::ProcessSpawnFailed("e".into()),
+                "MCP server process failed: e",
+            ),
+        ];
+        for (err, want) in cases {
+            assert_eq!(format!("{}", err), want);
+        }
+    }
+}

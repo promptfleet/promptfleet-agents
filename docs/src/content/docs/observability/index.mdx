@@ -1,0 +1,28 @@
+---
+title: Observability overview
+description: Five crates under crates/observability/ for logging, tracing context, OTEL, and Prometheus.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+These crates build on each other:
+
+1. **`observability_core`** — ports, adapters, `ObservabilityManager`, W3C trace context, batching.
+2. **`observability`** — facade (`Obs`, `ObservabilityConfig`) and optional integration with the `otel` and `prometheus` workspace crates.
+3. **`structured_logging`** — optional convenience and performance layers on top of `observability_core`.
+4. **`otel`** — OpenTelemetry-specific types (`Otel`, `OtelManager`, OTLP client, sampling).
+5. **`prometheus`** — Prometheus-specific types (`Prometheus`, `PrometheusManager`, federation/cardinality when enabled).
+
+Feature flags and public exports are defined in each crate’s **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
+
+<CardGrid>
+  <LinkCard title="observability_core" description="Ports, adapters, ObservabilityManager, W3C trace context, batching." href="/promptfleet-agents/observability/observability-core/" />
+  <LinkCard title="observability" description="Facade — Obs, ObservabilityConfig, optional OTEL and Prometheus integration." href="/promptfleet-agents/observability/observability/" />
+  <LinkCard title="structured_logging" description="Enhanced structured logging with performance optimizations and convenience APIs." href="/promptfleet-agents/observability/structured-logging/" />
+  <LinkCard title="otel" description="OpenTelemetry integration — OTLP helpers, sampling, resource attributes." href="/promptfleet-agents/observability/otel/" />
+  <LinkCard title="prometheus" description="Prometheus metrics — registry plugin, federation, push gateway, cardinality reduction." href="/promptfleet-agents/observability/prometheus/" />
+</CardGrid>
+
+See also: [Observability guide](/promptfleet-agents/guides/observability/) for setup and configuration patterns.
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/promptfleet-agents/getting-started/) for local `cargo doc`).

@@ -1,8 +1,8 @@
 //! Simple Panic Handling Demo for SpinKube Agents
 
 use structured_logging::{
-    get_panic_stats, supervised, EnhancedObservabilityConfig, PerformanceExtension,
-    StructuredLoggingError,
+    EnhancedObservabilityConfig, PerformanceExtension, StructuredLoggingError, get_panic_stats,
+    supervised,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

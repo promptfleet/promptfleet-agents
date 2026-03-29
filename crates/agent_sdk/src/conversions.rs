@@ -4,7 +4,6 @@
 //! provide standalone conversion functions. The convenience methods on
 //! `MessageContext` and `TaskContext` call these internally.
 
-use a2a_protocol_core::data::artifact::Artifact;
 use a2a_protocol_core::data::message::{Message, MessageRole, Part};
 use a2a_protocol_core::data::task::{Task, TaskState};
 use agent_core::{AgentMessage, ContentPart, ConversationContext, Role, TaskPhase};
@@ -113,7 +112,6 @@ pub fn task_phase_from_a2a(state: &TaskState) -> TaskPhase {
 // ─── Convenience: MessageContext / TaskContext from agent_core types ────
 
 use crate::agent::message::{MessageContext, TaskContext};
-use crate::agent::response::RuntimeArtifact;
 
 impl MessageContext {
     /// Build a `MessageContext` from a protocol-agnostic `AgentMessage`.
@@ -162,27 +160,6 @@ impl TaskContext {
     /// ```
     pub fn from_text_turns(turns: &[(&str, &str)]) -> Self {
         Self::from_conversation(ConversationContext::from_text_turns(turns))
-    }
-}
-
-pub fn runtime_artifact_from_a2a(artifact: Artifact) -> Option<RuntimeArtifact> {
-    let name = artifact
-        .name
-        .clone()
-        .unwrap_or_else(|| "artifact".to_string());
-    let description = artifact.description.clone();
-    if let Some(data) = artifact.get_data_content().cloned() {
-        Some(RuntimeArtifact {
-            name,
-            description,
-            data,
-        })
-    } else {
-        artifact.get_text_content().map(|text| RuntimeArtifact {
-            name,
-            description,
-            data: serde_json::Value::String(text.to_string()),
-        })
     }
 }
 

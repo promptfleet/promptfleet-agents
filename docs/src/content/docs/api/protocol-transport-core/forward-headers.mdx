@@ -1,0 +1,52 @@
+---
+title: "forward_headers"
+description: "forward_headers module"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+## Structs
+
+### `ForwardedHeaders`
+
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(headers: HashMap<String, String>) -> Self
+```
+
+
+#### `as_map`
+
+```rust
+fn as_map(&self) -> &HashMap<String, String>
+```
+
+
+#### `into_map`
+
+```rust
+fn into_map(self) -> HashMap<String, String>
+```
+
+
+## Functions
+
+### `sanitize_header_map`
+
+```rust
+fn sanitize_header_map(headers: &http::HeaderMap) -> ForwardedHeaders
+```
+
+
+### `sanitize_headers`
+
+```rust
+fn sanitize_headers(headers: &HashMap<String, String>) -> ForwardedHeaders
+```
+

@@ -1,3 +1,5 @@
-pub mod openai;
+pub(crate) mod anthropic;
+pub(crate) mod openai;
 
-pub use openai::OpenAIClient;
+pub(crate) use anthropic::AnthropicClient;
+pub(crate) use openai::OpenAIClient;

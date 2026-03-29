@@ -25,17 +25,15 @@ pub(super) fn map_task_phase(state: &str) -> Option<TaskPhase> {
     }
 }
 
-/// Build a tools array exposing only the sentinel finalization tool.
-fn build_finalization_tools_json(tools: &ToolRegistry) -> Vec<serde_json::Value> {
+/// Tool schemas exposing only the sentinel finalization tool.
+fn build_finalization_tool_schemas(tools: &ToolRegistry) -> Vec<llm_client::ToolSchema> {
     match tools.get("checkpoint_task") {
-        Some(spec) => vec![serde_json::json!({
-            "type": "function",
-            "function": {
-                "name": spec.name,
-                "description": spec.description,
-                "parameters": spec.parameters
-            }
-        })],
+        Some(spec) => vec![llm_client::ToolSchema {
+            name: spec.name.clone(),
+            description: spec.description.clone(),
+            parameters: spec.parameters.clone(),
+            strict: if spec.strict { Some(true) } else { None },
+        }],
         None => Vec::new(),
     }
 }
@@ -191,7 +189,7 @@ pub(super) async fn run_finalization_turn(
     llm: Arc<dyn LlmInvoker>,
     model: &str,
     tools: &ToolRegistry,
-    mut messages: Vec<serde_json::Value>,
+    mut messages: Vec<llm_client::ChatMessage>,
     post_mortem: &str,
 ) -> Result<serde_json::Value, String> {
     let instruction = format!(
@@ -202,44 +200,38 @@ pub(super) async fn run_finalization_turn(
         Context: {}",
         post_mortem
     );
-    messages.push(serde_json::json!({"role":"user","content": instruction }));
-    let tools_json = build_finalization_tools_json(tools);
-    let payload = serde_json::json!({
-        "model": model,
-        "messages": messages,
-        "tools": tools_json,
-        "tool_choice": "auto",
-        "parallel_tool_calls": false
+    messages.push(llm_client::ChatMessage {
+        role: "user".into(),
+        content: Some(instruction),
+        ..Default::default()
     });
+    let tool_schemas = build_finalization_tool_schemas(tools);
+    let mut parallel_ext = serde_json::Map::new();
+    parallel_ext.insert(
+        "parallel_tool_calls".to_string(),
+        serde_json::Value::Bool(false),
+    );
+    let request = llm_client::LlmRequest {
+        model: model.to_string(),
+        messages,
+        tools: Some(tool_schemas),
+        tool_choice: Some(llm_client::ToolChoice::Auto),
+        extensions: Some(parallel_ext),
+        ..Default::default()
+    };
     let raw = llm
-        .request(payload)
+        .request(request)
         .await
         .map_err(|e| format!("LLM request failed in finalization turn: {}", e))?;
-    let maybe_msg = raw
-        .get("choices")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|ch| ch.get("message"));
-    let tool_calls = maybe_msg
-        .and_then(|m| m.get("tool_calls"))
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+    let tool_calls = raw
+        .choices
+        .first()
+        .and_then(|c| c.message.tool_calls.as_ref())
+        .into_iter()
+        .flat_map(|t| t.iter());
     for tc in tool_calls {
-        let name = tc
-            .get("function")
-            .and_then(|f| f.get("name"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if name == "checkpoint_task" {
-            let args_str = tc
-                .get("function")
-                .and_then(|f| f.get("arguments"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("{}");
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(args_str) {
-                return Ok(val);
-            }
+        if tc.name == "checkpoint_task" {
+            return Ok(tc.arguments.clone());
         }
     }
     Err("checkpoint_task was not called".to_string())

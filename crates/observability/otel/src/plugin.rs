@@ -2,10 +2,12 @@
 
 use observability_core::traits::{SpanGuard, SpanStatus};
 use observability_core::{
-    ports::MetricsPort, ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext,
+    ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext, ports::MetricsPort,
 };
 
-use crate::collector_client::{CollectorClient, LogData, MetricData, OtelSpanData, SpanEvent};
+use crate::collector_client::{
+    CollectorClient, LogData, MetricData, MetricKind, OtelSpanData, SpanEvent,
+};
 use crate::resource_attributes::ResourceAttributeManager;
 use crate::sampling::SamplingStrategy;
 #[cfg(feature = "structured-logging")]
@@ -308,7 +310,9 @@ impl Otel {
             return Ok(());
         }
 
-        self.collector_client.export_metrics(metrics).await
+        self.collector_client
+            .export_metrics(metrics, &self.resource_manager)
+            .await
     }
 
     /// Export pending logs to collector
@@ -317,12 +321,20 @@ impl Otel {
             return Ok(());
         }
 
-        self.collector_client.export_logs(logs).await
+        self.collector_client
+            .export_logs(logs, &self.resource_manager)
+            .await
     }
 
     /// Get resource attributes
     pub fn get_resource_attributes(&self) -> HashMap<String, String> {
         self.resource_manager.get_all_attributes()
+    }
+
+    /// Get the effective OTEL configuration.
+    #[cfg(test)]
+    pub(crate) fn config(&self) -> &OtelConfig {
+        &self.config
     }
 
     /// Generate a new span ID
@@ -435,12 +447,15 @@ impl Otel {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Avoid panicking if called outside a Tokio runtime.
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                handle.spawn(async move {
-                    let _ = this.flush_all_buffers().await;
-                });
-            } else {
-                // Best-effort: no runtime available. Keep buffering.
+            match tokio::runtime::Handle::try_current() {
+                Ok(handle) => {
+                    handle.spawn(async move {
+                        let _ = this.flush_all_buffers().await;
+                    });
+                }
+                _ => {
+                    // Best-effort: no runtime available. Keep buffering.
+                }
             }
         }
 
@@ -613,6 +628,7 @@ impl ObservabilityPlugin for Otel {
         // Add trace correlation if available
         if let Some(context) = self.get_trace_context() {
             log = log
+                .with_trace_context(&context.trace_id, &context.span_id)
                 .with_attribute("trace_id", &context.trace_id)
                 .with_attribute("span_id", &context.span_id);
         }
@@ -650,18 +666,11 @@ impl ObservabilityPlugin for Otel {
 impl MetricsPort for Otel {
     /// Emit a simple counter metric
     fn emit_counter_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "counter".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("count".to_string()),
-            description: Some(format!("Counter metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Counter)
+            .with_label("component", "otel_plugin")
+            .with_unit("count")
+            .with_description(format!("Counter metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {
@@ -684,18 +693,11 @@ impl MetricsPort for Otel {
 
     /// Emit a simple histogram/timing metric
     fn emit_histogram_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "histogram".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("duration".to_string()),
-            description: Some(format!("Histogram metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Histogram)
+            .with_label("component", "otel_plugin")
+            .with_unit("duration")
+            .with_description(format!("Histogram metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {
@@ -718,18 +720,11 @@ impl MetricsPort for Otel {
 
     /// Emit a simple gauge metric
     fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-        let metric_data = crate::collector_client::MetricData {
-            name: name.to_string(),
-            value,
-            labels: vec![
-                ("component".to_string(), "otel_plugin".to_string()),
-                ("metric_type".to_string(), "gauge".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            unit: Some("value".to_string()),
-            description: Some(format!("Gauge metric: {}", name)),
-        };
+        let metric_data = MetricData::new(name, value)
+            .with_kind(MetricKind::Gauge)
+            .with_label("component", "otel_plugin")
+            .with_unit("value")
+            .with_description(format!("Gauge metric: {}", name));
 
         // Add to metric buffer
         let should_flush = {
@@ -778,8 +773,49 @@ impl OtelBuilder {
         self
     }
 
+    pub fn with_service_version(mut self, version: impl Into<String>) -> Self {
+        self.config.service_version = version.into();
+        self
+    }
+
+    pub fn with_service_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.config.service_namespace = namespace.into();
+        self
+    }
+
     pub fn with_batch_size(mut self, size: usize) -> Self {
         self.config.batch_size = size;
+        self
+    }
+
+    pub fn with_export_timeout_secs(mut self, timeout_secs: u64) -> Self {
+        self.config.export_timeout_secs = timeout_secs;
+        self
+    }
+
+    pub fn with_sampling_strategy(mut self, strategy: SamplingStrategy) -> Self {
+        self.config.sampling_strategy = strategy;
+        self
+    }
+
+    pub fn with_auto_instrumentation(mut self, enabled: bool) -> Self {
+        self.config.auto_instrumentation = enabled;
+        self
+    }
+
+    pub fn with_resource_attribute(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.config
+            .resource_attributes
+            .insert(key.into(), value.into());
+        self
+    }
+
+    pub fn with_resource_attributes(mut self, attributes: HashMap<String, String>) -> Self {
+        self.config.resource_attributes = attributes;
         self
     }
 
@@ -839,11 +875,64 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_preserves_extended_config() {
+        let mut resource_attributes = HashMap::new();
+        resource_attributes.insert("deployment.environment".to_string(), "test".to_string());
+        resource_attributes.insert("region".to_string(), "us-east-1".to_string());
+
+        let plugin = Otel::builder()
+            .with_endpoint("http://collector:4317")
+            .with_service_name("test-service")
+            .with_service_version("1.2.3")
+            .with_service_namespace("platform")
+            .with_batch_size(128)
+            .with_export_timeout_secs(7)
+            .with_sampling_strategy(SamplingStrategy::AlwaysOff)
+            .with_auto_instrumentation(false)
+            .with_resource_attributes(resource_attributes.clone())
+            .build_sync()
+            .expect("builder should construct a plugin");
+
+        assert_eq!(plugin.config.service_name, "test-service");
+        assert_eq!(plugin.config.service_version, "1.2.3");
+        assert_eq!(plugin.config.service_namespace, "platform");
+        assert_eq!(plugin.config.batch_size, 128);
+        assert_eq!(plugin.config.export_timeout_secs, 7);
+        assert!(matches!(
+            &plugin.config.sampling_strategy,
+            &SamplingStrategy::AlwaysOff
+        ));
+        assert!(!plugin.config.auto_instrumentation);
+        assert_eq!(plugin.config.resource_attributes, resource_attributes);
+
+        let all_attributes = plugin.get_resource_attributes();
+        assert_eq!(
+            all_attributes.get("service.name"),
+            Some(&"test-service".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("service.version"),
+            Some(&"1.2.3".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("service.namespace"),
+            Some(&"platform".to_string())
+        );
+        assert_eq!(
+            all_attributes.get("deployment.environment"),
+            Some(&"test".to_string())
+        );
+    }
+
+    #[test]
     fn test_config_from_env() {
         // Set environment variables
-        std::env::set_var("OTEL_SERVICE_NAME", "env-test-service");
-        std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector:4317");
-        std::env::set_var("OTEL_RESOURCE_ATTRIBUTES", "env=test,version=1.0");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_SERVICE_NAME", "env-test-service") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector:4317") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("OTEL_RESOURCE_ATTRIBUTES", "env=test,version=1.0") };
 
         let config = OtelConfig::from_env();
 
@@ -859,9 +948,12 @@ mod tests {
         );
 
         // Clean up
-        std::env::remove_var("OTEL_SERVICE_NAME");
-        std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT");
-        std::env::remove_var("OTEL_RESOURCE_ATTRIBUTES");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_SERVICE_NAME") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT") };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("OTEL_RESOURCE_ATTRIBUTES") };
     }
 
     #[test]

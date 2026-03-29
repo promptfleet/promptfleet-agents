@@ -1,0 +1,25 @@
+---
+title: "callable"
+description: "JSON-in / JSON-out async callable used by protocol-neutral tooling."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+JSON-in / JSON-out async callable used by protocol-neutral tooling.
+
+Prefer [`CallableSkill`] when you need a type-erased async function object (for example
+registering dynamic tools) without tying call sites to a specific concrete future type.
+
+## Type Aliases
+
+### `CallableSkill`
+
+```rust
+type CallableSkill = Box<dyn Fn + Send + Sync>;
+```
+
+Boxed async callable: `serde_json::Value` in, [`SdkResult`] of JSON out.
+
+On native targets the future is `Send`; on WASM it is single-threaded.

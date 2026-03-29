@@ -1,0 +1,290 @@
+---
+title: "observability"
+description: "# Observability (Facade)"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# Observability (Facade)
+
+This crate is the **single happy-path entrypoint** for PromptFleet observability.
+It installs global structured logging once (via `observability_core`) and provides
+a shareable `Obs` handle that subcomponents (A2A client/server, LLM client, etc.)
+can accept as `Arc<dyn ObsHandle>`.
+
+Design goals:
+- One initializer (`Obs::init`) per process
+- One handle (`Obs`) passed into subcomponents
+- Backend-agnostic usage (OTEL / Prometheus are optional, best-effort)
+
+## Type Aliases
+
+### `ObsResult`
+
+```rust
+type ObsResult = observability_core::ObservabilityResult<T>;
+```
+
+Convenience result type for the facade.
+
+### `SharedObs`
+
+```rust
+type SharedObs = Arc<dyn ObsHandle>;
+```
+
+
+## Traits
+
+### `ObsHandle`
+
+A small, stable interface that subcomponents can depend on.
+
+Prefer taking `SharedObs` (`Arc<dyn ObsHandle>`) in A2A/LLM components.
+
+**Required / Provided Methods**
+
+```rust
+fn span(&self, name: &str, attrs: &[(&str, &str)]) -> observability_core::SpanGuard
+```
+
+Start a span. The returned guard ends the span on drop.
+
+```rust
+fn metric(&self, name: &str, value: f64, labels: &[(&str, &str)])
+```
+
+Record a metric (counter/histogram/gauge depending on backend configuration).
+
+```rust
+fn log(&self, level: LogLevel, message: &str, fields: &JsonValue) -> ObsResult<()>
+```
+
+Emit a structured log event (best effort).
+
+```rust
+fn log_kv(&self, level: LogLevel, message: &str, fields: &[(&str, &str)])
+```
+
+Emit a log event with low-cardinality key/value fields.
+
+This method is intentionally **always available** (no serde types in the signature).
+When the `logging` feature is disabled, it becomes a best-effort no-op.
+
+```rust
+fn flush(&self) -> ObsResult<()>
+```
+
+Flush any buffered telemetry (best effort).
+
+```rust
+fn health(&self) -> ObsHealth
+```
+
+Health status of configured backends (best effort; does not do network probes).
+
+## Structs
+
+### `Obs`
+
+Main facade handle. Cloneable and cheap to pass around.
+
+**Methods**
+
+#### `noop`
+
+```rust
+fn noop() -> Self
+```
+
+Create a no-op handle (spans/metrics/logging are best-effort no-ops).
+
+Useful for tests and for components that want an `Obs` even when
+observability is not configured.
+
+#### `init_from_env`
+
+```rust
+fn init_from_env() -> ObsResult<Self>
+```
+
+Initialize from process environment.
+
+This intentionally stays minimal: it uses OTEL/Prometheus env helpers from
+backend crates when those features are enabled.
+
+#### `extract_context`
+
+```rust
+fn extract_context(headers: &HashMap<String, String>) -> ObsResult<Option<observability_core::W3CTraceContext>>
+```
+
+Extract W3C trace context from inbound headers.
+
+#### `inject_context`
+
+```rust
+fn inject_context(headers: &mut HashMap<String, String>, context: &observability_core::W3CTraceContext)
+```
+
+Inject W3C trace context into outbound headers.
+
+#### `init`
+
+```rust
+fn init(cfg: ObservabilityConfig) -> ObsResult<Self>
+```
+
+Initialize global logging once and configure optional backends.
+
+Call this **once** during agent startup and pass the returned handle into
+all subcomponents (A2A client/server, LLM client, etc.).
+
+#### `maybe_flush`
+
+```rust
+fn maybe_flush(&self) -> ObsResult<()>
+```
+
+Flush buffered telemetry at most once per configured interval.
+
+This is intended for WASM request-driven workloads (SpinKube): call at the end of
+request handling to ensure spans/metrics/logs are exported within bounded time
+without flushing on every single request.
+
+#### `shared`
+
+```rust
+fn shared(self) -> SharedObs
+```
+
+
+### `ObsHealth`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `logging` | `bool` |  |
+| `otel` | `Option&lt;bool&gt;` |  |
+| `prometheus` | `Option&lt;bool&gt;` |  |
+| `notes` | `Vec&lt;String&gt;` |  |
+
+### `ObservabilityConfig`
+
+Unified configuration for the happy path.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `service_name` | `String` | Service identity (used for correlation fields and backend configs). |
+| `service_version` | `String` |  |
+| `service_namespace` | `String` |  |
+| `logging` | `observability_core::ObservabilityConfig` | Global structured logging configuration (installed once per process). |
+| `otel` | `OtelConfig` | Optional OTEL exporter configuration. |
+| `prometheus` | `PrometheusConfig` | Optional Prometheus exporter configuration. |
+
+**Methods**
+
+#### `with_service`
+
+```rust
+fn with_service<impl Into<String>, impl Into<String>, impl Into<String>>(self, name: impl Into, version: impl Into, namespace: impl Into) -> Self
+```
+
+
+#### `from_env`
+
+```rust
+fn from_env() -> Self
+```
+
+Build an `ObservabilityConfig` from environment variables.
+
+Supported (minimal) env vars:
+- Service identity: `OTEL_SERVICE_NAME`, `OTEL_SERVICE_VERSION`, `OTEL_SERVICE_NAMESPACE`
+- Logging:
+  - Filtering: `OBS_LOG_LEVEL` (PromptFleet) or `RUST_LOG` (Rust ecosystem)
+  - Format: `PF_LOG_FORMAT` (PromptFleet) or `OBS_LOG_FORMAT` (back-compat) or `LOG_FORMAT` (alias)
+  - Flags: `OBS_LOG_STRUCTURED`, `OBS_LOG_CONTEXT`
+- OTEL: `OBS_OTEL_ENABLED`, `OBS_OTEL_METRICS_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OBS_OTEL_SAMPLING`, `OBS_OTEL_SAMPLING_RATIO`
+- Prometheus: `OBS_PROMETHEUS_ENABLED`, `PROMETHEUS_PUSHGATEWAY`, `PROMETHEUS_JOB_NAME`, `PROMETHEUS_INSTANCE`
+
+#### `from_value`
+
+```rust
+fn from_value(root: &ConfigValue) -> Self
+```
+
+Build an `ObservabilityConfig` from a JSON value (typically produced by `pf_config`).
+
+Expected shapes (both accepted):
+- `{ "observability": { ... } }`
+- `{ ... }` (the observability object directly)
+
+Missing fields fall back to defaults.
+
+### `OtelConfig`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | `bool` |  |
+| `metrics_enabled` | `bool` |  |
+| `otlp_endpoint` | `String` |  |
+| `batch_size` | `usize` |  |
+| `export_timeout` | `web_time::Duration` |  |
+| `sampling` | `OtelSampling` |  |
+
+**Methods**
+
+#### `disabled`
+
+```rust
+fn disabled() -> Self
+```
+
+
+### `PrometheusConfig`
+
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | `bool` |  |
+| `pushgateway_endpoint` | `Option&lt;String&gt;` |  |
+| `job_name` | `String` |  |
+| `instance` | `String` |  |
+| `push_interval` | `web_time::Duration` |  |
+| `cardinality_reduction` | `bool` |  |
+| `max_cardinality` | `usize` |  |
+
+**Methods**
+
+#### `disabled`
+
+```rust
+fn disabled() -> Self
+```
+
+
+## Enums
+
+### `OtelSampling`
+
+
+**Variants**
+
+| Variant | Description |
+|---------|-------------|
+| `AlwaysOn` |  |
+| `AlwaysOff` |  |
+| `TraceIdRatio(f64)` |  |
+| `ParentBased` |  |

@@ -1,10 +1,10 @@
 //! A2A v1.0 Task Management Methods
 
 use crate::{
+    A2AResult, JsonRpcRequest, JsonRpcResponse,
     data::task::{Task, TaskState},
     methods::params::{CancelTaskRequest, GetTaskRequest, ListTasksRequest, ListTasksResponse},
     services::TaskStorage,
-    A2AResult, JsonRpcRequest, JsonRpcResponse,
 };
 use std::sync::Arc;
 
@@ -217,5 +217,144 @@ mod tests {
         let request = JsonRpcRequest::new(json!("req"), "ListTasks".to_string(), json!({}));
         let response = handle_tasks_list(request, storage).unwrap();
         assert!(response.is_success());
+    }
+
+    #[test]
+    fn test_list_tasks_empty_storage() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let request = JsonRpcRequest::new(json!("req"), "ListTasks".to_string(), json!({}));
+        let response = handle_tasks_list(request, storage).unwrap();
+        assert!(response.is_success());
+        let result = response.result.unwrap();
+        assert_eq!(result["tasks"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_list_tasks_filter_by_context_id() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let mut t1 = Task::new("ctx-a".to_string());
+        t1.update_status(TaskState::Working);
+        let mut t2 = Task::new("ctx-b".to_string());
+        t2.update_status(TaskState::Working);
+        storage.store_task(t1).unwrap();
+        storage.store_task(t2).unwrap();
+
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "ListTasks".to_string(),
+            json!({"contextId": "ctx-a"}),
+        );
+        let response = handle_tasks_list(request, storage).unwrap();
+        let result = response.result.unwrap();
+        let tasks = result["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["contextId"], "ctx-a");
+    }
+
+    #[test]
+    fn test_list_tasks_filter_by_status() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let mut t1 = Task::new("ctx".to_string());
+        t1.update_status(TaskState::Working);
+        let mut t2 = Task::new("ctx".to_string());
+        t2.update_status(TaskState::Completed);
+        storage.store_task(t1).unwrap();
+        storage.store_task(t2).unwrap();
+
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "ListTasks".to_string(),
+            json!({"status": "working"}),
+        );
+        let response = handle_tasks_list(request, storage).unwrap();
+        let result = response.result.unwrap();
+        let tasks = result["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["status"]["state"], "TASK_STATE_WORKING");
+    }
+
+    #[test]
+    fn test_list_tasks_page_size_limits_results() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        for _ in 0..5 {
+            let mut t = Task::new("ctx".to_string());
+            t.update_status(TaskState::Working);
+            storage.store_task(t).unwrap();
+        }
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "ListTasks".to_string(),
+            json!({"pageSize": 2}),
+        );
+        let response = handle_tasks_list(request, storage).unwrap();
+        let result = response.result.unwrap();
+        let tasks = result["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert!(result.get("nextPageToken").is_some());
+    }
+
+    #[test]
+    fn test_get_task_with_history_length() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let mut task = create_test_task();
+        use crate::data::message::{Message, MessageRole, Part};
+        for i in 0..3 {
+            task.add_to_history(Message::new(
+                MessageRole::User,
+                vec![Part::text(format!("msg {i}"))],
+                task.id.clone(),
+            ));
+        }
+        let task_id = task.id.clone();
+        storage.store_task(task).unwrap();
+
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "GetTask".to_string(),
+            json!({"id": task_id, "historyLength": 1}),
+        );
+        let response = handle_tasks_get(request, storage).unwrap();
+        let result = response.result.unwrap();
+        let history = result["history"].as_array().unwrap();
+        assert_eq!(history.len(), 1, "historyLength=1 should trim to 1 message");
+    }
+
+    #[test]
+    fn test_cancel_failed_task_returns_not_cancelable() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let mut task = create_test_task();
+        task.update_status(TaskState::Failed);
+        let task_id = task.id.clone();
+        storage.store_task(task).unwrap();
+
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "CancelTask".to_string(),
+            json!({"id": task_id}),
+        );
+        assert!(handle_tasks_cancel(request, storage).is_err());
+    }
+
+    #[test]
+    fn test_cancel_rejected_task_returns_not_cancelable() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let mut task = create_test_task();
+        task.update_status(TaskState::Rejected);
+        let task_id = task.id.clone();
+        storage.store_task(task).unwrap();
+
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "CancelTask".to_string(),
+            json!({"id": task_id}),
+        );
+        assert!(handle_tasks_cancel(request, storage).is_err());
+    }
+
+    #[test]
+    fn test_get_task_empty_id_returns_error() {
+        let storage = Arc::new(InMemoryTaskStorage::new());
+        let request = JsonRpcRequest::new(json!("req"), "GetTask".to_string(), json!({"id": ""}));
+        assert!(handle_tasks_get(request, storage).is_err());
     }
 }

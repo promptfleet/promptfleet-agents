@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 
 use futures::Stream;
@@ -9,7 +9,7 @@ use tokio::sync::oneshot;
 
 use crate::agent::trace::AgentTraceEvent;
 
-use super::{map_trace_to_agent_io, AgentIoEvent, IoEventContext};
+use super::{AgentIoEvent, IoEventContext, map_trace_to_agent_io};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunStatus {

@@ -1,0 +1,28 @@
+---
+title: LLM overview
+description: Provider-agnostic LLM client, context management, tool registry, and proc macros for function-calling.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+These crates build on each other:
+
+1. **`llm_client`** — provider-neutral HTTP client with typed requests, streaming SSE, model profiles, and wire-format abstraction (OpenAI-compat / Anthropic Messages).
+2. **`llm_context_core`** — WASM-compatible context window management: token estimation, budget tracking, history strategies, and long-term memory traits.
+3. **`llm_tools`** — lightweight, WASM-safe tool registry and `registry_from!` macro for collecting LLM tools and dispatching by name.
+4. **`llm_tool_macros`** — proc-macro crate providing `#[llm_tool]` to register plain Rust functions as LLM tools with auto-generated JSON Schema.
+5. **`tool_web_search`** — reusable LLM tool that performs web search via the Tavily API, returns a `ToolSpec` for any agent's registry.
+
+Feature flags and public exports are defined in each crate's **`Cargo.toml`** and **`src/lib.rs`**. Use those as the source of truth; this site summarizes them and does not replace `cargo doc`.
+
+<CardGrid>
+  <LinkCard title="llm_client" description="Provider-neutral HTTP client with typed requests, streaming SSE, model profiles, and wire-format abstraction." href="/promptfleet-agents/llm/llm-client/" />
+  <LinkCard title="llm_context_core" description="WASM-compatible context window management — token estimation, budget tracking, history strategies." href="/promptfleet-agents/llm/llm-context-core/" />
+  <LinkCard title="llm_tools" description="Lightweight WASM-safe tool registry and registry_from! macro for collecting LLM tools." href="/promptfleet-agents/llm/llm-tools/" />
+  <LinkCard title="llm_tool_macros" description="Proc-macro: #[llm_tool] for registering Rust functions as LLM tools with JSON Schema." href="/promptfleet-agents/llm/llm-tool-macros/" />
+  <LinkCard title="tool_web_search" description="Reusable LLM tool for web search via Tavily API." href="/promptfleet-agents/llm/tool-web-search/" />
+</CardGrid>
+
+See also: [LLM Client guide](/promptfleet-agents/guides/llm-client/) for end-to-end setup, and [LLM Tools guide](/promptfleet-agents/guides/llm-tools/) for registering custom tools.
+
+**Full API reference:** coming soon via published `rustdoc` (see [Getting started](/promptfleet-agents/getting-started/) for local `cargo doc`).

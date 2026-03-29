@@ -5,8 +5,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![cfg(feature = "sub-agents")]
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use a2a_protocol_core::data::TaskState;
 use agent_core::{AgentMessage, ContentPart, Role};
@@ -14,18 +14,18 @@ use agent_sdk::a2a::sub_agent::{
     A2aStreamEvent, A2aSubAgentAdapter, A2aTraceMapper, DefaultA2aTraceMapper,
 };
 use agent_sdk::agent::llm_orchestrator::{
-    run_tools_loop_agnostic, run_tools_loop_agnostic_with_cancel, LlmPolicy,
+    LlmPolicy, run_tools_loop_agnostic, run_tools_loop_agnostic_with_cancel,
 };
 use agent_sdk::agent::tool_context::ToolContext;
 use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
 use agent_sdk::agent::trace::AgentTraceEvent;
 use agent_sdk::sub_agent::{DelegationMode, SubAgentContext, SubAgentToolBuilder};
 use futures_util::StreamExt;
-use pf_test_harness::a2a_mock::{sse_status, MockA2AServerBuilder};
+use pf_test_harness::a2a_mock::{MockA2AServerBuilder, sse_status};
 use pf_test_harness::scenario::LlmScenario;
 use serde_json::json;
 use tokio::sync::Notify;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 /// Helper: execute a ToolSpec's WithContext executor with a capturing ToolContext.
 async fn run_tool(

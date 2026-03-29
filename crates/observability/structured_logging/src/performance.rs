@@ -11,7 +11,7 @@ use string_interner_crate::StringInterner;
 use crate::error::{Result, StructuredLoggingError};
 use crate::extension::PerformanceConfig;
 use observability_core::domain::TraceContext;
-use observability_core::{traits::LogLevel, LogEntry, TransportPort};
+use observability_core::{LogEntry, TransportPort, traits::LogLevel};
 use serde_json::Value;
 
 /// Performance statistics for monitoring optimization impact
@@ -96,22 +96,51 @@ impl StringInterningProcessor {
     pub fn intern_string(&self, value: &str) -> Result<String> {
         // Try read lock first for lookup
         if let Ok(interner) = self.interner.read() {
-            if let Some(interned) = interner.get(value) {
-                // Hit - update stats
+            if let Some(sym) = interner.get(value) {
                 if let Ok(mut stats) = self.stats.lock() {
                     stats.string_interner_hits += 1;
                 }
-                return Ok(interned.to_string());
+                let resolved = interner
+                    .resolve(sym)
+                    .ok_or_else(|| {
+                        StructuredLoggingError::string_interning(
+                            "Failed to resolve interned symbol",
+                        )
+                    })?
+                    .to_string();
+                return Ok(resolved);
             }
         }
 
         // Miss - need write lock to insert
         if let Ok(mut interner) = self.interner.write() {
-            let interned = interner.get_or_intern(value);
+            // Re-check under write lock (another thread may have inserted)
+            if let Some(sym) = interner.get(value) {
+                if let Ok(mut stats) = self.stats.lock() {
+                    stats.string_interner_hits += 1;
+                }
+                let resolved = interner
+                    .resolve(sym)
+                    .ok_or_else(|| {
+                        StructuredLoggingError::string_interning(
+                            "Failed to resolve interned symbol",
+                        )
+                    })?
+                    .to_string();
+                return Ok(resolved);
+            }
+
+            let sym = interner.get_or_intern(value);
             if let Ok(mut stats) = self.stats.lock() {
                 stats.string_interner_misses += 1;
             }
-            Ok(interned.to_string())
+            let resolved = interner
+                .resolve(sym)
+                .ok_or_else(|| {
+                    StructuredLoggingError::string_interning("Failed to resolve interned symbol")
+                })?
+                .to_string();
+            Ok(resolved)
         } else {
             Err(StructuredLoggingError::string_interning(
                 "Failed to acquire write lock on string interner",
@@ -266,8 +295,9 @@ impl FastPathLogger {
             stats.bytes_written += buffer.len() as u64;
         }
 
-        self.buffer_pool.return_buffer(buffer.clone())?;
-        Ok(buffer)
+        let result = buffer.clone();
+        self.buffer_pool.return_buffer(buffer)?;
+        Ok(result)
     }
 
     /// Fast path for A2A message logging
@@ -305,8 +335,9 @@ impl FastPathLogger {
             stats.bytes_written += buffer.len() as u64;
         }
 
-        self.buffer_pool.return_buffer(buffer.clone())?;
-        Ok(buffer)
+        let result = buffer.clone();
+        self.buffer_pool.return_buffer(buffer)?;
+        Ok(result)
     }
 
     fn append_timestamp(&self, buffer: &mut Vec<u8>) {
@@ -626,5 +657,122 @@ mod tests {
         let config = PerformanceConfig::default();
         let manager = PerformanceManager::new(&config);
         assert!(manager.is_ok());
+    }
+
+    #[test]
+    fn test_stats_zero_denominators() {
+        let stats = PerformanceStats::default();
+        assert_eq!(stats.string_interner_hit_ratio(), 0.0);
+        assert_eq!(stats.buffer_pool_hit_ratio(), 0.0);
+        assert_eq!(stats.fast_path_ratio(), 0.0);
+    }
+
+    #[test]
+    fn test_buffer_pool_exhaustion_creates_new() {
+        let pool = BufferPool::new(1, 512);
+
+        let b1 = pool.get_buffer().unwrap();
+        let b2 = pool.get_buffer().unwrap();
+        assert_eq!(b1.capacity(), 512);
+        assert_eq!(b2.capacity(), 512);
+
+        pool.return_buffer(b1).unwrap();
+        // Pool is full (cap=1), so b2 is silently dropped
+        pool.return_buffer(b2).unwrap();
+
+        // Next get should come from pool
+        let b3 = pool.get_buffer().unwrap();
+        assert_eq!(b3.len(), 0);
+    }
+
+    #[test]
+    fn test_fast_path_a2a_message() {
+        let config = PerformanceConfig::default();
+        let logger = FastPathLogger::new(&config).unwrap();
+
+        let result = logger.log_a2a_message_fast("message/send", "agent-a", "agent-b", Some(100));
+        assert!(result.is_ok());
+
+        let json_str = String::from_utf8(result.unwrap()).unwrap();
+        assert!(json_str.contains("message/send"));
+        assert!(json_str.contains("agent-a"));
+        assert!(json_str.contains("agent-b"));
+        assert!(json_str.contains("100"));
+    }
+
+    #[test]
+    fn test_fast_path_a2a_no_duration() {
+        let config = PerformanceConfig::default();
+        let logger = FastPathLogger::new(&config).unwrap();
+
+        let result = logger.log_a2a_message_fast("message/send", "a", "b", None);
+        assert!(result.is_ok());
+
+        let json_str = String::from_utf8(result.unwrap()).unwrap();
+        assert!(!json_str.contains("duration_ms"));
+    }
+
+    #[cfg(feature = "string-interner")]
+    #[test]
+    fn test_string_interning_hit_miss_stats() {
+        let processor = StringInterningProcessor::new(100).unwrap();
+
+        // First call is a miss
+        processor.intern_string("alpha").unwrap();
+        // Second call is a hit
+        processor.intern_string("alpha").unwrap();
+        // Another miss
+        processor.intern_string("beta").unwrap();
+
+        let stats = processor.stats.lock().unwrap();
+        assert_eq!(stats.string_interner_misses, 2);
+        assert_eq!(stats.string_interner_hits, 1);
+    }
+
+    #[cfg(feature = "string-interner")]
+    #[test]
+    fn test_string_interning_process_entry() {
+        let processor = StringInterningProcessor::new(100).unwrap();
+
+        let entry = observability_core::domain::create_log_entry(
+            observability_core::traits::LogLevel::Info,
+            "test",
+            serde_json::json!({
+                "model": "gpt-4",
+                "status": "ok",
+                "operation": "llm_request",
+                "component": "sdk"
+            }),
+        );
+
+        let processed = processor.process_entry(entry).unwrap();
+        let fields = processed.fields.as_object().unwrap();
+        assert_eq!(fields["model"], "gpt-4");
+        assert_eq!(fields["status"], "ok");
+        assert_eq!(fields["operation"], "llm_request");
+        assert_eq!(fields["component"], "sdk");
+    }
+
+    #[cfg(feature = "string-interner")]
+    #[test]
+    fn test_performance_manager_stats_aggregation() {
+        let config = PerformanceConfig::default();
+        let manager = PerformanceManager::new(&config).unwrap();
+
+        let entry = observability_core::domain::create_log_entry(
+            observability_core::traits::LogLevel::Info,
+            "test",
+            serde_json::json!({"model": "gpt-4", "status": "ok"}),
+        );
+
+        let _ = manager.process_entry(entry).unwrap();
+
+        let stats = manager.get_stats();
+        assert!(stats.string_interner_misses > 0);
+
+        manager.reset_stats().unwrap();
+        let stats = manager.get_stats();
+        assert_eq!(stats.string_interner_misses, 0);
+        assert_eq!(stats.string_interner_hits, 0);
     }
 }

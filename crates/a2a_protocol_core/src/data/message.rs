@@ -311,4 +311,88 @@ mod tests {
         assert_eq!(message.metadata.as_ref().unwrap()["priority"], "high");
         assert_eq!(message.extensions.as_ref().unwrap()[0], "openai");
     }
+
+    #[test]
+    fn test_with_id_constructor() {
+        let msg = Message::with_id(
+            "fixed-id".to_string(),
+            MessageRole::Agent,
+            vec![Part::text("hi")],
+        );
+        assert_eq!(msg.message_id, "fixed-id");
+        assert_eq!(msg.role, MessageRole::Agent);
+        assert!(msg.task_id.is_none());
+    }
+
+    #[test]
+    fn test_with_context_chaining() {
+        let msg = Message::with_id(
+            "m-1".to_string(),
+            MessageRole::User,
+            vec![Part::text("hello")],
+        )
+        .with_context("ctx-99".to_string());
+        assert_eq!(msg.context_id.as_deref(), Some("ctx-99"));
+    }
+
+    #[test]
+    fn test_get_text_content_multipart() {
+        let msg = Message::new(
+            MessageRole::User,
+            vec![Part::text("hello"), Part::text("world")],
+            "t-1".to_string(),
+        );
+        assert_eq!(msg.get_text_content(), "hello world");
+    }
+
+    #[test]
+    fn test_is_text_only_mixed_parts() {
+        let text_only = Message::new(
+            MessageRole::User,
+            vec![Part::text("a"), Part::text("b")],
+            "t".to_string(),
+        );
+        assert!(text_only.is_text_only());
+
+        let mixed = Message::new(
+            MessageRole::User,
+            vec![Part::text("a"), Part::data(json!({"x": 1}))],
+            "t".to_string(),
+        );
+        assert!(!mixed.is_text_only());
+    }
+
+    #[test]
+    fn test_get_data_parts_filtering() {
+        let msg = Message::new(
+            MessageRole::User,
+            vec![
+                Part::text("label"),
+                Part::data(json!({"v": 42})),
+                Part::text("outro"),
+            ],
+            "t".to_string(),
+        );
+        let data_parts = msg.get_data_parts();
+        assert_eq!(data_parts.len(), 1);
+        assert_eq!(data_parts[0].data.as_ref().unwrap()["v"], 42);
+    }
+
+    #[test]
+    fn test_url_with_media_type() {
+        let part = Part::url_with_media("https://example.com/img.png", "image/png");
+        assert!(part.is_url());
+        assert_eq!(part.media_type.as_deref(), Some("image/png"));
+        assert_eq!(part.url.as_deref(), Some("https://example.com/img.png"));
+    }
+
+    #[test]
+    fn test_add_extension_and_read_back() {
+        let mut msg = Message::text(MessageRole::User, "hi", "t".to_string());
+        msg.add_extension("ext-a".to_string());
+        msg.add_extension("ext-b".to_string());
+        let exts = msg.extensions.as_ref().unwrap();
+        assert_eq!(exts.len(), 2);
+        assert_eq!(exts[0], "ext-a");
+    }
 }

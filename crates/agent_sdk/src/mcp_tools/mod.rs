@@ -4,12 +4,12 @@
 //!
 //! ## Outbound (agent uses MCP tools) — implemented
 //!
-//! Connect to external MCP servers and inject their tools into [`ToolRegistry`]:
+//! Connect to external MCP servers and inject their tools into [`crate::agent::tools::ToolRegistry`]:
 //!
 //! ```rust,ignore
 //! let config = McpServersConfig::from_file("mcp_servers.json")?;
 //! let source = NativeMcpBackend::connect(&config).await?;
-//! let mut tools = ToolRegistry::new();
+//! let mut tools = crate::agent::tools::ToolRegistry::new();
 //! McpToolAdapter::register_mcp_tools(&mut tools, Arc::new(source)).await?;
 //! // tools now contains mcp.<server_id>.<tool_name> entries
 //! ```
@@ -23,7 +23,7 @@
 //! ## Dual Backend
 //!
 //! - **Native**: [`NativeMcpBackend`] wraps `rmcp` (stdio + streamable HTTP + OAuth)
-//! - **WASM**: [`WasmMcpBackend`] wraps `mcp_protocol` (Streamable HTTP via spin-sdk)
+//! - **WASM** (`wasm32`): `WasmMcpBackend` wraps `mcp_protocol` (streamable HTTP via spin-sdk)
 
 pub mod adapter;
 pub mod config;
@@ -45,8 +45,8 @@ pub use error::McpToolError;
 pub use server_adapter::McpServerAdapter;
 pub use types::{McpCallResult, McpContent, McpToolDescriptor, McpToolSource};
 pub use web_search::{
-    tool_category, ExtractOptions, ExtractedContent, SearchDepth, SearchOptions, SearchResponse,
-    SearchResult, WebSearchError, WebSearchProvider,
+    ExtractOptions, ExtractedContent, SearchDepth, SearchOptions, SearchResponse, SearchResult,
+    WebSearchError, WebSearchProvider, tool_category,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

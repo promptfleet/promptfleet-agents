@@ -1,19 +1,19 @@
 //! Native A2A HTTP Server using Axum
 
 use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION, A2AProtocol, AgentCard,
     services::{InMemoryTaskStorage, TaskStorage},
-    A2AProtocol, AgentCard, A2A_PROTOCOL_VERSION,
 };
 use anyhow::Result;
 use axum::{
+    Router,
     body::Body,
     http::{HeaderMap, StatusCode},
     response::{Json, Response},
     routing::{get, post},
-    Router,
 };
 use log::{debug, error, info, trace, warn};
-use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION};
+use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -30,8 +30,8 @@ use {
 #[cfg(feature = "observability")]
 use {
     observability::{
-        attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-        ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+        ObsHandle, SpanStatus, TraceContext, W3CTraceContext, attr, clear_current_context,
+        get_current_context, metric, set_current_context, span, value, with_context_future,
     },
     web_time::Instant,
 };
@@ -287,8 +287,10 @@ impl A2AHttpServer {
             "/jsonrpc" | "/" => {
                 debug!("Routing to JSON-RPC simulation for agent: {}", agent_id);
                 if method != "POST" {
-                    warn!("Invalid HTTP method for JSON-RPC simulation: {} (expected POST) for agent: {}", 
-                          method, agent_id);
+                    warn!(
+                        "Invalid HTTP method for JSON-RPC simulation: {} (expected POST) for agent: {}",
+                        method, agent_id
+                    );
                     let error_response = json!({
                         "jsonrpc": JSONRPC_VERSION,
                         "error": {
@@ -324,22 +326,287 @@ impl A2AHttpServer {
                         method, id, agent_id
                     );
 
-                    debug!("Delegating to A2A protocol instance for native simulation, agent: {} method: {}", 
-                           agent_id, method);
-                    let response = match self.protocol.handle_incoming(incoming)? {
-                        Some(response) => {
-                            debug!("A2A protocol returned response for native simulation, agent: {} id: {:?}", 
-                                   agent_id, response.id);
-                            response
+                    #[cfg(feature = "observability")]
+                    let (span_guard, start_time, prev_ctx) = {
+                        let mut h = std::collections::HashMap::<String, String>::new();
+                        for (k, v) in headers.iter() {
+                            if let Ok(v) = v.to_str() {
+                                h.insert(k.as_str().to_lowercase(), v.to_string());
+                            }
                         }
-                        None => {
-                            debug!("A2A protocol processed notification (no response) for native simulation, agent: {}", agent_id);
-                            JsonRpcResponse::success(
-                                json!(null),
-                                json!({"status": "notification processed"}),
-                            )
+
+                        let peer = h
+                            .get("x-a2a-peer-service")
+                            .map(|s| s.as_str())
+                            .unwrap_or("unknown");
+
+                        let parent = observability::Obs::extract_context(&h)
+                            .ok()
+                            .flatten()
+                            .unwrap_or_else(W3CTraceContext::new_root);
+
+                        let prev = get_current_context();
+
+                        let span_guard = self.obs.as_ref().and_then(|obs| {
+                            if let Some(otel) = obs.otel_plugin() {
+                                Some(otel.start_span_with_w3c_context(
+                                    span::A2A_SERVER,
+                                    &parent,
+                                    &[
+                                        (attr::COMPONENT, "a2a_server"),
+                                        (attr::OPERATION, method.as_str()),
+                                        (attr::PEER_SERVICE, peer),
+                                        (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                                        (attr::RPC_METHOD, method.as_str()),
+                                        (attr::PF_KIND, value::KIND_A2A),
+                                    ],
+                                ))
+                            } else {
+                                Some(obs.span(
+                                    span::A2A_SERVER,
+                                    &[
+                                        (attr::COMPONENT, "a2a_server"),
+                                        (attr::OPERATION, method.as_str()),
+                                        (attr::PEER_SERVICE, peer),
+                                        (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                                        (attr::RPC_METHOD, method.as_str()),
+                                        (attr::PF_KIND, value::KIND_A2A),
+                                    ],
+                                ))
+                            }
+                        });
+
+                        if let Some(g) = &span_guard {
+                            set_current_context(TraceContext {
+                                trace_id: parent.trace_id.clone(),
+                                span_id: g.span_id().to_string(),
+                                parent_span_id: Some(parent.parent_id.clone()),
+                                sampled: parent.is_sampled(),
+                            });
+                        }
+
+                        (span_guard, Instant::now(), prev)
+                    };
+
+                    debug!(
+                        "Delegating JSON-RPC simulation for native server, agent: {} method: {} app_present={} app_async_present={}",
+                        agent_id,
+                        method,
+                        self.app.is_some(),
+                        self.app_async.is_some()
+                    );
+
+                    let response = if let Some(app) = &self.app_async {
+                        match serde_json::from_str::<serde_json::Value>(request_str) {
+                            Ok(root) => {
+                                let method =
+                                    root.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                                if method == crate::method::SEND_MESSAGE {
+                                    let params_val = root
+                                        .get("params")
+                                        .cloned()
+                                        .unwrap_or(serde_json::Value::Null);
+                                    let params =
+                                        a2a_protocol_core::methods::params::MessageSendParams::from_json(
+                                            params_val,
+                                        )?;
+                                    let id =
+                                        root.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                                    let response_future = app.handle_send_message_async(params);
+                                    #[cfg(feature = "observability")]
+                                    let response_result = if let Some(current_context) =
+                                        get_current_context()
+                                    {
+                                        with_context_future(current_context, response_future).await
+                                    } else {
+                                        response_future.await
+                                    };
+                                    #[cfg(not(feature = "observability"))]
+                                    let response_result = response_future.await;
+                                    match response_result {
+                                        Ok(result) => {
+                                            let result_value =
+                                                if let a2a_protocol_core::methods::params::MessageSendResponse::Task(
+                                                    task,
+                                                ) = &result
+                                                {
+                                                    if let Some(storage) = &self.task_storage {
+                                                        let _ = storage.store_task(task.clone());
+                                                    }
+                                                    serde_json::to_value(result)?
+                                                } else {
+                                                    serde_json::to_value(result)?
+                                                };
+                                            JsonRpcResponse::success(id, result_value)
+                                        }
+                                        Err(err) => {
+                                            let jsonrpc_error = err.to_jsonrpc_error();
+                                            JsonRpcResponse::error(
+                                                id,
+                                                jsonrpc_error.code,
+                                                jsonrpc_error.message,
+                                            )
+                                        }
+                                    }
+                                } else if method == crate::method::GET_AGENT_CARD {
+                                    let card = app.build_agent_card();
+                                    let id =
+                                        root.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                                    JsonRpcResponse::success(id, serde_json::to_value(card)?)
+                                } else {
+                                    self.protocol.handle_incoming(incoming)?.unwrap_or_else(|| {
+                                        JsonRpcResponse::success(
+                                            serde_json::json!(null),
+                                            serde_json::json!({"status":"notification processed"}),
+                                        )
+                                    })
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to parse JSON body (async app): {}", e);
+                                return Err(e.into());
+                            }
+                        }
+                    } else if let Some(app) = &self.app {
+                        match serde_json::from_str::<serde_json::Value>(request_str) {
+                            Ok(root) => {
+                                let method =
+                                    root.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                                if method == crate::method::SEND_MESSAGE {
+                                    let params_val = root
+                                        .get("params")
+                                        .cloned()
+                                        .unwrap_or(serde_json::Value::Null);
+                                    let params =
+                                        a2a_protocol_core::methods::params::MessageSendParams::from_json(
+                                            params_val,
+                                        )?;
+                                    let id =
+                                        root.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                                    match app.handle_send_message(params) {
+                                        Ok(result) => {
+                                            let result_value =
+                                                if let a2a_protocol_core::methods::params::MessageSendResponse::Task(
+                                                    task,
+                                                ) = &result
+                                                {
+                                                    if let Some(storage) = &self.task_storage {
+                                                        let _ = storage.store_task(task.clone());
+                                                    }
+                                                    serde_json::to_value(result)?
+                                                } else {
+                                                    serde_json::to_value(result)?
+                                                };
+                                            JsonRpcResponse::success(id, result_value)
+                                        }
+                                        Err(err) => {
+                                            let jsonrpc_error = err.to_jsonrpc_error();
+                                            JsonRpcResponse::error(
+                                                id,
+                                                jsonrpc_error.code,
+                                                jsonrpc_error.message,
+                                            )
+                                        }
+                                    }
+                                } else if method == crate::method::GET_AGENT_CARD {
+                                    let card = app.build_agent_card();
+                                    let id =
+                                        root.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                                    JsonRpcResponse::success(id, serde_json::to_value(card)?)
+                                } else {
+                                    self.protocol.handle_incoming(incoming)?.unwrap_or_else(|| {
+                                        JsonRpcResponse::success(
+                                            serde_json::json!(null),
+                                            serde_json::json!({"status":"notification processed"}),
+                                        )
+                                    })
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to parse JSON body (sync app): {}", e);
+                                return Err(e.into());
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "Delegating to A2A protocol instance for native simulation, agent: {} method: {}",
+                            agent_id, method
+                        );
+                        match self.protocol.handle_incoming(incoming)? {
+                            Some(response) => {
+                                debug!(
+                                    "A2A protocol returned response for native simulation, agent: {} id: {:?}",
+                                    agent_id, response.id
+                                );
+                                response
+                            }
+                            None => {
+                                debug!(
+                                    "A2A protocol processed notification (no response) for native simulation, agent: {}",
+                                    agent_id
+                                );
+                                JsonRpcResponse::success(
+                                    json!(null),
+                                    json!({"status": "notification processed"}),
+                                )
+                            }
                         }
                     };
+
+                    #[cfg(feature = "observability")]
+                    if let Some(obs) = &self.obs {
+                        let duration_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+                        let status = if response.error.is_some() {
+                            value::STATUS_ERROR
+                        } else {
+                            value::STATUS_OK
+                        };
+                        let outcome = if response.error.is_some() {
+                            value::OUTCOME_ERROR
+                        } else {
+                            value::OUTCOME_OK
+                        };
+
+                        if let Some(g) = &span_guard {
+                            g.add_attribute(attr::STATUS, status);
+                            g.add_attribute(attr::PF_OUTCOME, outcome);
+                            g.set_status(if status == value::STATUS_OK {
+                                SpanStatus::Ok
+                            } else {
+                                SpanStatus::Error
+                            });
+                        }
+
+                        obs.metric(
+                            metric::A2A_REQUESTS_TOTAL,
+                            1.0,
+                            &[
+                                (attr::COMPONENT, "a2a_server"),
+                                (attr::OPERATION, method.as_str()),
+                                (attr::STATUS, status),
+                            ],
+                        );
+                        obs.metric(
+                            metric::A2A_LATENCY_MS,
+                            duration_ms,
+                            &[
+                                (attr::COMPONENT, "a2a_server"),
+                                (attr::OPERATION, method.as_str()),
+                                (attr::STATUS, status),
+                            ],
+                        );
+
+                        drop(span_guard);
+
+                        if let Err(err) = obs.maybe_flush() {
+                            warn!("observability:flush_failed error={}", err);
+                        }
+
+                        match prev_ctx {
+                            Some(ctx) => set_current_context(ctx),
+                            None => clear_current_context(),
+                        }
+                    }
 
                     let mut response_headers = HeaderMap::new();
                     response_headers.insert("content-type", "application/json".parse().unwrap());
@@ -572,7 +839,16 @@ impl A2AHttpServer {
                                 StatusCode::BAD_REQUEST
                             })?;
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
-                        match app.handle_send_message_async(params).await {
+                        let response_future = app.handle_send_message_async(params);
+                        #[cfg(feature = "observability")]
+                        let response_result = if let Some(current_context) = get_current_context() {
+                            with_context_future(current_context, response_future).await
+                        } else {
+                            response_future.await
+                        };
+                        #[cfg(not(feature = "observability"))]
+                        let response_result = response_future.await;
+                        match response_result {
                             Ok(result) => {
                                 let result_value =
                                     if let a2a_protocol_core::methods::params::MessageSendResponse::Task(
@@ -922,7 +1198,7 @@ impl A2AHttpServer {
 async fn sigterm_signal() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix::{SignalKind, signal};
         let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
         let ctrl_c = tokio::signal::ctrl_c();
         tokio::select! {
@@ -989,7 +1265,7 @@ mod tests {
         let server = A2AHttpServer::new_with_a2a_methods(agent_card);
 
         let headers = HeaderMap::new();
-        let body = r#"{"jsonrpc":"2.0","id":"test","method":"pf.agent.ping","params":null}"#
+        let body = r#"{"jsonrpc":"2.0","id":"test","method":"Ping","params":null}"#
             .as_bytes()
             .to_vec();
 
@@ -1074,5 +1350,87 @@ mod tests {
 
         let agent_response: serde_json::Value = serde_json::from_slice(&response_body).unwrap();
         assert_eq!(agent_response["name"], "test-agent");
+    }
+
+    #[cfg(feature = "observability")]
+    #[tokio::test]
+    async fn test_native_server_preserves_w3c_trace_context_for_app_adapter() {
+        use a2a_app_ports::{A2AAppPortAsync, AppFuture};
+        use a2a_protocol_core::data::{Message, MessageRole};
+        use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
+        use observability::{TraceContext, get_current_context};
+
+        #[derive(Clone)]
+        struct TraceCapturingApp {
+            seen: std::sync::Arc<std::sync::Mutex<Option<TraceContext>>>,
+        }
+
+        impl A2AAppPortAsync for TraceCapturingApp {
+            fn build_agent_card(&self) -> AgentCard {
+                AgentCard::new("test-agent".to_string())
+            }
+
+            fn handle_send_message_async<'a>(
+                &'a self,
+                _params: SendMessageRequest,
+            ) -> AppFuture<'a> {
+                Box::pin(async move {
+                    *self.seen.lock().unwrap() = get_current_context();
+                    Ok(SendMessageResponse::Message(Message::text(
+                        MessageRole::Agent,
+                        "ok",
+                        "task-1".to_string(),
+                    )))
+                })
+            }
+        }
+
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let app = TraceCapturingApp { seen: seen.clone() };
+
+        let mut obs_cfg = observability::ObservabilityConfig::default();
+        obs_cfg.otel.enabled = true;
+        obs_cfg.otel.otlp_endpoint = "http://otel:4317".to_string();
+        let obs = observability::Obs::init(obs_cfg).unwrap();
+
+        let server = A2AHttpServer::new_with_a2a_methods(AgentCard::new("test-agent".to_string()))
+            .with_app_adapter_async(std::sync::Arc::new(app))
+            .with_observability(obs);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", "application/json".parse().unwrap());
+        headers.insert(
+            "traceparent",
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+                .parse()
+                .unwrap(),
+        );
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "trace-test",
+            "method": crate::method::SEND_MESSAGE,
+            "params": {
+                "message": {
+                    "messageId": "msg-1",
+                    "role": "ROLE_USER",
+                    "parts": [{"text": "hello"}]
+                }
+            }
+        })
+        .to_string()
+        .into_bytes();
+
+        let (status, _, _) = server
+            .serve_request("POST", "/jsonrpc", headers, body)
+            .await
+            .unwrap();
+        assert_eq!(status, StatusCode::OK);
+
+        let ctx = seen.lock().unwrap().clone().expect("trace context");
+        assert_eq!(ctx.trace_id, "0af7651916cd43dd8448eb211c80319c");
+        assert_eq!(ctx.parent_span_id.as_deref(), Some("b7ad6b7169203331"));
+        assert_ne!(ctx.span_id, "b7ad6b7169203331");
+        assert_eq!(ctx.span_id.len(), 16);
     }
 }

@@ -1,14 +1,13 @@
 //! LLM orchestration over the protocol-free engine.
 //!
 //! This module provides runtime orchestration plus compatibility wrappers:
-//! - `crate::a2a::execute_a2a`: adapter-owned request-response compatibility entry point
+//! - [`crate::a2a::execute_a2a`]: adapter-owned request-response compatibility entry point
 //! - [`run_tools_loop_stream`]: native-only streaming entry point with trace events
 //! - [`run_tools_loop_agnostic`]: protocol-agnostic streaming entry point
 //!
-//! The core tool-calling loop lives in [`engine::core_loop`](super::engine::core_loop).
-//! LLM invoker traits and policy configuration are in [`llm_invoker`](super::llm_invoker)
-//! and re-exported here for backward compatibility.
-//! Sentinel-tool finalization logic is in [`finalization`](super::finalization).
+//! The core tool-calling loop lives in [`crate::agent::engine`]. LLM invoker traits and policy
+//! types are re-exported here (for example [`LlmPolicy`], [`LlmInvoker`]). Sentinel-tool
+//! finalization helpers are crate-internal.
 
 // ── Re-exports ──────────────────────────────────────────────────────────
 //
@@ -28,8 +27,8 @@ use crate::agent::{Response, RuntimeResponse, TaskOpts};
 use crate::error::SdkResult;
 use agent_core::{ContentPart, TaskPhase};
 use log::debug;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // All utility helpers (apply_request_defaults, build_tools_json, context-window
 // management) now live in engine::core_loop — the single source of truth.
@@ -38,24 +37,25 @@ use std::sync::Arc;
 // Native-only: streaming tools loop over ToolEngine core
 // =========================================================================
 
-/// Execute a streaming tools loop that yields [`AgentTraceEvent`]s in
-/// real-time.
+/// Execute a streaming tools loop that yields [`crate::agent::trace::AgentTraceEvent`] values in
+/// real time.
 ///
-/// This is the streaming counterpart of [`run_tools_loop`]. It consumes
+/// This is the streaming counterpart of [`run_tools_loop_agnostic`]. It consumes
 /// an [`LlmStreamInvoker`] and yields trace events through a channel as
 /// the LLM generates tokens and tools are executed.
 ///
-/// The returned [`AgentTraceStream`] completes when the agent finishes
-/// (either with [`AgentTraceEvent::Completed`] or [`Failed`]).
+/// The returned [`crate::agent::trace::AgentTraceStream`] completes when the agent finishes
+/// (either with [`crate::agent::trace::AgentTraceEvent::Completed`] or
+/// [`crate::agent::trace::AgentTraceEvent::Failed`]).
 ///
 /// # Implementation
 ///
 /// This is a thin runtime wrapper that:
 /// 1. Builds OpenAI-format messages from `MessageContext` / `TaskContext`
 /// 2. Converts `LlmPolicy` to `EngineConfig`
-/// 3. Delegates to [`engine::core_loop::execute`] — the single source of truth
+/// 3. Delegates to the engine core loop (see [`crate::agent::engine`]) — the single source of truth
 ///
-/// # Differences from `run_tools_loop`
+/// # Differences from [`run_tools_loop_agnostic`]
 ///
 /// - Uses streaming LLM calls (real SSE from the provider)
 /// - Emits `ContentDelta` / `ReasoningDelta` per-token
@@ -169,7 +169,7 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
     request_headers: Option<Arc<std::collections::HashMap<String, String>>>,
     history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
 ) -> crate::agent::trace::AgentTraceStream {
-    use crate::agent::engine::{core_loop, StreamingTurnInvoker};
+    use crate::agent::engine::{StreamingTurnInvoker, core_loop};
     use crate::agent::trace::AgentTraceEvent;
 
     let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);
@@ -358,24 +358,22 @@ pub(crate) fn run_tools_loop_agnostic_with_cancel_and_history_runtime(
 // =========================================================================
 
 /// Append text to the system message (or create one if absent).
-fn inject_system_supplement(messages: &mut Vec<serde_json::Value>, supplement: &str) {
+fn inject_system_supplement(messages: &mut Vec<llm_client::ChatMessage>, supplement: &str) {
     if let Some(first) = messages.first_mut() {
-        if first.get("role").and_then(|r| r.as_str()) == Some("system") {
-            if let Some(content) = first.get("content").and_then(|c| c.as_str()) {
-                *first = serde_json::json!({
-                    "role": "system",
-                    "content": format!("{}{}", content, supplement)
-                });
+        if first.role == "system" {
+            if let Some(ref content) = first.content {
+                first.content = Some(format!("{}{}", content, supplement));
                 return;
             }
         }
     }
     messages.insert(
         0,
-        serde_json::json!({
-            "role": "system",
-            "content": supplement.trim_start()
-        }),
+        llm_client::ChatMessage {
+            role: "system".into(),
+            content: Some(supplement.trim_start().to_string()),
+            ..Default::default()
+        },
     );
 }
 
@@ -384,7 +382,7 @@ pub(crate) fn build_runtime_messages(
     msg_ctx: &MessageContext,
     task_ctx: Option<&TaskContext>,
     system_message: Option<&str>,
-) -> Vec<serde_json::Value> {
+) -> Vec<llm_client::ChatMessage> {
     let history = task_ctx
         .map(|ctx| ctx.runtime_history.as_slice())
         .unwrap_or(&[]);
@@ -395,12 +393,16 @@ pub(crate) fn build_runtime_messages_with_history(
     msg_ctx: &MessageContext,
     history: &[agent_core::AgentMessage],
     system_message: Option<&str>,
-) -> Vec<serde_json::Value> {
-    let mut messages: Vec<serde_json::Value> = Vec::new();
+) -> Vec<llm_client::ChatMessage> {
+    let mut messages: Vec<llm_client::ChatMessage> = Vec::new();
 
     if let Some(sys) = system_message {
         if !sys.is_empty() {
-            messages.push(serde_json::json!({"role": "system", "content": sys}));
+            messages.push(llm_client::ChatMessage {
+                role: "system".into(),
+                content: Some(sys.into()),
+                ..Default::default()
+            });
         }
     }
 
@@ -420,7 +422,11 @@ pub(crate) fn build_runtime_messages_with_history(
             }
         }
         if !text_content.is_empty() {
-            messages.push(serde_json::json!({"role": role, "content": text_content}));
+            messages.push(llm_client::ChatMessage {
+                role: role.into(),
+                content: Some(text_content),
+                ..Default::default()
+            });
         }
     }
 
@@ -432,7 +438,11 @@ pub(crate) fn build_runtime_messages_with_history(
         Some(dctx) if !dctx.is_empty() => format!("{}\n\nUser: {}", dctx, user_text),
         _ => user_text,
     };
-    messages.push(serde_json::json!({"role": "user", "content": combined_user}));
+    messages.push(llm_client::ChatMessage {
+        role: "user".into(),
+        content: Some(combined_user),
+        ..Default::default()
+    });
 
     messages
 }
@@ -495,7 +505,7 @@ pub(crate) async fn execute_runtime(
     skill_summary: Option<&str>,
     history_policy_runtime: &dyn HistoryPolicyRuntime,
 ) -> SdkResult<RuntimeResponse> {
-    use crate::agent::engine::{core_loop, RequestResponseTurnInvoker};
+    use crate::agent::engine::{RequestResponseTurnInvoker, core_loop};
 
     let original_task_ctx = task_ctx.clone();
     let prepared_history = match task_ctx.as_ref() {
@@ -749,12 +759,12 @@ mod adapter_compat_tests {
     use std::sync::{Arc, Mutex};
 
     struct MockRequestInvoker {
-        responses: Mutex<VecDeque<Result<serde_json::Value, String>>>,
+        responses: Mutex<VecDeque<Result<llm_client::LlmResponse, String>>>,
         calls: AtomicUsize,
     }
 
     impl MockRequestInvoker {
-        fn new(responses: Vec<Result<serde_json::Value, String>>) -> Self {
+        fn new(responses: Vec<Result<llm_client::LlmResponse, String>>) -> Self {
             Self {
                 responses: Mutex::new(responses.into()),
                 calls: AtomicUsize::new(0),
@@ -769,9 +779,9 @@ mod adapter_compat_tests {
     impl LlmInvoker for MockRequestInvoker {
         fn request(
             &self,
-            _payload: serde_json::Value,
+            _req: llm_client::LlmRequest,
         ) -> std::pin::Pin<
-            Box<dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send>,
+            Box<dyn core::future::Future<Output = Result<llm_client::LlmResponse, String>> + Send>,
         > {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let next = self
@@ -837,16 +847,14 @@ mod adapter_compat_tests {
     fn checkpoint_tool_call_response(args: serde_json::Value) -> serde_json::Value {
         serde_json::json!({
             "choices": [{
+                "index": 0,
                 "message": {
+                    "role": "assistant",
                     "content": null,
                     "tool_calls": [{
-                        "index": 0,
                         "id": "call_ck",
-                        "type": "function",
-                        "function": {
-                            "name": "checkpoint_task",
-                            "arguments": args.to_string()
-                        }
+                        "name": "checkpoint_task",
+                        "arguments": args
                     }]
                 },
                 "finish_reason": "tool_calls"
@@ -857,22 +865,27 @@ mod adapter_compat_tests {
     fn text_response(content: &str) -> serde_json::Value {
         serde_json::json!({
             "choices": [{
-                "message": { "content": content },
+                "index": 0,
+                "message": { "role": "assistant", "content": content },
                 "finish_reason": "stop"
             }]
         })
     }
 
+    fn llm_response_from_chat_json(v: serde_json::Value) -> llm_client::LlmResponse {
+        serde_json::from_value(v).expect("fixture deserializes to LlmResponse")
+    }
+
     #[tokio::test]
     async fn execute_a2a_uses_stop_signal_checkpoint_args_directly() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![Ok(
-            checkpoint_tool_call_response(json!({
+            llm_response_from_chat_json(checkpoint_tool_call_response(json!({
                 "task_patch": {
                     "state": "completed",
                     "append_history_text": "structured done"
                 },
                 "respond": { "kind": "task" }
-            })),
+            }))),
         )]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 
@@ -911,14 +924,18 @@ mod adapter_compat_tests {
     #[tokio::test]
     async fn execute_a2a_finalize_required_runs_forced_checkpoint_turn() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![
-            Ok(text_response("plain text that should be superseded")),
-            Ok(checkpoint_tool_call_response(json!({
-                "task_patch": {
-                    "state": "completed",
-                    "append_history_text": "finalized via checkpoint"
-                },
-                "respond": { "kind": "task" }
-            }))),
+            Ok(llm_response_from_chat_json(text_response(
+                "plain text that should be superseded",
+            ))),
+            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(
+                json!({
+                    "task_patch": {
+                        "state": "completed",
+                        "append_history_text": "finalized via checkpoint"
+                    },
+                    "respond": { "kind": "task" }
+                }),
+            ))),
         ]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 
@@ -957,8 +974,12 @@ mod adapter_compat_tests {
     #[tokio::test]
     async fn execute_a2a_finalize_required_falls_back_to_plain_text_when_checkpoint_not_called() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![
-            Ok(text_response("plain fallback text")),
-            Ok(text_response("still no checkpoint tool call")),
+            Ok(llm_response_from_chat_json(text_response(
+                "plain fallback text",
+            ))),
+            Ok(llm_response_from_chat_json(text_response(
+                "still no checkpoint tool call",
+            ))),
         ]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 
@@ -994,13 +1015,15 @@ mod adapter_compat_tests {
     async fn execute_a2a_finalize_required_on_error_uses_checkpoint_turn_then_failed_state() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![
             Err("upstream 503".to_string()),
-            Ok(checkpoint_tool_call_response(json!({
-                "task_patch": {
-                    "state": "failed",
-                    "status_text": "structured failure reason"
-                },
-                "respond": { "kind": "task" }
-            }))),
+            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(
+                json!({
+                    "task_patch": {
+                        "state": "failed",
+                        "status_text": "structured failure reason"
+                    },
+                    "respond": { "kind": "task" }
+                }),
+            ))),
         ]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 
@@ -1046,7 +1069,7 @@ mod stream_tests {
     use crate::agent::tools::{ToolExecutor, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
     use futures::StreamExt;
-    use llm_client::model_client::ClientError;
+    use llm_client::LlmError;
     use std::sync::Arc;
 
     struct MockStreamInvoker {
@@ -1062,7 +1085,7 @@ mod stream_tests {
     }
 
     impl LlmStreamInvoker for MockStreamInvoker {
-        fn request_stream(&self, _payload: serde_json::Value) -> LlmStreamFuture {
+        fn request_stream(&self, _req: llm_client::LlmRequest) -> LlmStreamFuture {
             let events = {
                 let mut guard = self.turns.lock().unwrap();
                 if guard.is_empty() {
@@ -1072,7 +1095,7 @@ mod stream_tests {
                 }
             };
             Box::pin(async move {
-                let stream = futures::stream::iter(events.into_iter().map(Ok::<_, ClientError>));
+                let stream = futures::stream::iter(events.into_iter().map(Ok::<_, LlmError>));
                 Ok(Box::pin(stream) as llm_client::LlmEventStream)
             })
         }

@@ -1,0 +1,193 @@
+---
+title: "services"
+description: "Domain Services for A2A Protocol Core"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Domain Services for A2A Protocol Core
+
+This module contains domain services that implement business logic
+for A2A protocol operations while maintaining pure domain architecture.
+
+## Traits
+
+### `TaskStorage`
+
+**Enhanced Task Storage Service Interface**
+
+Defines the contract for task storage operations with proper A2A protocol
+support for context-based operations (1 context : N tasks relationship).
+
+**Required / Provided Methods**
+
+```rust
+fn store_task(&self, task: Task) -> A2AResult<()>
+```
+
+Store a new or updated task
+
+```rust
+fn get_task(&self, task_id: &str) -> A2AResult<Option<Task>>
+```
+
+Retrieve a task by ID
+
+```rust
+fn update_task(&self, task: Task) -> A2AResult<()>
+```
+
+Update an existing task
+
+```rust
+fn list_tasks(&self) -> A2AResult<Vec<Task>>
+```
+
+List all tasks (for tasks/list method)
+
+```rust
+fn remove_task(&self, task_id: &str) -> A2AResult<bool>
+```
+
+Remove a task (if needed for cleanup)
+
+```rust
+fn task_exists(&self, task_id: &str) -> A2AResult<bool>
+```
+
+Check if a task exists
+
+```rust
+fn get_tasks_by_context(&self, context_id: &str) -> A2AResult<Vec<Task>>
+```
+
+Get all tasks within a specific context (conversation)
+
+This is the key method for A2A protocol compliance - allows retrieving
+all tasks that belong to the same conversation context.
+
+```rust
+fn get_latest_task_in_context(&self, context_id: &str) -> A2AResult<Option<Task>>
+```
+
+Get the latest (most recently created) task in a context
+
+Useful for conversation continuity and determining the most recent
+task state within a conversation.
+
+```rust
+fn get_context_history(&self, context_id: &str) -> A2AResult<Vec<Message>>
+```
+
+Get conversation history from all tasks in a context
+
+Aggregates message history from all tasks in a conversation context
+for LLM context management as specified in A2A protocol.
+
+```rust
+fn get_or_create_context(&self, context_id: &str) -> A2AResult<ConversationContext>
+```
+
+Get or create conversation context
+
+Manages conversation context lifecycle - creates new context if it
+doesn't exist, returns existing context otherwise.
+
+```rust
+fn update_context_activity(&self, context_id: &str) -> A2AResult<()>
+```
+
+Update context activity (called when new task is added)
+
+Updates the conversation context metadata when tasks are added
+to track conversation lifecycle.
+
+```rust
+fn list_contexts(&self) -> A2AResult<Vec<ConversationContext>>
+```
+
+List all conversation contexts
+
+Returns all active conversation contexts for management/debugging.
+
+## Structs
+
+### `ConversationContext`
+
+**Context Information for Conversation Management**
+
+Represents a conversation context that contains multiple tasks
+following the A2A protocol specification.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `context_id` | `String` | Unique context identifier (persistent across tasks) |
+| `created_at` | `String` | When the conversation started |
+| `last_active` | `String` | Last interaction time |
+| `task_count` | `u32` | Number of tasks in this context |
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(context_id: String) -> Self
+```
+
+Create a new conversation context
+
+#### `update_activity`
+
+```rust
+fn update_activity(&mut self)
+```
+
+Update last active timestamp and increment task count
+
+### `InMemoryTaskStorage`
+
+In-Memory Task Storage Implementation
+
+Provides a simple in-memory task storage for development and testing.
+In production, this would be replaced with persistent storage.
+
+**Enhanced A2A Protocol Support**: Now includes separate context tracking
+for proper conversation management with 1:N context:task relationship.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new in-memory task storage
+
+#### `task_count`
+
+```rust
+fn task_count(&self) -> usize
+```
+
+Get the number of stored tasks (for testing)
+
+#### `context_count`
+
+```rust
+fn context_count(&self) -> usize
+```
+
+Get the number of stored contexts (for testing)
+
+#### `clear`
+
+```rust
+fn clear(&self)
+```
+
+Clear all tasks and contexts (for testing)

@@ -177,70 +177,6 @@ pub trait A2ATransportFactory: Send + Sync {
     }
 }
 
-/// A2A Transport Builder
-///
-/// Builder pattern for configuring transport instances.
-/// Provides a fluent interface for setting transport options.
-pub struct A2ATransportBuilder {
-    transport_type: String,
-    endpoint: String,
-    config: HashMap<String, Value>,
-}
-
-impl A2ATransportBuilder {
-    /// Create a new transport builder
-    pub fn new(transport_type: impl Into<String>, endpoint: impl Into<String>) -> Self {
-        Self {
-            transport_type: transport_type.into(),
-            endpoint: endpoint.into(),
-            config: HashMap::new(),
-        }
-    }
-
-    /// Set a configuration option
-    pub fn with_config(mut self, key: impl Into<String>, value: Value) -> Self {
-        self.config.insert(key.into(), value);
-        self
-    }
-
-    /// Set multiple configuration options
-    pub fn with_config_map(mut self, config: HashMap<String, Value>) -> Self {
-        self.config.extend(config);
-        self
-    }
-
-    /// Set timeout configuration
-    pub fn with_timeout(self, timeout_ms: u64) -> Self {
-        self.with_config("timeout_ms", Value::from(timeout_ms))
-    }
-
-    /// Set retry configuration
-    pub fn with_retries(self, max_retries: u32) -> Self {
-        self.with_config("max_retries", Value::from(max_retries))
-    }
-
-    /// Set authentication configuration
-    pub fn with_auth(self, auth_type: impl Into<String>, auth_value: impl Into<String>) -> Self {
-        self.with_config("auth_type", Value::from(auth_type.into()))
-            .with_config("auth_value", Value::from(auth_value.into()))
-    }
-
-    /// Get the transport type
-    pub fn transport_type(&self) -> &str {
-        &self.transport_type
-    }
-
-    /// Get the endpoint
-    pub fn endpoint(&self) -> &str {
-        &self.endpoint
-    }
-
-    /// Get the configuration
-    pub fn config(&self) -> &HashMap<String, Value> {
-        &self.config
-    }
-}
-
 /// Mock transport for testing
 ///
 /// Simple transport implementation for unit tests and development.
@@ -348,21 +284,6 @@ mod tests {
         assert!(unhealthy_transport.health_check().await.is_err());
     }
 
-    #[test]
-    fn test_transport_builder() {
-        let builder = A2ATransportBuilder::new("http", "http://localhost:8080")
-            .with_timeout(5000)
-            .with_retries(3)
-            .with_auth("bearer", "token123");
-
-        assert_eq!(builder.transport_type(), "http");
-        assert_eq!(builder.endpoint(), "http://localhost:8080");
-        assert_eq!(builder.config()["timeout_ms"], 5000);
-        assert_eq!(builder.config()["max_retries"], 3);
-        assert_eq!(builder.config()["auth_type"], "bearer");
-        assert_eq!(builder.config()["auth_value"], "token123");
-    }
-
     #[tokio::test]
     async fn test_default_response() {
         let transport = MockTransport::new();
@@ -372,46 +293,6 @@ mod tests {
         let response = transport.send_request(request).await.unwrap();
         assert!(response.is_success());
         assert_eq!(response.result.unwrap()["method"], "unknown_method");
-    }
-
-    // NEW COMPREHENSIVE TESTS FOR 100% COVERAGE
-
-    #[test]
-    fn test_transport_builder_with_config_map() {
-        let mut config_map = HashMap::new();
-        config_map.insert("custom_setting".to_string(), Value::from("custom_value"));
-        config_map.insert("timeout_override".to_string(), Value::from(10000));
-
-        let builder = A2ATransportBuilder::new("websocket", "ws://localhost:9000")
-            .with_config_map(config_map);
-
-        assert_eq!(builder.transport_type(), "websocket");
-        assert_eq!(builder.endpoint(), "ws://localhost:9000");
-        assert_eq!(builder.config()["custom_setting"], "custom_value");
-        assert_eq!(builder.config()["timeout_override"], 10000);
-    }
-
-    #[test]
-    fn test_transport_builder_comprehensive_configuration() {
-        let mut initial_config = HashMap::new();
-        initial_config.insert("base_setting".to_string(), Value::from("base_value"));
-
-        let builder = A2ATransportBuilder::new("grpc", "grpc://service.cluster.local:50051")
-            .with_config_map(initial_config)
-            .with_timeout(30000)
-            .with_retries(5)
-            .with_auth("mtls", "cert.pem")
-            .with_config("compression", Value::from("gzip"))
-            .with_config("pool_size", Value::from(20));
-
-        let config = builder.config();
-        assert_eq!(config["base_setting"], "base_value");
-        assert_eq!(config["timeout_ms"], 30000);
-        assert_eq!(config["max_retries"], 5);
-        assert_eq!(config["auth_type"], "mtls");
-        assert_eq!(config["auth_value"], "cert.pem");
-        assert_eq!(config["compression"], "gzip");
-        assert_eq!(config["pool_size"], 20);
     }
 
     #[test]
@@ -567,26 +448,6 @@ mod tests {
         // Test cleanup
         assert!(factory.remove_transport("agent-1").await.is_ok());
         assert!(factory.remove_transport("agent-2").await.is_ok());
-    }
-
-    #[test]
-    fn test_transport_builder_edge_cases() {
-        // Test with empty strings
-        let builder = A2ATransportBuilder::new("", "");
-        assert_eq!(builder.transport_type(), "");
-        assert_eq!(builder.endpoint(), "");
-        assert!(builder.config().is_empty());
-
-        // Test with special characters and unicode
-        let builder =
-            A2ATransportBuilder::new("custom-transport", "proto://🌍.example.com:8080/αβγ")
-                .with_config("special_chars", Value::from("!@#$%^&*()"))
-                .with_config("unicode", Value::from("café ñoño αβγδε"));
-
-        assert_eq!(builder.transport_type(), "custom-transport");
-        assert_eq!(builder.endpoint(), "proto://🌍.example.com:8080/αβγ");
-        assert_eq!(builder.config()["special_chars"], "!@#$%^&*()");
-        assert_eq!(builder.config()["unicode"], "café ñoño αβγδε");
     }
 
     #[tokio::test]

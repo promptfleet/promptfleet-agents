@@ -1,0 +1,58 @@
+---
+title: pf-types
+description: Lightweight naming and validation primitives for the PromptFleet agent ecosystem (AgentSlug, normalize_name).
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Intentionally minimal for broad dependency use.</Aside>
+
+**Crate:** `pf-types` · **Path:** `crates/commons/pf-types`  
+**Description** (`Cargo.toml`): *Lightweight naming and validation primitives for the PromptFleet agent ecosystem (AgentSlug, normalize_name).*
+
+## Role
+
+Provides `AgentSlug` (the canonical `tenant:space:agent` address) and name normalisation helpers. Has no runtime dependencies beyond `thiserror` and optional `serde` — intentionally kept small so WASM agents and third-party integrations can depend on it without pulling in cloud platform concerns.
+
+## Feature flags
+
+From `crates/commons/pf-types/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | `serde` |
+| `serde` | Enables `Serialize`/`Deserialize` impls on `AgentSlug` |
+
+## Public API (from `src/lib.rs`)
+
+- **`AgentSlug`** — canonical `tenant:space:agent` identifier. Methods:
+  - `from_canonical("acme:prod:echo-bot")` / `from_names("Acme", "Prod", "Echo Bot")`
+  - `from_subject("tenants/acme/spaces/prod/agents/echo-bot")` / `to_subject()`
+  - `canonical()` → `&str`, `into_string()` → `String`
+  - Implements `Display`, `FromStr`, `Serialize`/`Deserialize` (with `serde` feature)
+- **`normalize_name(input)`** — normalizes a name segment to K8s-label-safe lowercase (max 63 chars, replaces whitespace/special chars with `-`)
+- **`TypeError`** — error enum: `InvalidSlugSegment { segment, reason }`, `InvalidSubject(String)`
+
+## Example sketch
+
+```rust
+use pf_types::{AgentSlug, normalize_name};
+
+// From display names (auto-normalized)
+let slug = AgentSlug::from_names("Acme Corp", "Production", "Weather Agent")?;
+assert_eq!(slug.canonical(), "acme-corp:production:weather-agent");
+
+// Parse from canonical string
+let slug: AgentSlug = "acme:dev:echo-bot".parse()?;
+
+// Convert to/from subject path
+let subject = slug.to_subject();
+assert_eq!(subject, "tenants/acme/spaces/dev/agents/echo-bot");
+let back = AgentSlug::from_subject(&subject)?;
+assert_eq!(back, slug);
+
+// Name normalization standalone
+assert_eq!(normalize_name("Hello World")?, "hello-world");
+```
+
+**Full API reference:** `cargo doc -p pf-types --no-deps`

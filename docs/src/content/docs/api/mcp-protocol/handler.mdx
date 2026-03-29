@@ -1,0 +1,60 @@
+---
+title: "handler"
+description: "# MCP Protocol Handler"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# MCP Protocol Handler
+
+**Core MCP protocol handling logic**
+
+## Structs
+
+### `McpProtocolHandler`
+
+**MCP Protocol Handler** - Integrates with protocol_transport_core
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create new MCP protocol handler
+
+#### `with_capabilities`
+
+```rust
+fn with_capabilities(self, capabilities: ServerCapabilities) -> Self
+```
+
+Configure server capabilities
+
+#### `with_auth_handler`
+
+```rust
+fn with_auth_handler<H>(self, handler: H) -> Self
+```
+
+Configure authentication handler
+
+#### `with_tool_provider`
+
+```rust
+fn with_tool_provider<P>(self, provider: P) -> Self
+```
+
+Configure tool provider
+
+#### `with_query_mode`
+
+```rust
+fn with_query_mode(self, query_mode: QueryMode) -> Self
+```
+
+Configure query mode

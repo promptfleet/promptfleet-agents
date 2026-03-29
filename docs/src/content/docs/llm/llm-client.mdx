@@ -1,0 +1,69 @@
+---
+title: llm_client
+description: Simplified, provider-agnostic LLM client built on protocol_transport_core.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Streaming is incremental on native, buffered on WASM.</Aside>
+
+**Crate:** `llm_client` · **Path:** `crates/llm/llm_client`  
+**Description** (`Cargo.toml`): *Simplified, provider-agnostic LLM client built on protocol_transport_core*
+
+## Role
+
+Provider-neutral LLM HTTP client: typed requests, streaming SSE events, model profiles, and an `LlmClient` facade. `WireFormat` selects JSON shape (OpenAI-compatible vs Anthropic Messages), not a single vendor — OpenRouter uses `WireFormat::OpenAiCompat`; Bedrock Claude often uses `WireFormat::AnthropicMessages`. On native targets, streaming is incremental over SSE. On WASM, responses are buffered then parsed.
+
+## Feature flags
+
+From `crates/llm/llm_client/Cargo.toml`:
+
+| Feature | Purpose |
+|---------|---------|
+| `default` | Empty — no features enabled by default |
+
+Native-only dependencies (`reqwest`, `tokio`) are activated via `cfg(not(target_arch = "wasm32"))` target gates, not feature flags.
+
+## Public API (from `src/lib.rs`)
+
+**Modules:** `auth`, `client`, `error`, `model_client`, `prepare`, `profile`, `stream`, `types`
+
+**Re-exports:**
+
+- **`LlmClient`**, **`LlmClientBuilder`**, **`WireFormat`** — client facade and builder
+- **`ApiKeyAuth`**, **`AnthropicApiKeyAuth`**, **`AuthProvider`**, **`AzureCredential`**, **`AzureOpenAiAuth`** — auth providers
+- **`LlmError`**, **`LlmResult`** — error types
+- **`ApiMode`**, **`ClientCapabilities`** — model client config
+- **`ModelCapabilities`**, **`ModelConfig`**, **`ModelFamily`**, **`ModelProfile`** — model profiles
+- **`StreamingPolicy`** — re-exported from `protocol_transport_core`
+- **`LlmEventStream`**, **`SseParser`**, **`StreamEvent`** — streaming SSE types
+- **`types::*`** — `ChatMessage`, `LlmRequest`, `LlmResponse`, `ToolCall`, `ToolSchema`, etc.
+
+## Example sketch
+
+```rust
+use llm_client::auth::ApiKeyAuth;
+use llm_client::client::{LlmClient, WireFormat};
+use llm_client::{ChatMessage, LlmRequest};
+
+let client = LlmClient::builder(WireFormat::OpenAiCompat)
+    .base_url("https://api.openai.com/v1")
+    .auth(ApiKeyAuth::new(std::env::var("OPENAI_API_KEY").unwrap()))
+    .build()?;
+
+let resp = client
+    .chat(LlmRequest {
+        model: "gpt-4o-mini".into(),
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: Some("Hello".into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    })
+    .await?;
+```
+
+See the [LLM Client guide](/promptfleet-agents/guides/llm-client/) for a comprehensive walkthrough of setup, configuration, and streaming patterns.
+
+**Full API reference:** `cargo doc -p llm_client --no-deps`

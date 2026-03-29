@@ -1,0 +1,57 @@
+---
+title: agent_core
+description: Protocol-agnostic agent domain types — messages, tasks, and artifacts independent of A2A, MCP, or any wire protocol.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">WASM-compatible — compiles to both `wasm32-wasip1` and native targets. Zero runtime dependencies beyond `serde`.</Aside>
+
+**Crate:** `agent_core` · **Path:** `crates/agent_core`  
+**Description** (`Cargo.toml`): *Protocol-agnostic agent domain types — the universal vocabulary for messages, tasks, and artifacts independent of A2A, MCP, or any wire protocol*
+
+## Role
+
+Defines the universal vocabulary for agent interactions — messages, content parts, task phases, and conversation context — without any dependency on A2A, MCP, or any specific wire protocol. Consumers that only need to *describe* agent interactions (studio, coordination, tests) depend on `agent_core` alone. The `agent_sdk` crate provides bidirectional conversions between these types and protocol-specific types.
+
+## Feature flags
+
+This crate has **no feature flags**. It depends only on `serde` and `serde_json`.
+
+## Public API (from `src/lib.rs`)
+
+From `src/message.rs` (re-exported via `pub use message::*`):
+
+- **`Role`** — enum: `User`, `Agent`, `System`
+- **`ContentPart`** — enum: `Text(String)`, `File { uri, mime, data }`, `Data(serde_json::Value)`
+- **`AgentMessage`** — struct with `role` and `parts`; convenience constructors `user_text()`, `agent_text()`, `system_text()`; helpers `text_content()`, `is_text_only()`, `has_data()`
+
+From `src/task.rs` (re-exported via `pub use task::*`):
+
+- **`TaskPhase`** — enum: `Pending`, `Working`, `Completed`, `Failed`, `Cancelled`
+- **`ConversationContext`** — struct with `history: Vec<AgentMessage>`, `task_phase`, `metadata`; constructors `new()`, `from_text_turns()`
+
+## Example sketch
+
+```rust
+use agent_core::{AgentMessage, Role, ContentPart, ConversationContext};
+
+// Simple text message
+let msg = AgentMessage::user_text("What's the weather?");
+assert_eq!(msg.role, Role::User);
+
+// Structured content
+let msg = AgentMessage::new(Role::User, vec![
+    ContentPart::Text("Analyze this data".into()),
+    ContentPart::Data(serde_json::json!({"rows": 42})),
+]);
+
+// Conversation context from text turns
+let ctx = ConversationContext::from_text_turns(&[
+    ("user", "hello"),
+    ("assistant", "hi there"),
+]);
+assert!(ctx.has_history());
+```
+
+**Full API reference:** `cargo doc -p agent_core --no-deps`

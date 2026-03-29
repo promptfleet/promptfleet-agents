@@ -1,0 +1,81 @@
+---
+title: "streaming"
+description: "Streaming timeout policy and idle-timeout stream wrapper."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Streaming timeout policy and idle-timeout stream wrapper.
+
+`StreamingPolicy` is unconditional (compiled for WASM + native).
+`IdleTimeoutStream` is native-only — requires tokio timers.
+
+## Constants
+
+### `RPC_REQUEST_TIMEOUT`
+
+```rust
+const RPC_REQUEST_TIMEOUT: Duration = ;
+```
+
+Per-request RPC timeout (wall-clock). Applied to non-streaming calls.
+
+## Structs
+
+### `StreamingPolicy`
+
+Three-clock streaming timeout configuration.
+
+Unconditional: compiled for both WASM and native targets.
+On WASM, values are stored for config parity but not enforced
+until WASI 0.3 streaming support is available.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connect_ms` | `u64` | TCP + TLS handshake timeout. Default: 10s. |
+| `first_byte_ms` | `u64` | Time until first data chunk arrives (after headers). Default: 45s. |
+| `idle_ms` | `u64` | Max silence between consecutive chunks — resets on each chunk. Default: 90s. |
+
+**Methods**
+
+#### `connect_timeout`
+
+```rust
+fn connect_timeout(&self) -> Duration
+```
+
+
+#### `first_byte_timeout`
+
+```rust
+fn first_byte_timeout(&self) -> Duration
+```
+
+
+#### `idle_timeout`
+
+```rust
+fn idle_timeout(&self) -> Duration
+```
+
+
+### `IdleTimeoutStream`
+
+Stream wrapper that terminates when no item arrives within `idle_timeout`.
+
+The timer resets on every yielded item — a stream emitting one token
+every 500ms runs indefinitely. A stream that goes silent for
+`idle_timeout` is terminated with `None` (clean EOF).
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(inner: S, idle_timeout: Duration) -> Self
+```
+

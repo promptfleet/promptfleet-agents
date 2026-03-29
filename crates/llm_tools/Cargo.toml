@@ -2,6 +2,9 @@
 name = "llm_tools"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Lightweight WASM-safe tool registry and macro to collect LLM tools and execute by name"
 
 [dependencies]

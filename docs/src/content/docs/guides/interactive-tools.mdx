@@ -1,0 +1,184 @@
+---
+title: Interactive Tools
+description: How to add confirmation and question prompts for human-in-the-loop flows.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `llm-engine` (interactive tools are LLM tools)</Aside>
+
+## What it does
+
+Interactive tools let your agent pause execution and request explicit user input before proceeding. The LLM calls `ask_confirmation` or `ask_question` as tool calls; the runtime emits an `InteractionRequested` event, the frontend shows a prompt, and on the next run the user's response is injected back into the conversation.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { workspace = true, features = ["llm-engine"] }
+```
+
+Interactive tools are bundled with the LLM engine — no separate feature flag needed.
+
+## How it works
+
+<Steps>
+
+1. **Register interaction tools** — call `make_interaction_tools()` and add them to your agent's tool registry.
+
+2. **LLM calls the tool** — during a streaming run, the LLM decides to call `ask_confirmation` or `ask_question`.
+
+3. **Runtime emits `InteractionRequested`** — the tool returns `{ "status": "interaction_pending", "interaction_id": "<uuid>" }` and emits an `AgentTraceEvent::InteractionRequested` with the full `InteractionRequest`.
+
+4. **Frontend shows the prompt** — the AG-UI SSE stream translates this into a `RunInputRequired` event. The run pauses.
+
+5. **User responds** — the frontend sends the next run request with an `interaction_response` data part containing the user's selection or free text.
+
+6. **LLM reads the response** — the response appears in conversation history as a `ContentPart::Data` with `interaction_response`, and the LLM continues from where it paused.
+
+</Steps>
+
+## Registering the tools
+
+```rust
+use agent_sdk::agent::interaction_tools::make_interaction_tools;
+
+let interaction_tools = make_interaction_tools();
+// Returns Vec<ToolSpec> with "ask_confirmation" and "ask_question"
+
+for tool in interaction_tools {
+    agent.register_tool(tool);
+}
+```
+
+## Tool: `ask_confirmation`
+
+A mandatory safety gate for mutating operations. The LLM must call this before any create/update/delete/deploy action.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `question` | `string` | yes | The approval question shown to the user |
+| `target_tool` | `string` | no | Name of the tool that will be called if approved (informational) |
+
+**Fixed options presented to the user:**
+
+| Option ID | Label | Meaning |
+|---|---|---|
+| `yes` | Yes | Approved — proceed |
+| `no` | No | Rejected — stop |
+| `no_with_feedback` | No — tell me what to change | Rejected with revision notes in `free_text` |
+
+**Example LLM tool call:**
+
+```json
+{
+  "name": "ask_confirmation",
+  "arguments": {
+    "question": "Deploy agent 'weather-bot' to production?",
+    "target_tool": "deploy_agent"
+  }
+}
+```
+
+## Tool: `ask_question`
+
+An open-ended question with optional structured choices. The user can always type freely regardless of whether options are provided.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `question` | `string` | yes | The question to present |
+| `options` | `array` | no | Structured choices (clickable buttons) |
+| `options[].id` | `string` | yes | Stable identifier returned in `selected_option_id` |
+| `options[].label` | `string` | yes | Display text on the button |
+| `options[].description` | `string` | no | Clarifying text below the button |
+
+**Example LLM tool call:**
+
+```json
+{
+  "name": "ask_question",
+  "arguments": {
+    "question": "Which data source should I connect to?",
+    "options": [
+      { "id": "postgres", "label": "PostgreSQL" },
+      { "id": "bigquery", "label": "BigQuery", "description": "Google Cloud warehouse" }
+    ]
+  }
+}
+```
+
+## Interaction types
+
+The `InteractionKind` enum distinguishes the two flows:
+
+| Kind | Tool | Behavior |
+|---|---|---|
+| `InteractionKind::Confirmation` | `ask_confirmation` | Yes/No/No-with-feedback, fixed options |
+| `InteractionKind::Question` | `ask_question` | Custom options + free text |
+
+## Request and response shapes
+
+### InteractionRequest
+
+Emitted by the tool via `AgentTraceEvent::InteractionRequested`:
+
+| Field | Type | Description |
+|---|---|---|
+| `interaction_id` | `String` | Unique ID correlating request ↔ response |
+| `kind` | `InteractionKind` | `Confirmation` or `Question` |
+| `question` | `String` | Prompt text shown to the user |
+| `options` | `Vec<InteractionOption>` | Clickable choices (may be empty) |
+| `allow_free_text` | `bool` | Always `true` — user can type freely |
+| `allow_cancel` | `bool` | Always `true` — user can dismiss |
+| `default_option_id` | `Option<String>` | Pre-selected option |
+| `timeout_ms` | `Option<u64>` | Auto-expiry (currently unused) |
+| `continuation_id` | `Option<String>` | Multi-step flow correlation |
+| `source_node` | `Option<String>` | Coordination graph node ID |
+| `metadata` | `Option<Value>` | Extension data (e.g., `{ "target_tool": "..." }`) |
+
+### InteractionResponse
+
+Sent by the frontend on the next run:
+
+| Field | Type | Description |
+|---|---|---|
+| `interaction_id` | `String` | Must match the pending request |
+| `selected_option_id` | `Option<String>` | ID of the option the user clicked |
+| `free_text` | `Option<String>` | Free-text answer |
+| `confirmed` | `Option<bool>` | Explicit yes/no for confirmations |
+| `cancelled` | `bool` | `true` if user dismissed without resolving |
+| `metadata` | `Option<Value>` | Extension data |
+
+### InteractionOption
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `String` | Stable identifier |
+| `label` | `String` | Display text |
+| `description` | `Option<String>` | Optional clarifying text |
+
+## Policy (hardcoded)
+
+These policies are enforced by the runtime and not exposed to the LLM:
+
+- `allow_free_text: true` — options are suggestions; user can always type freely
+- `allow_cancel: true` — user always has an exit
+- `timeout_ms: None` — no auto-expiry; timeout is a system-level concern
+
+## Key types reference
+
+| Type | Module | Description |
+|---|---|---|
+| `make_interaction_tools()` | `agent_sdk::agent::interaction_tools` | Returns `Vec<ToolSpec>` with both interaction tools |
+| `InteractionKind` | `agent_sdk::interaction` | `Question` or `Confirmation` |
+| `InteractionRequest` | `agent_sdk::interaction` | Full request payload emitted by tools |
+| `InteractionResponse` | `agent_sdk::interaction` | User's response payload |
+| `InteractionOption` | `agent_sdk::interaction` | Selectable option: `id`, `label`, `description` |
+| `ToolSpec` | `agent_sdk::agent::tools` | Tool registration: name, description, schema, executor |
+| `ToolExecutor` | `agent_sdk::agent::tools` | `WithContext(fn)` — executor with event emission |
+| `ToolContext` | `agent_sdk::agent::tool_context` | Context handle for emitting `AgentTraceEvent` |
+| `AgentTraceEvent::InteractionRequested` | `agent_sdk::agent::trace` | Trace event carrying the `InteractionRequest` |

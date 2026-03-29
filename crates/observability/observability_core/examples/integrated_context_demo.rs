@@ -6,7 +6,7 @@
 //! Higher-level domain context managers (LLM/A2A/request) live in higher crates
 //! like `structured_logging` and are intentionally not part of this foundation crate.
 
-use observability_core::{get_current_context, with_context, TraceContext};
+use observability_core::{TraceContext, get_current_context, with_context};
 
 fn main() {
     println!("🔌 observability_core context demo");

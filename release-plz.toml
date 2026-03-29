@@ -1,0 +1,133 @@
+[workspace]
+changelog_update = true
+semver_check = true
+git_release_enable = false
+git_tag_enable = false
+dependencies_update = false
+pr_labels = ["release"]
+
+# ── Tier 0: Leaves ──
+
+[[package]]
+name = "foundation_utils"
+version_group = "pf"
+
+[[package]]
+name = "protocol_transport_core"
+version_group = "pf"
+
+[[package]]
+name = "agent_core"
+version_group = "pf"
+
+[[package]]
+name = "a2a_rpc_macros"
+version_group = "pf"
+
+[[package]]
+name = "llm_context_core"
+version_group = "pf"
+
+[[package]]
+name = "llm_tool_macros"
+version_group = "pf"
+
+[[package]]
+name = "pf_macros"
+version_group = "pf"
+
+[[package]]
+name = "pf-types"
+version_group = "pf"
+
+[[package]]
+name = "pf_config"
+version_group = "pf"
+
+# ── Tier 1 ──
+
+[[package]]
+name = "observability_core"
+version_group = "pf"
+
+[[package]]
+name = "a2a_protocol_core"
+version_group = "pf"
+
+[[package]]
+name = "llm_client"
+version_group = "pf"
+
+[[package]]
+name = "mcp_protocol"
+version_group = "pf"
+
+# ── Tier 2 ──
+
+[[package]]
+name = "a2a_app_ports"
+version_group = "pf"
+
+[[package]]
+name = "llm_tools"
+version_group = "pf"
+
+[[package]]
+name = "otel"
+version_group = "pf"
+
+[[package]]
+name = "pf_prometheus"
+version_group = "pf"
+
+[[package]]
+name = "structured_logging"
+version_group = "pf"
+
+# ── Tier 3 ──
+
+[[package]]
+name = "observability"
+version_group = "pf"
+
+[[package]]
+name = "a2a_http_client"
+version_group = "pf"
+
+[[package]]
+name = "a2a_http_server"
+version_group = "pf"
+
+# ── Tier 4 ──
+
+[[package]]
+name = "agent_sdk"
+version_group = "pf"
+git_tag_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
+
+[[package]]
+name = "tool_web_search"
+version_group = "pf"
+
+[[package]]
+name = "pf_test_harness"
+version_group = "pf"
+
+# ── Excluded ──
+
+[[package]]
+name = "umao_agents"
+release = false
+publish = false
+
+[[package]]
+name = "a2a-echo-native"
+release = false
+publish = false
+
+[[package]]
+name = "umao-local-orchestration"
+release = false
+publish = false

@@ -1,0 +1,157 @@
+---
+title: AG-UI Streaming
+description: How to stream agent output to frontends with the AG-UI protocol.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `event-stream`</Aside>
+
+<Aside type="caution">Native only — AG-UI streaming requires tokio and is not available on WASM.</Aside>
+
+## What it does
+
+AG-UI provides a Server-Sent Events (SSE) streaming surface for your agent, designed for frontend consumption. It translates internal `AgentTraceEvent` streams into typed `AgentIoEvent` SSE frames that frontends can render incrementally — text deltas, reasoning steps, tool calls, interaction prompts, and run lifecycle signals.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { workspace = true, features = ["event-stream", "llm-engine"] }
+```
+
+## How to use it
+
+<Steps>
+
+1. **Build an agent with a stream-capable LLM runtime** — the agent must have `configure_llm_runtime` called so `can_run_stream()` returns `true`.
+
+2. **Create an `AgUiConfig`** — configure the SSE endpoint path (defaults to `/agui/v1/runs`).
+
+3. **Build an `AgUiApp`** from the agent and config.
+
+4. **Mount the router** — call `.router()` to get an axum `Router`, then merge it into your server.
+
+</Steps>
+
+```rust
+use agent_sdk::agui::{AgUiApp, AgUiConfig};
+use std::sync::Arc;
+
+let agent = build_my_agent()?;
+
+let agui = AgUiApp::from_agent(agent, AgUiConfig::default())?;
+let router = agui.router();
+
+// Serve with axum
+let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+axum::serve(listener, router).await?;
+```
+
+### Using a shared agent
+
+If you need the agent in multiple places (e.g., A2A + AG-UI), wrap it in an `Arc`:
+
+```rust
+use std::sync::Arc;
+
+let agent = Arc::new(build_my_agent()?);
+let agui = AgUiApp::from_shared_agent(agent.clone(), AgUiConfig {
+    route_path: "/agui/v1/runs".to_string(),
+})?;
+```
+
+### Combining with A2A hosting
+
+Use `AgentHostBuilder::with_agui` to serve both A2A JSON-RPC and AG-UI on one router:
+
+```rust
+use agent_sdk::AgentHostBuilder;
+
+let host = AgentHostBuilder::new(agent)
+    .with_agui(AgUiConfig::default())
+    .build()?;
+
+// host.router() includes both /jsonrpc and /agui/v1/runs
+```
+
+## SSE event types
+
+The `AgentIoEvent` enum defines the SSE frame vocabulary:
+
+| Event | Fields | Purpose |
+|---|---|---|
+| `RunStarted` | `thread_id`, `run_id` | Stream opened |
+| `RunFinished` | `thread_id`, `run_id`, `result` | Stream complete |
+| `RunError` | `message`, `code` | Error during run |
+| `StepStarted` | `step_name` | Tool/step begins |
+| `StepFinished` | `step_name` | Tool/step ends |
+| `TextMessageStart` | `message_id`, `role` | Text message begins |
+| `TextMessageContent` | `message_id`, `delta` | Text token delta |
+| `TextMessageEnd` | `message_id` | Text message complete |
+| `ReasoningStart` | `message_id` | Reasoning block begins |
+| `ReasoningMessageStart` | `message_id`, `role` | Reasoning message begins |
+| `ReasoningMessageContent` | `message_id`, `delta` | Reasoning token delta |
+| `ToolCallStart` | `tool_call_id`, `tool_name` | Tool invocation begins |
+| `ToolCallEnd` | `tool_call_id`, `result` | Tool invocation ends |
+| `RunInputRequired` | `interaction_request` | Agent needs user input |
+
+## Stream driver
+
+For advanced use, `AgUiStreamDriver` gives fine-grained control over the mapping pipeline:
+
+```rust
+use agent_sdk::agui::{AgUiStreamDriver, AgUiDriverConfig, IoEventContext};
+
+let driver = AgUiStreamDriver::new(AgUiDriverConfig {
+    ctx: IoEventContext {
+        thread_id: "thread-123".into(),
+        run_id: "run-456".into(),
+        message_id: "msg-789".into(),
+    },
+    cancel_flag: None,
+    enrichers: vec![],
+});
+```
+
+### Stream enrichers
+
+Implement the `StreamEnricher` trait to inject custom events into the SSE stream (e.g., citations, metadata):
+
+```rust
+use agent_sdk::agui::CitationEnricher;
+
+let config = AgUiDriverConfig {
+    // ...
+    enrichers: vec![Box::new(CitationEnricher::new(sources))],
+};
+```
+
+## Broadcast
+
+`StreamBroadcast` lets multiple subscribers receive the same SSE stream:
+
+```rust
+use agent_sdk::streaming::StreamBroadcast;
+
+let broadcast = StreamBroadcast::new(source_stream);
+let subscriber_a = broadcast.subscribe();
+let subscriber_b = broadcast.subscribe();
+```
+
+## Key types reference
+
+| Type | Module | Description |
+|---|---|---|
+| `AgUiApp` | `agent_sdk::agui` | App builder — `from_agent()`, `from_shared_agent()`, `router()` |
+| `AgUiConfig` | `agent_sdk::agui` | Config with `route_path` field (default: `/agui/v1/runs`) |
+| `AgUiStreamDriver` | `agent_sdk::streaming` | Low-level driver for trace → SSE mapping |
+| `AgUiDriverConfig` | `agent_sdk::streaming` | Driver config: context, cancel flag, enrichers |
+| `AgentIoEvent` | `agent_sdk::streaming` | SSE event enum for frontend consumption |
+| `IoEventContext` | `agent_sdk::streaming` | `thread_id`, `run_id`, `message_id` |
+| `StreamBroadcast` | `agent_sdk::streaming` | Fan-out a single stream to multiple subscribers |
+| `StreamResponse` | `a2a_protocol_core::streaming` | A2A streaming response type |
+| `StreamEnricher` | `agent_sdk::streaming` | Trait for injecting custom events |
+| `SummaryHandle` | `agent_sdk::streaming` | Access to run summary after stream completes |
+| `RunSummary` | `agent_sdk::streaming` | Summary data: status, token usage, timing |
+| `RunStatus` | `agent_sdk::streaming` | `Completed`, `Error`, `InputRequired`, `Cancelled` |

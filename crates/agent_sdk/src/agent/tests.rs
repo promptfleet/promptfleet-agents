@@ -257,7 +257,11 @@ async fn test_three_tier_message_handler_cascade() {
 
     let mut agent = Agent::new_runtime("test-agent").unwrap();
 
-    agent.add_skill("travel_planning", "Help plan trips and itineraries");
+    agent
+        .add_skill("travel_planning")
+        .description("Help plan trips and itineraries")
+        .register()
+        .unwrap();
 
     agent
         .skill("get_weather", |params| async move {

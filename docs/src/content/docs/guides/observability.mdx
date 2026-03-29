@@ -1,0 +1,171 @@
+---
+title: Observability
+description: How to add traces, metrics, and structured logs to your agent with the observability crate.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">Requires feature: `agent-observability`</Aside>
+
+## What it does
+
+The `observability` crate provides a single facade (`Obs`) for structured logging, OpenTelemetry traces, and Prometheus metrics. When the `agent-observability` feature is enabled on `agent_sdk`, the `AgentBuilder` auto-initializes observability from your config file and starts a background flush loop.
+
+## Enable the feature
+
+```toml
+[dependencies]
+agent_sdk = { workspace = true, features = ["agent-observability"] }
+```
+
+The underlying `observability` crate has its own feature flags for backend selection:
+
+| Feature | What it enables |
+|---|---|
+| `logging` (default) | Global structured logging via `observability_core` |
+| `config` (default) | JSON config parsing for `ObservabilityConfig` |
+| `otel` | OpenTelemetry trace/span exporter |
+| `prometheus` | Prometheus metrics exporter |
+| `prometheus-pushgateway` | Prometheus Pushgateway client |
+| `full` | Enables `otel` + `prometheus` |
+
+## How to use it
+
+<Steps>
+
+1. **Add the `agent-observability` feature** to your `agent_sdk` dependency.
+
+2. **Configure observability in your config JSON** — add an `observability` section with service identity and backend settings.
+
+3. **Build the agent with `AgentBuilder`** — it auto-detects the observability config, calls `Obs::init()`, and starts the background flush loop.
+
+4. **Use standard `log` macros** — `log::info!`, `log::debug!`, etc. — they automatically route through the observability layer.
+
+</Steps>
+
+### Via config file (recommended)
+
+Add an `observability` section to your `agent-config.json`:
+
+```json
+{
+  "agent": {
+    "name": "my-agent",
+    "description": "Agent with observability"
+  },
+  "observability": {
+    "service_name": "my-agent",
+    "service_version": "1.0.0",
+    "service_namespace": "production",
+    "otel": {
+      "enabled": true
+    },
+    "prometheus": {
+      "enabled": true
+    }
+  }
+}
+```
+
+Then build the agent:
+
+```rust
+use agent_sdk::AgentBuilder;
+
+let agent = AgentBuilder::from_config_path("agent-config.json")?
+    .build()?;
+// Observability is auto-initialized; background flush is running.
+```
+
+### Standalone initialization
+
+If you need `Obs` outside of `AgentBuilder`:
+
+```rust
+use observability::{Obs, ObservabilityConfig};
+
+let config = ObservabilityConfig {
+    service_name: "my-service".into(),
+    service_version: "0.1.0".into(),
+    service_namespace: "default".into(),
+    ..Default::default()
+};
+
+let obs = Obs::init(config)?;
+```
+
+Or from environment variables:
+
+```rust
+let obs = Obs::init_from_env()?;
+```
+
+## ObservabilityConfig fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `service_name` | `String` | `"promptfleet-agent"` | Service identity for traces and metrics |
+| `service_version` | `String` | `"0.1.0"` | Semantic version |
+| `service_namespace` | `String` | `"default"` | Namespace / environment |
+| `logging` | `CoreLoggingConfig` | (defaults) | Structured logging configuration |
+| `otel` | `OtelConfig` | disabled | OpenTelemetry exporter settings |
+| `prometheus` | `PrometheusConfig` | disabled | Prometheus exporter settings |
+
+## Flush management
+
+The SDK wraps `Obs` in an `ObservabilityRuntime` that handles telemetry flush:
+
+- **Native agents**: a background tokio task flushes periodically (default: every 5 seconds, configurable via `PF_OBS_FLUSH_INTERVAL_MS`).
+- **WASM agents**: request-driven time-gated flush via `maybe_flush()` — no background tasks.
+
+The flush interval is controlled by the `PF_OBS_FLUSH_INTERVAL_MS` environment variable (milliseconds). Default: `5000`.
+
+## Trace context propagation
+
+The `observability` crate re-exports W3C trace context helpers for distributed tracing:
+
+```rust
+use observability::{
+    set_current_context,
+    get_current_context,
+    with_context_future,
+    W3CTraceContext,
+    HeaderExtractor,
+};
+
+// Extract trace context from inbound headers
+let ctx = W3CTraceContext::extract(&HeaderExtractor::new(&headers));
+set_current_context(ctx);
+
+// Propagate context across async boundaries
+let result = with_context_future(get_current_context(), async {
+    // spans created here inherit the parent trace
+    do_work().await
+}).await;
+```
+
+## Environment variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `PF_OBS_FLUSH_INTERVAL_MS` | Flush interval in milliseconds | `5000` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP exporter endpoint (when `otel` feature enabled) | — |
+| `OTEL_SERVICE_NAME` | Override service name for OTEL | — |
+
+## Key types reference
+
+| Type | Module | Description |
+|---|---|---|
+| `Obs` | `observability` | Main facade — `init()`, `init_from_env()`, `noop()`, `flush()` |
+| `ObservabilityConfig` | `observability` | Config: service identity, logging, OTEL, Prometheus |
+| `ObsHandle` | `observability` | Trait for passing `Obs` as `Arc<dyn ObsHandle>` |
+| `ObsHealth` | `observability` | Health/status reporting |
+| `OtelConfig` | `observability` | OTEL exporter enabled/endpoint config |
+| `OtelSampling` | `observability` | Trace sampling configuration |
+| `PrometheusConfig` | `observability` | Prometheus exporter config |
+| `ObservabilityRuntime` | `agent_sdk` | SDK flush orchestration — `maybe_flush()`, `start_background_flush_loop()` |
+| `TraceContext` | `observability_core` | Thread-local trace context |
+| `W3CTraceContext` | `observability_core` | W3C traceparent/tracestate helpers |
+| `SpanGuard` | `observability_core` | RAII span guard |
+| `SpanStatus` | `observability_core` | Span completion status |
+| `LogLevel` | `observability_core` | `Trace`, `Debug`, `Info`, `Warn`, `Error` |

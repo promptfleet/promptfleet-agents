@@ -1,0 +1,88 @@
+---
+title: "noop"
+description: "Zero-cost no-op implementations for observability when features are disabled"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Zero-cost no-op implementations for observability when features are disabled
+
+## Structs
+
+### `NoOpObservabilityPlugin`
+
+No-op observability plugin that does nothing
+
+This implementation provides zero runtime cost when observability is disabled.
+All methods are inlined and compile to nothing in release builds.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+Create a new no-op plugin
+
+#### `shared`
+
+```rust
+fn shared() -> Arc<Self>
+```
+
+Create an Arc'd no-op plugin for sharing
+
+### `NoOpMetricsCollector`
+
+No-op metrics collector
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+### `NoOpStructuredLogger`
+
+No-op structured logger
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new() -> Self
+```
+
+
+#### `with_level`
+
+```rust
+fn with_level(level: LogLevel) -> Self
+```
+
+
+## Functions
+
+### `create_noop_plugin`
+
+```rust
+fn create_noop_plugin() -> Box<dyn ObservabilityPlugin>
+```
+
+Convenience function to create a no-op plugin when observability is disabled
+
+### `create_shared_noop_plugin`
+
+```rust
+fn create_shared_noop_plugin() -> Arc<dyn ObservabilityPlugin>
+```
+
+Convenience function to create a shared no-op plugin

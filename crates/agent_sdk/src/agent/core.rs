@@ -19,11 +19,11 @@ use a2a_protocol_core::services::TaskStorage;
 
 use super::{
     config::AgentConfig,
-    history_policy::{build_history_policy_runtime, HistoryPolicyRuntime},
+    history_policy::{HistoryPolicyRuntime, build_history_policy_runtime},
     message::{MessageContext, SkillExecutor, TaskContext},
     message_handlers::MessageHandlerManager,
     response::RuntimeResponse,
-    skill::{SkillBuilder, SkillRegistry},
+    skill::{SkillEntryBuilder, SkillRegistry},
     task_manager::TaskManager,
 };
 
@@ -165,19 +165,18 @@ impl Agent {
 
     // -- Skill registration (unified API) --
 
-    /// Register skill metadata only (no handler) for discovery advertisement.
-    pub fn add_skill(&mut self, skill_id: &str, description: &str) -> &mut Self {
-        self.skill_registry.add_skill(skill_id, description);
-        self
+    /// Register a skill via the fluent builder (handler optional — omit for metadata-only).
+    pub fn add_skill(&mut self, skill_id: &str) -> SkillEntryBuilder<'_> {
+        self.skill_registry.add_skill(skill_id)
     }
 
-    /// Create a skill builder for fluent registration.
-    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillBuilder<F, Fut>
+    /// Register a skill with a handler (`add_skill(name).handler(handler)`).
+    pub fn skill<F, Fut>(&mut self, name: &str, handler: F) -> SkillEntryBuilder<'_>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<Value, String>> + Send + 'static,
     {
-        SkillBuilder::new(&mut self.skill_registry, name, handler)
+        self.skill_registry.skill(name, handler)
     }
 
     /// Register a notification handler.
@@ -228,76 +227,9 @@ impl Agent {
         self.message_handler_manager.set_custom_handler(handler);
     }
 
-    #[cfg(feature = "llm-engine")]
-    pub fn set_llm_tools_message_handler(
-        &mut self,
-        llm: std::sync::Arc<dyn super::llm_orchestrator::LlmInvoker>,
-        model: &str,
-        tools: super::tools::ToolRegistry,
-        system_message: Option<String>,
-        policy: Option<super::llm_orchestrator::LlmPolicy>,
-    ) -> SdkResult<()> {
-        self.message_handler_manager.set_llm_tools_handler(
-            llm,
-            model,
-            tools,
-            policy,
-            system_message,
-            self.history_policy_runtime.clone(),
-        )
-    }
-
+    /// Configure the built-in LLM tool loop, streaming runtime (native), and request defaults.
     #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
-    pub fn set_llm_tools_message_handler_with<I, T>(
-        &mut self,
-        client: I,
-        model: &str,
-        tools: T,
-        system_message: Option<String>,
-        policy: Option<super::llm_orchestrator::LlmPolicy>,
-    ) -> SdkResult<()>
-    where
-        I: super::llm_orchestrator::IntoLlmInvoker
-            + super::llm_orchestrator::IntoLlmStreamInvoker
-            + Clone,
-        T: super::tools::IntoTools,
-    {
-        let inv = client.clone().into_invoker();
-        let reg = tools.into_tools();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.stream_runtime = Some(StreamRuntimeConfig {
-                llm: client.into_stream_invoker(),
-                model: model.to_string(),
-                tools: reg.clone(),
-                policy: policy.clone().unwrap_or_default(),
-                system_message: system_message.clone(),
-                request_defaults: None,
-            });
-        }
-        self.set_llm_tools_message_handler(inv, model, reg, system_message, policy)
-    }
-
-    #[cfg(all(feature = "llm-engine", target_arch = "wasm32"))]
-    pub fn set_llm_tools_message_handler_with<I, T>(
-        &mut self,
-        client: I,
-        model: &str,
-        tools: T,
-        system_message: Option<String>,
-        policy: Option<super::llm_orchestrator::LlmPolicy>,
-    ) -> SdkResult<()>
-    where
-        I: super::llm_orchestrator::IntoLlmInvoker + Clone,
-        T: super::tools::IntoTools,
-    {
-        let inv = client.into_invoker();
-        let reg = tools.into_tools();
-        self.set_llm_tools_message_handler(inv, model, reg, system_message, policy)
-    }
-
-    #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
-    pub fn set_llm_tools_message_handler_configured<I, T>(
+    pub fn configure_llm_runtime<I, T>(
         &mut self,
         client: I,
         model: &str,
@@ -314,17 +246,14 @@ impl Agent {
     {
         let inv = client.clone().into_invoker();
         let reg = tools.into_tools();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.stream_runtime = Some(StreamRuntimeConfig {
-                llm: client.into_stream_invoker(),
-                model: model.to_string(),
-                tools: reg.clone(),
-                policy: policy.clone().unwrap_or_default(),
-                system_message: system_message.clone(),
-                request_defaults: request_defaults.clone(),
-            });
-        }
+        self.stream_runtime = Some(StreamRuntimeConfig {
+            llm: client.into_stream_invoker(),
+            model: model.to_string(),
+            tools: reg.clone(),
+            policy: policy.clone().unwrap_or_default(),
+            system_message: system_message.clone(),
+            request_defaults: request_defaults.clone(),
+        });
         self.message_handler_manager
             .set_llm_tools_handler_configured(
                 inv,
@@ -338,7 +267,7 @@ impl Agent {
     }
 
     #[cfg(all(feature = "llm-engine", target_arch = "wasm32"))]
-    pub fn set_llm_tools_message_handler_configured<I, T>(
+    pub fn configure_llm_runtime<I, T>(
         &mut self,
         client: I,
         model: &str,
@@ -388,7 +317,7 @@ impl Agent {
     ) -> SdkResult<super::trace::AgentTraceStream> {
         let runtime = self.stream_runtime.as_ref().ok_or_else(|| {
             SdkError::feature_not_enabled(
-                "llm streaming runtime not configured; call set_llm_tools_message_handler_with/configured with a stream-capable client",
+                "llm streaming runtime not configured; call configure_llm_runtime with a stream-capable client",
             )
         })?;
 

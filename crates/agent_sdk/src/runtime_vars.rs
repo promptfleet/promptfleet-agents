@@ -95,7 +95,11 @@ impl ActivationEnv {
 
         debug!(
             "Loaded activation vars: max_cold_start_ms={} initial_backoff_ms={} max_backoff_ms={} max_retries={} jitter={}",
-            env.max_cold_start_ms, env.initial_backoff_ms, env.max_backoff_ms, env.max_retries, env.jitter
+            env.max_cold_start_ms,
+            env.initial_backoff_ms,
+            env.max_backoff_ms,
+            env.max_retries,
+            env.jitter
         );
         env
     }
@@ -208,4 +212,125 @@ fn get_spin_var(lower: &str) -> Option<String> {
 #[inline]
 fn get_spin_var(_lower: &str) -> Option<String> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env test lock")
+    }
+
+    #[test]
+    fn activation_env_defaults() {
+        let _g = env_lock();
+        unsafe {
+            for k in [
+                "PF_ACTIVATION_MAX_COLD_START_MS",
+                "PF_ACTIVATION_INITIAL_BACKOFF_MS",
+                "PF_ACTIVATION_MAX_BACKOFF_MS",
+                "PF_ACTIVATION_MAX_RETRIES",
+                "PF_ACTIVATION_JITTER",
+            ] {
+                std::env::remove_var(k);
+            }
+        }
+        let e = ActivationEnv::load_optional();
+        assert_eq!(e.max_cold_start_ms, 60_000);
+        assert_eq!(e.max_retries, 3);
+        assert!(e.jitter);
+    }
+
+    #[test]
+    fn activation_env_overrides() {
+        let _g = env_lock();
+        unsafe {
+            std::env::set_var("PF_ACTIVATION_MAX_RETRIES", "7");
+            std::env::set_var("PF_ACTIVATION_JITTER", "false");
+        }
+        let e = ActivationEnv::load_optional();
+        assert_eq!(e.max_retries, 7);
+        assert!(!e.jitter);
+        unsafe {
+            std::env::remove_var("PF_ACTIVATION_MAX_RETRIES");
+            std::env::remove_var("PF_ACTIVATION_JITTER");
+        }
+    }
+
+    #[test]
+    fn activation_env_invalid_falls_back() {
+        let _g = env_lock();
+        unsafe {
+            std::env::set_var("PF_ACTIVATION_MAX_COLD_START_MS", "not-a-number");
+        }
+        let e = ActivationEnv::load_optional();
+        assert_eq!(e.max_cold_start_ms, 60_000);
+        unsafe {
+            std::env::remove_var("PF_ACTIVATION_MAX_COLD_START_MS");
+        }
+    }
+
+    #[test]
+    fn checkpoint_env_defaults() {
+        let _g = env_lock();
+        unsafe {
+            std::env::remove_var("PF_CHECKPOINT_MODE");
+            std::env::remove_var("PF_CHECKPOINT_ALLOW_MESSAGE_RESPONSE");
+        }
+        let e = CheckpointEnv::load_optional();
+        assert_eq!(e.mode, CheckpointMode::TaskObservable);
+        assert!(!e.allow_message_response);
+    }
+
+    #[test]
+    fn checkpoint_mode_parsing() {
+        let _g = env_lock();
+        unsafe {
+            std::env::set_var("PF_CHECKPOINT_MODE", "state_only");
+        }
+        assert_eq!(
+            CheckpointEnv::load_optional().mode,
+            CheckpointMode::StateOnly
+        );
+        unsafe {
+            std::env::set_var("PF_CHECKPOINT_MODE", "response_control");
+        }
+        assert_eq!(
+            CheckpointEnv::load_optional().mode,
+            CheckpointMode::ResponseControl
+        );
+        unsafe {
+            std::env::set_var("PF_CHECKPOINT_MODE", "unknown_mode");
+        }
+        assert_eq!(
+            CheckpointEnv::load_optional().mode,
+            CheckpointMode::TaskObservable
+        );
+        unsafe {
+            std::env::remove_var("PF_CHECKPOINT_MODE");
+        }
+    }
+
+    #[test]
+    fn checkpoint_allow_message_response_bool() {
+        let _g = env_lock();
+        unsafe {
+            std::env::set_var("PF_CHECKPOINT_ALLOW_MESSAGE_RESPONSE", "true");
+        }
+        assert!(CheckpointEnv::load_optional().allow_message_response);
+        unsafe {
+            std::env::set_var("PF_CHECKPOINT_ALLOW_MESSAGE_RESPONSE", "0");
+        }
+        assert!(!CheckpointEnv::load_optional().allow_message_response);
+        unsafe {
+            std::env::remove_var("PF_CHECKPOINT_ALLOW_MESSAGE_RESPONSE");
+        }
+    }
 }

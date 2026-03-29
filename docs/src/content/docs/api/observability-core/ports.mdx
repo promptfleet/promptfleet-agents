@@ -1,0 +1,183 @@
+---
+title: "ports"
+description: "Ports layer - Abstract interfaces for hexagonal architecture"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+Ports layer - Abstract interfaces for hexagonal architecture
+
+This module defines the ports (interfaces) that the core domain uses
+to interact with the external world. Adapters implement these ports.
+
+## Traits
+
+### `TransportPort`
+
+Port for transporting log entries to external systems
+
+This is the interface that different adapters implement:
+- WasmStdoutAdapter (writes to WASM stdout)
+- HttpTransportAdapter (sends via HTTP)
+- BatchingTransportAdapter (batches entries)
+
+**Required / Provided Methods**
+
+```rust
+fn transport(&self, entry: &LogEntry) -> ObservabilityResult<()>
+```
+
+Transport a single log entry
+
+```rust
+fn transport_batch(&self, entries: &[LogEntry]) -> ObservabilityResult<()>
+```
+
+Transport multiple log entries (for batching)
+
+### `FormatterPort`
+
+Port for formatting log entries
+
+Different formatters can be plugged in:
+- JsonFormatter (structured JSON output)
+- PlainTextFormatter (human-readable text)
+- CompactFormatter (single-line JSON)
+
+**Required / Provided Methods**
+
+```rust
+fn format(&self, entry: &LogEntry) -> ObservabilityResult<String>
+```
+
+Format a log entry into a string
+
+### `StandardLoggingPort`
+
+Port for standard logging integration
+
+This port allows us to hook into standard Rust logging infrastructure:
+- log::Log implementation
+- tracing::Subscriber implementation
+
+**Required / Provided Methods**
+
+```rust
+fn initialize(&self) -> ObservabilityResult<()>
+```
+
+Initialize the logging system (called once during agent startup)
+
+```rust
+fn process_standard_log(&self, entry: LogEntry) -> ObservabilityResult<()>
+```
+
+Process a log entry from standard logging macros
+
+```rust
+fn enabled(&self, level: &LogLevel) -> bool
+```
+
+Check if logging is enabled for this level
+
+### `ContextPort`
+
+Port for accessing context information
+
+This allows the logging system to enrich entries with context:
+- Agent ID, request ID, trace ID
+- User-defined context fields
+- Thread/task local context
+
+**Required / Provided Methods**
+
+```rust
+fn get_context(&self) -> HashMap<String, serde_json::Value>
+```
+
+Get current context fields
+
+```rust
+fn add_context(&self, key: String, value: serde_json::Value)
+```
+
+Add a context field
+
+```rust
+fn remove_context(&self, key: &str)
+```
+
+Remove a context field
+
+```rust
+fn clear_context(&self)
+```
+
+Clear all context
+
+### `BatchingPort`
+
+Port for batching log entries
+
+This allows different batching strategies:
+- TimeBasedBatcher (flush every N seconds)
+- SizeBasedBatcher (flush when buffer reaches N entries)
+- HybridBatcher (combination of time and size)
+
+**Required / Provided Methods**
+
+```rust
+fn add_to_batch(&self, entry: LogEntry) -> ObservabilityResult<()>
+```
+
+Add an entry to the batch
+
+```rust
+fn flush_batch(&self) -> ObservabilityResult<()>
+```
+
+Force flush the current batch
+
+```rust
+fn batch_size(&self) -> usize
+```
+
+Get current batch size
+
+### `MetricsPort`
+
+Port for metrics collection (basic interface for correlation).
+
+**Required / Provided Methods**
+
+```rust
+fn emit_counter_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple counter metric
+
+```rust
+fn emit_histogram_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple histogram/timing metric
+
+```rust
+fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()>
+```
+
+Emit a simple gauge metric
+
+```rust
+fn is_enabled(&self) -> bool
+```
+
+Check if metrics collection is enabled
+
+```rust
+fn emit_metrics_batch(&self, entries: &[MetricsEntry]) -> ObservabilityResult<()>
+```
+
+Batch emit multiple metrics (optional, has default implementation)

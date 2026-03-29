@@ -1,0 +1,156 @@
+---
+title: "history"
+description: "History manager — orchestrates context window management across tiers."
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+History manager — orchestrates context window management across tiers.
+
+The [`HistoryManager`] is the main integration point. It:
+1. Applies a [`ContextStrategy`] to trim history within budget
+2. Optionally injects long-term memories from a [`LongTermMemory`] backend
+3. Optionally summarizes evicted messages via a [`Summarizer`]
+4. Tracks token usage and provides diagnostics
+
+## Type Aliases
+
+### `SummarizerFuture`
+
+```rust
+type SummarizerFuture = Pin<Box<dyn Future + Send>>;
+```
+
+
+## Traits
+
+### `Summarizer`
+
+Trait for summarizing evicted conversation messages.
+
+Implementations can use an LLM or extractive methods to compress
+a sequence of messages into a concise summary.
+
+**Required / Provided Methods**
+
+```rust
+fn summarize(&self, messages: &[serde_json::Value]) -> SummarizerFuture
+```
+
+Summarize the given messages into a single text string.
+
+## Structs
+
+### `ExtractiveSnippets`
+
+Extractive summarizer — no LLM calls, just extracts key content.
+
+Takes the first and last user messages plus any tool results,
+joining them into a brief "Previously:" block.
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `max_chars` | `usize` | Maximum character length of the summary. |
+
+### `HistoryManagerConfig`
+
+Configuration for the [`HistoryManager`].
+
+**Fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `strategy` | `ContextStrategyKind` | Which strategy to use for trimming history. |
+| `enable_summarization` | `bool` | Whether to generate summaries of evicted messages. |
+| `enable_long_term_memory` | `bool` | Whether to query long-term memory for relevant context. |
+| `recall_top_k` | `usize` | Number of long-term memories to inject per turn. |
+| `memory_token_budget` | `u32` | Maximum tokens to allocate for injected long-term memories. |
+
+### `HistoryManager`
+
+Central manager for LLM context window management.
+
+Call [`prepare_messages`](Self::prepare_messages) before each LLM invocation
+to get a trimmed, budget-aware message list. Call
+[`on_turn_complete`](Self::on_turn_complete) after each turn to update
+summaries and store memories.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(config: HistoryManagerConfig) -> Self
+```
+
+Create a new HistoryManager with the given configuration.
+
+#### `with_summarizer`
+
+```rust
+fn with_summarizer(self, summarizer: Arc<dyn Summarizer>) -> Self
+```
+
+Set the summarizer implementation.
+
+#### `with_memory`
+
+```rust
+fn with_memory(self, memory: Arc<dyn LongTermMemory>) -> Self
+```
+
+Set the long-term memory backend.
+
+#### `with_summaries`
+
+```rust
+fn with_summaries(self, summaries: Vec<String>) -> Self
+```
+
+Seed the manager with previously persisted conversation summaries.
+
+#### `prepare_messages`
+
+```rust
+async fn prepare_messages(&self, budget: &ContextBudget, system_message: Option<&str>, history: &[serde_json::Value], current_turn: &[serde_json::Value], memory_filters: &MemoryFilters) -> Vec<serde_json::Value>
+```
+
+Prepare messages for the next LLM invocation.
+
+This is the main entry point. It:
+1. Optionally retrieves relevant long-term memories
+2. Constructs the system message (with memories + summaries)
+3. Applies the context strategy to trim history within budget
+
+Returns the message list ready to be sent to the LLM.
+
+#### `on_turn_complete`
+
+```rust
+async fn on_turn_complete(&mut self, evicted_messages: &[serde_json::Value], agent_id: &str, user_id: Option<&str>, conversation_id: Option<&str>)
+```
+
+Notify the manager that a turn has completed.
+
+If summarization is enabled, this may generate a summary of evicted
+messages and optionally store it in long-term memory.
+
+#### `summaries`
+
+```rust
+fn summaries(&self) -> &[String]
+```
+
+Get accumulated summaries (for diagnostics).
+
+#### `strategy_name`
+
+```rust
+fn strategy_name(&self) -> &''static str
+```
+
+Get the strategy name (for diagnostics).

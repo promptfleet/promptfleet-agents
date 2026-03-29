@@ -7,9 +7,9 @@ use std::sync::Arc;
 use a2a_app_ports::{A2AAppPort, A2AAppPortAsync, AppFuture};
 use a2a_http_server::{A2AHttpServer, AgentCard};
 use a2a_protocol_core::{
+    A2AError, A2AResult,
     data::{Message, MessageRole, Task, TaskState},
     methods::params::{SendMessageRequest, SendMessageResponse},
-    A2AError, A2AResult,
 };
 use axum::http::StatusCode;
 use pf_test_harness::a2a_http::{call_jsonrpc, jsonrpc_body, message_send_body, tasks_get_body};
@@ -234,10 +234,12 @@ async fn test_sync_adapter_failure_maps_to_jsonrpc_error() {
         payload.get("error").is_some(),
         "response must contain JSON-RPC error"
     );
-    assert!(payload["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Internal"));
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Internal")
+    );
 }
 
 #[tokio::test]
@@ -256,8 +258,10 @@ async fn test_async_adapter_failure_maps_to_jsonrpc_error() {
         payload.get("error").is_some(),
         "response must contain JSON-RPC error"
     );
-    assert!(payload["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Internal"));
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Internal")
+    );
 }

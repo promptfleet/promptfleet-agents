@@ -1,0 +1,138 @@
+---
+title: "a2a_http_server"
+description: "# A2A HTTP Server"
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+<Aside type="tip">Auto-generated from rustdoc JSON (format v57). Crate version: 0.1.0.</Aside>
+
+# A2A HTTP Server
+
+**A2A HTTP Server** with WASM default and native testing support
+
+✅ **Target Adaptive**: WASM (Spin SDK) + Native (Axum) with identical APIs
+✅ **Complete Feature Parity**: All A2A protocol methods work identically
+✅ **Testing Excellence**: Native HTTP server for comprehensive testing
+✅ **Clean Architecture**: Protocol instance injection, no global state
+✅ **Comprehensive Logging**: Debug, info, warn, error levels with agent context
+
+## Structs
+
+### `A2AHttpServer`
+
+**A2A HTTP Server** - Native implementation using Axum
+
+Wraps an A2AProtocol instance to provide HTTP transport.
+No global state, pure dependency injection.
+
+**Methods**
+
+#### `new`
+
+```rust
+fn new(protocol: A2AProtocol) -> Self
+```
+
+Create new HTTP server with protocol instance
+
+#### `new_with_a2a_methods`
+
+```rust
+fn new_with_a2a_methods(agent_card: AgentCard) -> Self
+```
+
+**Recommended Constructor**: Create HTTP server with full A2A standard methods
+
+#### `with_app_adapter`
+
+```rust
+fn with_app_adapter(self, app: Arc<dyn a2a_app_ports::A2AAppPort>) -> Self
+```
+
+Attach application adapter (SDK) for delegation of selected methods
+
+#### `with_app_adapter_async`
+
+```rust
+fn with_app_adapter_async(self, app: Arc<dyn a2a_app_ports::A2AAppPortAsync>) -> Self
+```
+
+Attach async application adapter (SDK) for delegation of selected methods
+
+#### `new_with_storage`
+
+```rust
+fn new_with_storage(agent_card: AgentCard, storage: Arc<dyn TaskStorage>) -> Self
+```
+
+Create HTTP server with custom task storage
+
+#### `agent_id`
+
+```rust
+fn agent_id(&self) -> &str
+```
+
+Get agent ID (for testing)
+
+#### `can_serve`
+
+```rust
+fn can_serve(&self) -> bool
+```
+
+Check if server can serve (for testing)
+
+#### `build_router`
+
+```rust
+fn build_router(self) -> Router
+```
+
+**BUILD AXUM ROUTER**: Create router for native HTTP serving
+
+#### `serve`
+
+```rust
+async fn serve(self, addr: &str) -> Result<()>
+```
+
+**START SERVER**: Start the server on given address (for testing)
+
+#### `serve_request`
+
+```rust
+async fn serve_request(&self, method: &str, path: &str, headers: HeaderMap, body: Vec<u8>) -> Result<(StatusCode, HeaderMap, Vec<u8>)>
+```
+
+**SERVE REQUEST SIMULATION**: For API compatibility testing
+
+## Functions
+
+### `init_logging`
+
+```rust
+fn init_logging(component_name: &str)
+```
+
+Initialize logging for A2A HTTP Server
+
+This is a convenience function that can be called by applications
+to ensure proper logging is configured for the A2A HTTP server.
+
+# Arguments
+* `component_name` - Name of the component (typically the agent name)
+
+# Example
+```
+a2a_http_server::init_logging("my-agent");
+```
+
+### `log_server_info`
+
+```rust
+fn log_server_info(agent_id: &str)
+```
+
+Log server creation with target information

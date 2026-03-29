@@ -17,13 +17,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use web_time::SystemTime;
 
 use observability_core::{
+    LogEntry,
     domain::{LogSource, TraceContext},
     traits::LogLevel,
-    LogEntry,
 };
 
 // Now we can use chrono directly since it's in our Cargo.toml
@@ -370,14 +370,15 @@ impl PanicHandler {
 
     /// Reset panic statistics
     pub fn reset_stats(&self) -> Result<()> {
-        if let Ok(mut stats) = self.stats.lock() {
-            *stats = PanicStats::default();
-            log::info!("📊 Panic statistics reset");
-            Ok(())
-        } else {
-            Err(StructuredLoggingError::enhanced_config(
+        match self.stats.lock() {
+            Ok(mut stats) => {
+                *stats = PanicStats::default();
+                log::info!("📊 Panic statistics reset");
+                Ok(())
+            }
+            _ => Err(StructuredLoggingError::enhanced_config(
                 "Failed to acquire stats lock",
-            ))
+            )),
         }
     }
 }
@@ -411,9 +412,9 @@ pub fn reset_panic_stats() -> Result<()> {
 /// Macro for supervised execution with panic capturing
 #[macro_export]
 macro_rules! supervised {
-    ($body:expr) => {{
+    ($body:expr_2021) => {{
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)).map_err(|_| {
-            crate::StructuredLoggingError::enhanced_config("Supervised operation panicked")
+            $crate::StructuredLoggingError::enhanced_config("Supervised operation panicked")
         })
     }};
 }

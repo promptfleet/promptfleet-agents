@@ -1,7 +1,10 @@
 [package]
 name = "llm_context_core"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "WASM-compatible LLM context window management — token estimation, budget tracking, history strategies, and memory traits"
 
 [lib]

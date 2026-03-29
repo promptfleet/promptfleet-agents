@@ -9,7 +9,7 @@
 //! remain unchanged.
 
 use crate::runtime_vars::CheckpointMode;
-use llm_client::model_client::ModelClient;
+use llm_client::{LlmClient, LlmRequest, LlmResponse};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -17,11 +17,10 @@ use std::sync::Arc;
 // ---------------------------------------------------------------------------
 
 #[cfg(target_arch = "wasm32")]
-type LlmFuture =
-    std::pin::Pin<Box<dyn core::future::Future<Output = Result<serde_json::Value, String>>>>;
+type LlmFuture = std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>>>>;
 #[cfg(not(target_arch = "wasm32"))]
 type LlmFuture =
-    std::pin::Pin<Box<dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send>>;
+    std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // Request-response invoker (WASM + native)
@@ -29,7 +28,7 @@ type LlmFuture =
 
 /// Object-safe invoker to call provider-agnostic LLMs
 pub trait LlmInvoker: Send + Sync {
-    fn request(&self, payload: serde_json::Value) -> LlmFuture;
+    fn request(&self, req: LlmRequest) -> LlmFuture;
 }
 
 /// Conversion trait: let users pass concrete clients directly
@@ -46,26 +45,26 @@ where
     }
 }
 
-impl IntoLlmInvoker for llm_client::providers::OpenAIClient {
+impl IntoLlmInvoker for LlmClient {
     fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::OpenAIClient>);
+        struct C(LlmClient);
         impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+            fn request(&self, req: LlmRequest) -> LlmFuture {
                 let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+                Box::pin(async move { inner.chat(req).await.map_err(|e| e.to_string()) })
             }
         }
-        Arc::new(C(Arc::new(self)))
+        Arc::new(C(self))
     }
 }
 
-impl IntoLlmInvoker for Arc<llm_client::providers::OpenAIClient> {
+impl IntoLlmInvoker for Arc<LlmClient> {
     fn into_invoker(self) -> Arc<dyn LlmInvoker> {
-        struct C(Arc<llm_client::providers::OpenAIClient>);
+        struct C(Arc<LlmClient>);
         impl LlmInvoker for C {
-            fn request(&self, payload: serde_json::Value) -> LlmFuture {
+            fn request(&self, req: LlmRequest) -> LlmFuture {
                 let inner = self.0.clone();
-                Box::pin(async move { inner.llm_request(payload).await.map_err(|e| e.to_string()) })
+                Box::pin(async move { inner.chat(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(C(self))
@@ -86,13 +85,9 @@ pub type LlmStreamFuture = std::pin::Pin<
 >;
 
 /// Object-safe invoker that returns a streaming event stream.
-///
-/// This is the streaming counterpart of [`LlmInvoker`]. Implementations
-/// must convert a raw JSON payload into an `LlmRequest` and call the
-/// provider's streaming endpoint.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait LlmStreamInvoker: Send + Sync {
-    fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture;
+    fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture;
 }
 
 /// Conversion trait: let users pass concrete clients directly.
@@ -102,40 +97,27 @@ pub trait IntoLlmStreamInvoker {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for llm_client::providers::OpenAIClient {
+impl IntoLlmStreamInvoker for LlmClient {
     fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::OpenAIClient>);
+        struct S(LlmClient);
         impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+            fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
-                    // Use llm_stream_raw to bypass LlmRequest deserialization.
-                    // The orchestrator builds payloads with tool_calls, tool_call_id,
-                    // and nullable content that ChatMessage cannot represent.
-                    inner
-                        .llm_stream_raw(payload)
-                        .await
-                        .map_err(|e| e.to_string())
-                })
+                Box::pin(async move { inner.chat_stream(req).await.map_err(|e| e.to_string()) })
             }
         }
-        Arc::new(S(Arc::new(self)))
+        Arc::new(S(self))
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl IntoLlmStreamInvoker for Arc<llm_client::providers::OpenAIClient> {
+impl IntoLlmStreamInvoker for Arc<LlmClient> {
     fn into_stream_invoker(self) -> Arc<dyn LlmStreamInvoker> {
-        struct S(Arc<llm_client::providers::OpenAIClient>);
+        struct S(Arc<LlmClient>);
         impl LlmStreamInvoker for S {
-            fn request_stream(&self, payload: serde_json::Value) -> LlmStreamFuture {
+            fn request_stream(&self, req: LlmRequest) -> LlmStreamFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
-                    inner
-                        .llm_stream_raw(payload)
-                        .await
-                        .map_err(|e| e.to_string())
-                })
+                Box::pin(async move { inner.chat_stream(req).await.map_err(|e| e.to_string()) })
             }
         }
         Arc::new(S(self))
@@ -154,7 +136,9 @@ impl IntoLlmStreamInvoker for Arc<llm_client::providers::OpenAIClient> {
 /// temperature stripped and max_tokens remapped to max_completion_tokens.
 #[derive(Debug, Clone, Default)]
 pub struct LlmRequestDefaults {
+    /// Sampling temperature; merged into the request when set.
     pub temperature: Option<f32>,
+    /// Maximum completion tokens; merged when set (may be remapped by model profiles).
     pub max_tokens: Option<u32>,
     /// Extra top-level JSON fields (e.g. reasoning_effort, chat_template_kwargs).
     /// These are merged last and can override anything.
@@ -168,25 +152,32 @@ pub struct LlmRequestDefaults {
 // Policy
 // ---------------------------------------------------------------------------
 
-/// Minimal policy for MVP
+/// Tool-loop limits, checkpoint behavior, and context-window policy for the LLM orchestrator.
 #[derive(Debug, Clone)]
 pub struct LlmPolicy {
+    /// When true, require a finalization checkpoint turn when the model would otherwise stop.
     pub finalize_required: bool,
+    /// Stop after this many consecutive tool failures.
     pub max_failed_tool_calls: usize,
-    // New decoupled limits
+    /// Cap total LLM turns; `None` means no limit.
     pub max_turns: Option<usize>,
+    /// Cap total tool invocations; `None` means no limit.
     pub max_tool_calls: Option<usize>,
+    /// Abort after this many consecutive turns without progress; `None` disables.
     pub max_no_progress_turns: Option<usize>,
+    /// Wall-clock timeout for the whole run (milliseconds); `None` disables.
     pub wall_clock_timeout_ms: Option<u64>,
-    // checkpoint_task gating (runtime-configurable)
+    /// How `checkpoint_task` is exposed to the protocol (see [`crate::runtime_vars::CheckpointMode`]).
     pub checkpoint_mode: CheckpointMode,
+    /// Allow plain message responses during checkpoint turns.
     pub checkpoint_allow_message_response: bool,
+    /// Mirror internal agent state into task metadata during checkpoints.
     pub checkpoint_mirror_internal_state_to_task_meta: bool,
     /// Maximum tokens for the context window (input messages + tools).
     ///
     /// When set, the orchestrator trims the message history using a sliding
     /// window before each LLM call to stay within this budget. Derived from
-    /// [`ModelCapabilities::context_window`] minus output reservation.
+    /// [`llm_client::profile::ModelCapabilities::context_window`] minus output reservation.
     ///
     /// When `None`, messages accumulate unboundedly (legacy behavior).
     pub max_context_tokens: Option<u32>,
@@ -206,5 +197,45 @@ impl Default for LlmPolicy {
             checkpoint_mirror_internal_state_to_task_meta: true,
             max_context_tokens: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IntoLlmInvoker, IntoLlmStreamInvoker, LlmPolicy, LlmRequestDefaults};
+    use llm_client::{LlmClient, WireFormat};
+
+    #[test]
+    fn llm_policy_default() {
+        let p = LlmPolicy::default();
+        assert!(p.finalize_required);
+        assert_eq!(p.max_failed_tool_calls, 5);
+    }
+
+    #[test]
+    fn llm_request_defaults_default_empty() {
+        let d = LlmRequestDefaults::default();
+        assert!(d.temperature.is_none());
+        assert!(d.extensions.is_none());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn llm_client_into_invokers() {
+        use llm_client::auth::ApiKeyAuth;
+        let client = LlmClient::builder(WireFormat::OpenAiCompat)
+            .base_url("http://localhost:9")
+            .auth(ApiKeyAuth::new("test-key"))
+            .build()
+            .expect("client");
+        let _ = client.clone().into_invoker();
+        let _ = std::sync::Arc::new(client).into_invoker();
+        let client2 = LlmClient::builder(WireFormat::OpenAiCompat)
+            .base_url("http://localhost:9")
+            .auth(ApiKeyAuth::new("test-key"))
+            .build()
+            .expect("client");
+        let _ = client2.clone().into_stream_invoker();
+        let _ = std::sync::Arc::new(client2).into_stream_invoker();
     }
 }

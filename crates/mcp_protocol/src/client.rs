@@ -5,13 +5,15 @@
 
 use crate::{
     AuthHandler, CallToolResult, ClientCapabilities, ClientInfo, InitializeRequest, JsonRpcError,
-    JsonRpcRequest, JsonRpcResponse, ListToolsResult, Tool, ToolCapabilities, MCP_PROTOCOL_VERSION,
+    JsonRpcRequest, JsonRpcResponse, ListToolsResult, MCP_PROTOCOL_VERSION, Tool, ToolCapabilities,
 };
 use protocol_transport_core::{ProtocolError, TransportError};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+#[cfg(feature = "sse-client")]
+use crate::ToolProvider;
 #[cfg(feature = "sse-client")]
 use protocol_transport_core::{SseTransport, Transport, TransportFactory, UniversalRequest};
 
@@ -284,7 +286,7 @@ impl StreamableHttpClientTransport {
 
         #[cfg(target_arch = "wasm32")]
         {
-            use spin_sdk::http::{send, Method, Request as SpinRequest, Response as SpinResponse};
+            use spin_sdk::http::{Method, Request as SpinRequest, Response as SpinResponse, send};
 
             let mut builder = SpinRequest::builder();
             builder.method(Method::Post);
@@ -423,11 +425,9 @@ fn parse_sse_jsonrpc_response(body: &[u8]) -> Result<JsonRpcResponse, ProtocolEr
         }
     }
 
-    Err(ProtocolError::Parsing(
-        format!(
-            "event-stream response did not contain an MCP JSON-RPC payload; legacy SSE-only endpoints are unsupported; body={text:?}"
-        ),
-    ))
+    Err(ProtocolError::Parsing(format!(
+        "event-stream response did not contain an MCP JSON-RPC payload; legacy SSE-only endpoints are unsupported; body={text:?}"
+    )))
 }
 
 /// **MCP Client** - Connect to MCP servers
@@ -768,16 +768,16 @@ impl McpClientBuilder {
 mod tests {
     use super::*;
     use axum::{
+        Json, Router,
         body::Bytes,
         extract::State,
         http::{HeaderMap, HeaderValue, StatusCode},
         response::IntoResponse,
         routing::post,
-        Json, Router,
     };
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
     use tokio::net::TcpListener;
 
@@ -965,9 +965,11 @@ mod tests {
         let client = McpClient::new().with_streamable_http_server(&url);
         let error = client.list_tools_async().await.expect_err("should fail");
 
-        assert!(error
-            .to_string()
-            .contains("legacy SSE-only endpoints are unsupported"));
+        assert!(
+            error
+                .to_string()
+                .contains("legacy SSE-only endpoints are unsupported")
+        );
 
         handle.abort();
     }

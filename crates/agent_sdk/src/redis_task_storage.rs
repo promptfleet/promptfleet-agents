@@ -11,10 +11,10 @@ mod inner {
     use crate::agent::task_store::{ContinuationSnapshot, RuntimeTaskStore};
     use crate::error::{SdkError, SdkResult};
     use a2a_protocol_core::{
+        A2AError, A2AResult,
         data::message::Message,
         data::task::Task,
         services::{ConversationContext, TaskStorage},
-        A2AError, A2AResult,
     };
     use redis::{Client, Commands, Connection};
 

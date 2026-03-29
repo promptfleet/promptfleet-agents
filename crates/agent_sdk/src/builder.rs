@@ -5,7 +5,7 @@
 use crate::{Agent, SdkError, SdkResult};
 
 #[cfg(feature = "config-loader")]
-use pf_config::{load_config_untyped, LoadOptions};
+use pf_config::{LoadOptions, load_config_untyped};
 
 #[cfg(feature = "agent-observability")]
 use observability::{Obs, ObservabilityConfig as ObsConfig};
@@ -13,7 +13,7 @@ use observability::{Obs, ObservabilityConfig as ObsConfig};
 #[cfg(feature = "agent-observability")]
 use crate::ObservabilityRuntime;
 #[cfg(feature = "context-window")]
-use llm_context_core::{history::Summarizer, LongTermMemory};
+use llm_context_core::{LongTermMemory, history::Summarizer};
 /// Fluent builder to construct the protocol-neutral [`crate::Agent`] runtime.
 pub struct AgentBuilder {
     config: crate::agent::config::AgentConfig,
@@ -27,6 +27,35 @@ pub struct AgentBuilder {
 }
 
 impl AgentBuilder {
+    /// Build from an in-memory [`crate::agent::config::AgentConfig`] (no JSON file required).
+    pub fn from_config(config: crate::agent::config::AgentConfig) -> SdkResult<Self> {
+        if config.name.is_empty() {
+            return Err(SdkError::invalid_input("Agent name cannot be empty"));
+        }
+        if config.max_message_size == 0 {
+            return Err(SdkError::invalid_input(
+                "Max message size must be greater than zero",
+            ));
+        }
+        Ok(Self {
+            config,
+            timeout_policy: Some(crate::timeout_policy::TimeoutPolicy::streaming_default()),
+            #[cfg(feature = "context-window")]
+            history_summarizer: None,
+            #[cfg(feature = "context-window")]
+            history_memory: None,
+            #[cfg(feature = "agent-observability")]
+            obs_config: None,
+        })
+    }
+
+    /// Minimal builder with default [`crate::agent::config::AgentConfig`] except `name`.
+    pub fn new(name: &str) -> SdkResult<Self> {
+        let mut config = crate::agent::config::AgentConfig::default();
+        config.name = name.to_string();
+        Self::from_config(config)
+    }
+
     pub fn from_config_path(path: &str) -> SdkResult<Self> {
         #[cfg(not(feature = "config-loader"))]
         {
@@ -54,11 +83,7 @@ impl AgentBuilder {
                 let is_default = obs_cfg.service_name == ObsConfig::default().service_name
                     && !obs_cfg.otel.enabled
                     && !obs_cfg.prometheus.enabled;
-                if is_default {
-                    None
-                } else {
-                    Some(obs_cfg)
-                }
+                if is_default { None } else { Some(obs_cfg) }
             };
 
             Ok(Self {
@@ -183,4 +208,71 @@ fn agent_config_from_value(root: &serde_json::Value) -> crate::agent::config::Ag
         }
     }
     cfg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_config_valid_builds_agent() {
+        let mut cfg = crate::agent::config::AgentConfig::default();
+        cfg.name = "builder-test".to_string();
+        let agent = AgentBuilder::from_config(cfg).unwrap().build().unwrap();
+        assert_eq!(agent.config().name, "builder-test");
+    }
+
+    #[test]
+    fn new_sets_name() {
+        let agent = AgentBuilder::new("hello-agent").unwrap().build().unwrap();
+        assert_eq!(agent.config().name, "hello-agent");
+    }
+
+    #[test]
+    fn from_config_rejects_empty_name() {
+        let mut cfg = crate::agent::config::AgentConfig::default();
+        cfg.name = String::new();
+        assert!(AgentBuilder::from_config(cfg).is_err());
+    }
+
+    #[test]
+    fn with_timeout_policy_propagates() {
+        let policy = crate::timeout_policy::TimeoutPolicy::streaming_default();
+        let b = AgentBuilder::new("t")
+            .unwrap()
+            .with_timeout_policy(policy.clone());
+        assert!(b.timeout_policy().is_some());
+    }
+
+    #[cfg(all(feature = "config-loader", not(target_arch = "wasm32")))]
+    #[test]
+    fn from_config_path_valid_json() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            tmp,
+            r#"{{"agent":{{"name":"file-agent","max_message_size":1048576,"description":"d"}}}}"#
+        )
+        .unwrap();
+        let path = tmp.path().to_str().unwrap();
+        let agent = AgentBuilder::from_config_path(path)
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(agent.config().name, "file-agent");
+    }
+
+    #[cfg(all(feature = "config-loader", not(target_arch = "wasm32")))]
+    #[test]
+    fn from_config_path_invalid_json_returns_error() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp, "{}", r#"not valid json {"#).unwrap();
+        let path = tmp.path().to_str().unwrap();
+        let err = AgentBuilder::from_config_path(path);
+        assert!(
+            err.is_err(),
+            "expected configuration error for invalid JSON"
+        );
+    }
 }

@@ -129,11 +129,9 @@ pub fn normalize_name(input: &str) -> Result<String, TypeError> {
                 out.push('-');
                 last_was_sep = true;
             }
-        } else {
-            if !last_was_sep {
-                out.push('-');
-                last_was_sep = true;
-            }
+        } else if !last_was_sep {
+            out.push('-');
+            last_was_sep = true;
         }
     }
     let normalized = out.trim_matches(['-', '.']).to_string();

@@ -8,21 +8,16 @@ use crate::tokens;
 use serde::{Deserialize, Serialize};
 
 /// Selects which context strategy to use (serializable for config).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ContextStrategyKind {
     /// Keep the most recent messages that fit within budget.
+    #[default]
     SlidingWindow,
     /// Sliding window, but prepend a summary of evicted messages.
     SlidingWindowWithSummary,
     /// Score messages by importance; keep highest-scoring within budget.
     PriorityBased,
-}
-
-impl Default for ContextStrategyKind {
-    fn default() -> Self {
-        Self::SlidingWindow
-    }
 }
 
 /// Trait for context window management strategies.
@@ -87,7 +82,7 @@ impl ContextStrategy for SlidingWindow {
         };
 
         let system_tokens = system_msg
-            .map(|m| tokens::estimate_message_json_tokens(m))
+            .map(tokens::estimate_message_json_tokens)
             .unwrap_or(0);
         let remaining_budget = budget_tokens.saturating_sub(system_tokens);
 

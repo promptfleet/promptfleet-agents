@@ -8,7 +8,7 @@ use observability_core::{LogEntry, ObservabilityConfig, ObservabilityManager};
 use serde::{Deserialize, Serialize};
 
 /// Enhanced configuration for structured logging with performance and convenience features
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnhancedObservabilityConfig {
     /// Base observability configuration
     pub base: ObservabilityConfig,
@@ -132,25 +132,6 @@ impl Default for ConvenienceConfig {
             enable_a2a_logging: true,
             enable_convenience_macros: true,
             enable_domain_fields: true,
-        }
-    }
-}
-
-impl Default for EnhancedObservabilityConfig {
-    fn default() -> Self {
-        Self {
-            base: ObservabilityConfig::default(),
-
-            #[cfg(feature = "performance-optimized")]
-            performance: PerformanceConfig::default(),
-
-            #[cfg(feature = "correlation-enhanced")]
-            correlation: CorrelationConfig::default(),
-
-            #[cfg(feature = "convenience")]
-            convenience: ConvenienceConfig::default(),
-
-            panic_handler: crate::panic_handler::PanicHandlerConfig::default(),
         }
     }
 }

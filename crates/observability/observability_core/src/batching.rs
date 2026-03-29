@@ -273,11 +273,9 @@ where
             if self.drop_on_overflow {
                 self.dropped_count.fetch_add(1, Ordering::Relaxed);
                 return false;
-            } else {
-                if let Some(old_item) = self.buffer.pop_front() {
-                    let old_size = old_item.estimated_size();
-                    self.current_memory.fetch_sub(old_size, Ordering::Relaxed);
-                }
+            } else if let Some(old_item) = self.buffer.pop_front() {
+                let old_size = old_item.estimated_size();
+                self.current_memory.fetch_sub(old_size, Ordering::Relaxed);
             }
         }
 

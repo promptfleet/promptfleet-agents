@@ -91,7 +91,7 @@ where
 {
     let resource = setup();
     let _guard = guard(resource, cleanup);
-    work(&_guard.resource())
+    work(_guard.resource())
 }
 
 #[cfg(test)]

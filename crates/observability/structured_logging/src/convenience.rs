@@ -387,6 +387,12 @@ impl DomainContextProcessor {
     }
 }
 
+impl Default for DomainContextProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogProcessor for DomainContextProcessor {
     fn process(&self, entry: LogEntry) -> observability_core::ObservabilityResult<LogEntry> {
         let mut enhanced_entry = entry;

@@ -8,20 +8,15 @@ use crate::AgentMessage;
 /// Simplified task lifecycle phase.
 ///
 /// Maps to A2A `TaskState` and can represent any protocol's task lifecycle.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskPhase {
+    #[default]
     Pending,
     Working,
     Completed,
     Failed,
     Cancelled,
-}
-
-impl Default for TaskPhase {
-    fn default() -> Self {
-        Self::Pending
-    }
 }
 
 /// Protocol-agnostic conversation context.

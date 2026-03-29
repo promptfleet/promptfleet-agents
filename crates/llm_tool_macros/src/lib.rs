@@ -56,34 +56,31 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let mut call_args = Vec::new();
     let mut has_context_param = false;
     for (idx, input) in inputs.iter().enumerate() {
-        match input {
-            syn::FnArg::Typed(pt) => {
-                let pat = &pt.pat;
-                let ty = &pt.ty;
-                let is_context = match &**ty {
-                    syn::Type::Path(tp) => tp
-                        .path
-                        .segments
-                        .last()
-                        .map(|seg| seg.ident == "ToolContext")
-                        .unwrap_or(false),
-                    _ => false,
-                };
+        if let syn::FnArg::Typed(pt) = input {
+            let pat = &pt.pat;
+            let ty = &pt.ty;
+            let is_context = match &**ty {
+                syn::Type::Path(tp) => tp
+                    .path
+                    .segments
+                    .last()
+                    .map(|seg| seg.ident == "ToolContext")
+                    .unwrap_or(false),
+                _ => false,
+            };
 
-                if is_context {
-                    has_context_param = true;
-                    call_args.push(quote! { <#ty as Default>::default() });
-                    continue;
-                }
-
-                let field_ident = match &**pat {
-                    syn::Pat::Ident(pi) => pi.ident.clone(),
-                    _ => format_ident!("arg{}", idx),
-                };
-                fields.push(quote! { pub #field_ident: #ty });
-                call_args.push(quote! { parsed.#field_ident });
+            if is_context {
+                has_context_param = true;
+                call_args.push(quote! { <#ty as Default>::default() });
+                continue;
             }
-            _ => {}
+
+            let field_ident = match &**pat {
+                syn::Pat::Ident(pi) => pi.ident.clone(),
+                _ => format_ident!("arg{}", idx),
+            };
+            fields.push(quote! { pub #field_ident: #ty });
+            call_args.push(quote! { parsed.#field_ident });
         }
     }
 

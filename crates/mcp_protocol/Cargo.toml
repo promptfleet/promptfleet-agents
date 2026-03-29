@@ -1,7 +1,10 @@
 [package]
 name = "mcp_protocol"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Model Context Protocol (MCP) implementation for PromptFleet - JSON-RPC 2.0 compatible"
 
 [dependencies]

@@ -2068,7 +2068,7 @@ dependencies = [
  "log",
  "observability_core",
  "otel",
- "prometheus 0.1.0",
+ "pf_prometheus",
  "serde",
  "serde_json",
  "web-time",
@@ -2084,7 +2084,7 @@ dependencies = [
  "log",
  "opentelemetry 0.21.0",
  "opentelemetry-semantic-conventions 0.13.0",
- "prometheus 0.13.4",
+ "prometheus",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2361,7 +2361,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pf-types"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2388,6 +2388,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "pf_prometheus"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hashbrown 0.14.5",
+ "indexmap 2.13.0",
+ "js-sys",
+ "log",
+ "observability_core",
+ "prometheus",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "string-interner",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+ "uuid",
+ "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]
@@ -2566,30 +2590,6 @@ dependencies = [
  "tokio",
  "tracing",
  "windows",
-]
-
-[[package]]
-name = "prometheus"
-version = "0.1.0"
-dependencies = [
- "futures",
- "hashbrown 0.14.5",
- "indexmap 2.13.0",
- "js-sys",
- "log",
- "observability_core",
- "prometheus 0.13.4",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "string-interner",
- "thiserror 1.0.69",
- "tokio",
- "url",
- "uuid",
- "wasm-bindgen",
- "web-time",
 ]
 
 [[package]]

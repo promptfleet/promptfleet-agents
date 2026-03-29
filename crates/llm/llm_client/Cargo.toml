@@ -1,7 +1,10 @@
 [package]
 name = "llm_client"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Simplified, provider-agnostic LLM client built on protocol_transport_core"
 
 [dependencies]

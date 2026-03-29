@@ -1,9 +1,11 @@
 [package]
 name = "structured_logging"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Enhanced structured logging with performance optimizations and convenience APIs for SpinKube agents"
-license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

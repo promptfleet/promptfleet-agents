@@ -1,7 +1,11 @@
 [package]
 name = "umao_agents"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
 description = "UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor backed by agent_sdk."
 keywords = ["umao", "promptfleet", "coordination", "multi-agent", "a2a"]
 categories = ["network-programming", "asynchronous"]

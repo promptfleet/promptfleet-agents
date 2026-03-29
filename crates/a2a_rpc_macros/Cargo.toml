@@ -1,8 +1,11 @@
 [package]
 name = "a2a_rpc_macros"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
-description = "[Experimental] Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Proc-macro for automatic A2A JSON-RPC command registration - WASM optimized with async support"
 
 [lib]
 proc-macro = true

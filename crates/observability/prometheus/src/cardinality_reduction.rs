@@ -2,7 +2,7 @@
 
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
-use string_interner::{backend::StringBackend, DefaultSymbol, StringInterner};
+use string_interner::{DefaultSymbol, StringInterner, backend::StringBackend};
 
 /// Cardinality reducer to optimize metric label combinations
 pub struct CardinalityReducer {

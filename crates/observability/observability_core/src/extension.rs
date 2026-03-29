@@ -223,7 +223,7 @@ impl ObservabilityConfig {
                 return Err(ObservabilityError::configuration(format!(
                     "Invalid format: {}. Must be 'json', 'compact', or 'plain'",
                     self.format
-                )))
+                )));
             }
         }
 

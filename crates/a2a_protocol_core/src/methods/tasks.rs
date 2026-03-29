@@ -1,10 +1,10 @@
 //! A2A v1.0 Task Management Methods
 
 use crate::{
+    A2AResult, JsonRpcRequest, JsonRpcResponse,
     data::task::{Task, TaskState},
     methods::params::{CancelTaskRequest, GetTaskRequest, ListTasksRequest, ListTasksResponse},
     services::TaskStorage,
-    A2AResult, JsonRpcRequest, JsonRpcResponse,
 };
 use std::sync::Arc;
 
@@ -327,7 +327,11 @@ mod tests {
         let task_id = task.id.clone();
         storage.store_task(task).unwrap();
 
-        let request = JsonRpcRequest::new(json!("req"), "CancelTask".to_string(), json!({"id": task_id}));
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "CancelTask".to_string(),
+            json!({"id": task_id}),
+        );
         assert!(handle_tasks_cancel(request, storage).is_err());
     }
 
@@ -339,18 +343,18 @@ mod tests {
         let task_id = task.id.clone();
         storage.store_task(task).unwrap();
 
-        let request = JsonRpcRequest::new(json!("req"), "CancelTask".to_string(), json!({"id": task_id}));
+        let request = JsonRpcRequest::new(
+            json!("req"),
+            "CancelTask".to_string(),
+            json!({"id": task_id}),
+        );
         assert!(handle_tasks_cancel(request, storage).is_err());
     }
 
     #[test]
     fn test_get_task_empty_id_returns_error() {
         let storage = Arc::new(InMemoryTaskStorage::new());
-        let request = JsonRpcRequest::new(
-            json!("req"),
-            "GetTask".to_string(),
-            json!({"id": ""}),
-        );
+        let request = JsonRpcRequest::new(json!("req"), "GetTask".to_string(), json!({"id": ""}));
         assert!(handle_tasks_get(request, storage).is_err());
     }
 }

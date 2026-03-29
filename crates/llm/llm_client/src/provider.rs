@@ -8,18 +8,15 @@ use std::future::Future;
 use std::pin::Pin;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type ChatFuture<'a> = Pin<
-    Box<dyn Future<Output = Result<LlmResponse, LlmError>> + Send + 'a>,
->;
+pub(crate) type ChatFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<LlmResponse, LlmError>> + Send + 'a>>;
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) type ChatFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<LlmResponse, LlmError>> + 'a>>;
+pub(crate) type ChatFuture<'a> = Pin<Box<dyn Future<Output = Result<LlmResponse, LlmError>> + 'a>>;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type ChatStreamFuture<'a> = Pin<
-    Box<dyn Future<Output = Result<LlmEventStream, LlmError>> + Send + 'a>,
->;
+pub(crate) type ChatStreamFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<LlmEventStream, LlmError>> + Send + 'a>>;
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) type ChatStreamFuture<'a> =

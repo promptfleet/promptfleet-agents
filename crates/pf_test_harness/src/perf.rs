@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use agent_sdk::a2a::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
+use agent_sdk::a2a::{A2aSseContext, a2a_sse_stream, map_trace_to_stream_response};
 use agent_sdk::agent::engine::{
     EngineConfig, EngineError, EngineResult, RequestResponseTurnInvoker, StreamingTurnInvoker,
 };
@@ -12,10 +12,10 @@ use agent_sdk::agent::tools::{ToolExecutionResult, ToolRegistry};
 use agent_sdk::agent::trace::AgentTraceEvent;
 use agent_sdk::agent::{MessageContext, TaskContext, ToolContext};
 use agent_sdk::agent_core::{AgentMessage, ContentPart, Role};
-use agent_sdk::agui::{agent_io_sse_stream, map_trace_to_agent_io, AgentIoEvent, IoEventContext};
+use agent_sdk::agui::{AgentIoEvent, IoEventContext, agent_io_sse_stream, map_trace_to_agent_io};
 use axum::response::IntoResponse;
 use llm_client::ChatMessage;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::pipeline::InvokerMode;
 use crate::scenario::LlmScenario;

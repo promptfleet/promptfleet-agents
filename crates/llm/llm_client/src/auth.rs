@@ -44,10 +44,7 @@ impl ApiKeyAuth {
 
 impl AuthProvider for ApiKeyAuth {
     fn authorize(&self, headers: &mut HashMap<String, String>) -> Result<(), LlmError> {
-        headers.insert(
-            "authorization".to_string(),
-            format!("Bearer {}", self.key),
-        );
+        headers.insert("authorization".to_string(), format!("Bearer {}", self.key));
         Ok(())
     }
 }

@@ -10,13 +10,13 @@ use std::sync::{Arc, Mutex};
 
 use a2a_protocol_core::data::{Message, MessageRole, Part, TaskState, TaskStatus};
 use a2a_protocol_core::streaming::{StreamResponse, TaskStatusUpdateEvent};
+use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::header;
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::Router;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 

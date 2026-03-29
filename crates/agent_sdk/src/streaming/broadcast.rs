@@ -1,5 +1,5 @@
 use tokio::sync::broadcast;
-use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 #[derive(Clone)]
 pub struct StreamBroadcast<E: Clone + Send + 'static> {

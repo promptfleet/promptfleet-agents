@@ -11,7 +11,7 @@ use string_interner_crate::StringInterner;
 use crate::error::{Result, StructuredLoggingError};
 use crate::extension::PerformanceConfig;
 use observability_core::domain::TraceContext;
-use observability_core::{traits::LogLevel, LogEntry, TransportPort};
+use observability_core::{LogEntry, TransportPort, traits::LogLevel};
 use serde_json::Value;
 
 /// Performance statistics for monitoring optimization impact
@@ -103,7 +103,9 @@ impl StringInterningProcessor {
                 let resolved = interner
                     .resolve(sym)
                     .ok_or_else(|| {
-                        StructuredLoggingError::string_interning("Failed to resolve interned symbol")
+                        StructuredLoggingError::string_interning(
+                            "Failed to resolve interned symbol",
+                        )
                     })?
                     .to_string();
                 return Ok(resolved);
@@ -120,7 +122,9 @@ impl StringInterningProcessor {
                 let resolved = interner
                     .resolve(sym)
                     .ok_or_else(|| {
-                        StructuredLoggingError::string_interning("Failed to resolve interned symbol")
+                        StructuredLoggingError::string_interning(
+                            "Failed to resolve interned symbol",
+                        )
                     })?
                     .to_string();
                 return Ok(resolved);

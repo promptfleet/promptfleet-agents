@@ -78,7 +78,6 @@ pub mod a2a_error_codes {
     pub const AUTHORIZATION_FAILED: i64 = -32051;
     pub const RATE_LIMIT_EXCEEDED: i64 = -32052;
     pub const CAPACITY_EXCEEDED: i64 = -32053;
-
 }
 
 impl A2AError {

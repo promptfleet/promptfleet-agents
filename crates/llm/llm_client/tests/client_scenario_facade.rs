@@ -3,10 +3,10 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use futures::StreamExt;
+use llm_client::StreamEvent;
 use llm_client::auth::ApiKeyAuth;
 use llm_client::client::{LlmClient, WireFormat};
 use llm_client::model_client::ApiMode;
-use llm_client::StreamEvent;
 use llm_client::{ChatMessage, LlmRequest};
 use pf_test_harness::scenario::LlmScenario;
 use pf_test_harness::scenario_openai_http::OpenAiScenarioMock;

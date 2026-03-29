@@ -50,9 +50,7 @@ pub(crate) mod providers;
 pub mod stream;
 pub mod types;
 
-pub use auth::{
-    AnthropicApiKeyAuth, ApiKeyAuth, AuthProvider, AzureCredential, AzureOpenAiAuth,
-};
+pub use auth::{AnthropicApiKeyAuth, ApiKeyAuth, AuthProvider, AzureCredential, AzureOpenAiAuth};
 pub use client::{LlmClient, LlmClientBuilder, WireFormat};
 pub use error::{LlmError, LlmResult};
 pub use model_client::{ApiMode, ClientCapabilities};

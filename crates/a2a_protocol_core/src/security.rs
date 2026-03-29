@@ -189,11 +189,17 @@ mod tests {
     fn test_openid_connect_roundtrip() {
         let scheme = SecurityScheme::OpenIdConnect(OpenIdConnectSecurityScheme {
             description: None,
-            open_id_connect_url: "https://auth.example.com/.well-known/openid-configuration".to_string(),
+            open_id_connect_url: "https://auth.example.com/.well-known/openid-configuration"
+                .to_string(),
         });
         let json = serde_json::to_value(&scheme).unwrap();
         assert_eq!(json["type"], "openIdConnect");
-        assert!(json["openIdConnectUrl"].as_str().unwrap().contains("openid-configuration"));
+        assert!(
+            json["openIdConnectUrl"]
+                .as_str()
+                .unwrap()
+                .contains("openid-configuration")
+        );
         let deser: SecurityScheme = serde_json::from_value(json).unwrap();
         assert!(matches!(deser, SecurityScheme::OpenIdConnect(_)));
     }
@@ -211,7 +217,10 @@ mod tests {
     fn test_security_requirement_with_scopes() {
         use std::collections::HashMap;
         let mut schemes = HashMap::new();
-        schemes.insert("oauth2".to_string(), vec!["read".to_string(), "write".to_string()]);
+        schemes.insert(
+            "oauth2".to_string(),
+            vec!["read".to_string(), "write".to_string()],
+        );
         let req = SecurityRequirement { schemes };
         let json = serde_json::to_value(&req).unwrap();
         let scopes = json["oauth2"].as_array().unwrap();

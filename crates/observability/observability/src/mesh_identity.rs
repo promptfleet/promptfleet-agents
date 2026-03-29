@@ -165,11 +165,7 @@ pub fn normalize_host(host: &str) -> String {
 
 fn non_empty_trimmed(v: String) -> Option<String> {
     let t = v.trim().to_string();
-    if t.is_empty() {
-        None
-    } else {
-        Some(t)
-    }
+    if t.is_empty() { None } else { Some(t) }
 }
 
 fn sanitize_segment(s: &str) -> String {

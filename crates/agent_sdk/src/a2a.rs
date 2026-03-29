@@ -6,26 +6,26 @@ use std::sync::Arc;
 use std::sync::Arc as StdArc;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use futures_util::{stream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, stream};
 use log::info;
 #[cfg(feature = "a2a-server")]
 use serde_json::Value;
 
+use crate::Agent;
 #[cfg(feature = "a2a-server")]
 use crate::agent::task_store::{
     ContinuationArtifactRef, ContinuationSnapshot, ContinuationStrategyDescriptor, RuntimeTaskStore,
 };
 use crate::agent::{RuntimeArtifact, RuntimeResponse, RuntimeTask};
-use crate::Agent;
 
 pub use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION,
     agent::{AgentCapabilities, AgentCard, AgentInterface, AgentSkill},
     data::{Artifact, Message, MessageRole, Part, Task, TaskState, TaskStatus},
     error::{A2AError, A2AResult},
     methods::params::{
         MessageSendParams, MessageSendResponse, SendMessageRequest, SendMessageResponse,
     },
-    A2A_PROTOCOL_VERSION,
 };
 
 #[cfg(feature = "event-stream")]
@@ -34,7 +34,7 @@ pub use a2a_protocol_core::streaming::StreamResponse;
 #[cfg(feature = "llm-engine")]
 use crate::agent::history_policy::default_runtime as default_history_policy_runtime;
 #[cfg(feature = "llm-engine")]
-use crate::agent::llm_orchestrator::{execute_runtime, LlmInvoker, LlmPolicy, LlmRequestDefaults};
+use crate::agent::llm_orchestrator::{LlmInvoker, LlmPolicy, LlmRequestDefaults, execute_runtime};
 
 #[cfg(feature = "a2a-server")]
 pub use crate::a2a_app::A2aApp;
@@ -688,7 +688,7 @@ async fn persist_continuation_update(
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-pub use crate::streaming::{a2a_sse_stream, map_trace_to_stream_response, A2aSseContext};
+pub use crate::streaming::{A2aSseContext, a2a_sse_stream, map_trace_to_stream_response};
 
 /// Start a protocol-native task trace stream from an [`Agent`] and A2A request.
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -770,12 +770,12 @@ mod tests {
     use agent_core::{AgentMessage, ContentPart, Role, TaskPhase};
     use serde_json::json;
 
-    use super::{runtime_response_into_a2a, MirroredTaskStorage};
+    use super::{MirroredTaskStorage, runtime_response_into_a2a};
+    use crate::SdkResult;
     use crate::agent::task_store::{
         ContinuationSnapshot, ContinuationStrategyDescriptor, RuntimeTaskStore,
     };
     use crate::agent::{RuntimeArtifact, RuntimeResponse, RuntimeTask};
-    use crate::SdkResult;
 
     struct TestRuntimeTaskStore {
         latest_by_context: RwLock<HashMap<String, ContinuationSnapshot>>,

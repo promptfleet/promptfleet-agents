@@ -53,10 +53,7 @@ mod tests {
                 McpToolError::CallToolFailed("e".into()),
                 "MCP tool call failed: e",
             ),
-            (
-                McpToolError::ConfigError("e".into()),
-                "MCP config error: e",
-            ),
+            (McpToolError::ConfigError("e".into()), "MCP config error: e"),
             (
                 McpToolError::ConnectionError("e".into()),
                 "MCP connection error: e",

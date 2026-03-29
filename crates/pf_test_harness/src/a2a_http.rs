@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::body::Body;
 use http::{HeaderMap, Request, StatusCode};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use crate::sse::{SseCapture, SseCollector};

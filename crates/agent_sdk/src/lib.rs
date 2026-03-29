@@ -206,8 +206,8 @@ pub use observability_runtime::ObservabilityRuntime;
 // Re-export A2A tool helpers (when enabled)
 #[cfg(feature = "a2a-tools")]
 pub use a2a_tools::tools::{
-    make_tools_from_config as a2a_tools_from_config, make_tools_from_names as a2a_tools_from_names,
-    A2AToolConfig,
+    A2AToolConfig, make_tools_from_config as a2a_tools_from_config,
+    make_tools_from_names as a2a_tools_from_names,
 };
 
 /// SDK version info

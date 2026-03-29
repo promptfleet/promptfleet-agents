@@ -59,7 +59,10 @@ async fn smoke_openrouter_chat_non_streaming() {
     let client = openrouter_client();
     let req = hello_request("openai/gpt-4o-mini");
 
-    let resp = client.chat(req).await.expect("OpenRouter chat request failed");
+    let resp = client
+        .chat(req)
+        .await
+        .expect("OpenRouter chat request failed");
 
     eprintln!("[openrouter/non-stream] response: {resp:#?}");
 
@@ -123,7 +126,10 @@ async fn smoke_anthropic_non_streaming() {
     let client = anthropic_client();
     let req = hello_request("claude-sonnet-4-20250514");
 
-    let resp = client.chat(req).await.expect("Anthropic chat request failed");
+    let resp = client
+        .chat(req)
+        .await
+        .expect("Anthropic chat request failed");
 
     eprintln!("[anthropic/non-stream] response: {resp:#?}");
 
@@ -215,10 +221,7 @@ async fn smoke_anthropic_tool_call() {
     eprintln!("[anthropic/tool-call] response: {resp:#?}");
 
     let tool_calls = &resp.tool_calls;
-    assert!(
-        tool_calls.is_some(),
-        "expected tool_calls in response"
-    );
+    assert!(tool_calls.is_some(), "expected tool_calls in response");
     let calls = tool_calls.as_ref().unwrap();
     assert!(!calls.is_empty(), "expected at least one tool call");
     assert_eq!(calls[0].name, "get_weather");
@@ -269,10 +272,7 @@ async fn smoke_openrouter_tool_call() {
     eprintln!("[openrouter/tool-call] response: {resp:#?}");
 
     let tool_calls = &resp.tool_calls;
-    assert!(
-        tool_calls.is_some(),
-        "expected tool_calls in response"
-    );
+    assert!(tool_calls.is_some(), "expected tool_calls in response");
     let calls = tool_calls.as_ref().unwrap();
     assert!(!calls.is_empty(), "expected at least one tool call");
     assert_eq!(calls[0].name, "get_weather");

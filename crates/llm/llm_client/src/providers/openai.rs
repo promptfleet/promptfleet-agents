@@ -45,8 +45,7 @@ impl OpenAIClient {
             });
         }
         if m.role == "assistant"
-            && m
-                .tool_calls
+            && m.tool_calls
                 .as_ref()
                 .map(|t| !t.is_empty())
                 .unwrap_or(false)
@@ -72,17 +71,26 @@ impl OpenAIClient {
                 })
                 .collect();
             let mut obj = serde_json::Map::new();
-            obj.insert("role".to_string(), serde_json::Value::String("assistant".into()));
+            obj.insert(
+                "role".to_string(),
+                serde_json::Value::String("assistant".into()),
+            );
             if let Some(c) = &m.content {
                 if !c.is_empty() {
                     obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
                 }
             }
-            obj.insert("tool_calls".to_string(), serde_json::Value::Array(tool_calls));
+            obj.insert(
+                "tool_calls".to_string(),
+                serde_json::Value::Array(tool_calls),
+            );
             return serde_json::Value::Object(obj);
         }
         let mut obj = serde_json::Map::new();
-        obj.insert("role".to_string(), serde_json::Value::String(m.role.clone()));
+        obj.insert(
+            "role".to_string(),
+            serde_json::Value::String(m.role.clone()),
+        );
         if let Some(c) = &m.content {
             obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
         }
@@ -865,11 +873,7 @@ impl OpenAIClient {
                         }
                     }
                 }
-                if buf.is_empty() {
-                    None
-                } else {
-                    Some(buf)
-                }
+                if buf.is_empty() { None } else { Some(buf) }
             });
         let content = output_text;
         log::debug!(
@@ -1017,10 +1021,7 @@ impl OpenAIClient {
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
         let (path, mut payload) = match mode {
-            ApiMode::Chat => (
-                self.chat_path.as_str(),
-                Self::to_chat_payload(&req),
-            ),
+            ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
             ApiMode::Responses | ApiMode::Auto => (
                 self.responses_path.as_str(),
                 Self::to_responses_payload(&req),
@@ -1057,10 +1058,7 @@ impl OpenAIClient {
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
         let (path, mut payload) = match mode {
-            ApiMode::Chat => (
-                self.chat_path.as_str(),
-                Self::to_chat_payload(&req),
-            ),
+            ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
             ApiMode::Responses | ApiMode::Auto => (
                 self.responses_path.as_str(),
                 Self::to_responses_payload(&req),

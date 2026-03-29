@@ -1,19 +1,20 @@
 //! WASM A2A HTTP Client using Spin SDK
 
-use a2a_protocol_core::{data::message::Message, data::task::Task, A2A_PROTOCOL_VERSION};
+use a2a_protocol_core::{A2A_PROTOCOL_VERSION, data::message::Message, data::task::Task};
 use anyhow::Result;
 use protocol_transport_core::{
-    JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use thiserror::Error;
 
 #[cfg(feature = "observability")]
 use observability::{
-    attr, clear_current_context, cluster_name, current_namespace, current_service_name,
+    ObsHandle, SpanStatus, TraceContext, W3CTraceContext, WORKLOAD_PREFIX, attr,
+    clear_current_context, cluster_name, current_namespace, current_service_name,
     get_current_context, metric, set_current_context, span, target_id_from_peer, value,
-    workload_id, ObsHandle, SpanStatus, TraceContext, W3CTraceContext, WORKLOAD_PREFIX,
+    workload_id,
 };
 
 #[cfg(feature = "observability")]

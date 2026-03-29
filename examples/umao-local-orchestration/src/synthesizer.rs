@@ -2,9 +2,9 @@
 //!
 //! Runs a minimal A2A HTTP server on a configurable port.
 
-use std::sync::Arc;
 use a2a_protocol_core::data::{Message, MessageRole, Part};
 use clap::Parser;
+use std::sync::Arc;
 use tracing::info;
 
 #[derive(Parser)]
@@ -33,7 +33,10 @@ fn extract_upstream_summary(raw: &str) -> String {
                 _ => {}
             }
         }
-        if let Some(t) = v.pointer("/__node_traits/task_prompt").and_then(|t| t.as_str()) {
+        if let Some(t) = v
+            .pointer("/__node_traits/task_prompt")
+            .and_then(|t| t.as_str())
+        {
             return truncate(t, 200);
         }
     }

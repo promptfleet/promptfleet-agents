@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::Parser, parse_macro_input, punctuated::Punctuated, Expr, ExprLit, ItemFn, Lit, Meta,
-    MetaNameValue, Token,
+    Expr, ExprLit, ItemFn, Lit, Meta, MetaNameValue, Token, parse::Parser, parse_macro_input,
+    punctuated::Punctuated,
 };
 
 /// #[llm_tool(name="get_weather", description="...", context)]
@@ -21,8 +21,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
             Meta::NameValue(MetaNameValue { path, value, .. }) => {
                 if path.is_ident("name") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(s),
-                        ..
+                        lit: Lit::Str(s), ..
                     }) = value
                     {
                         tool_name = Some(s.value());
@@ -30,8 +29,7 @@ pub fn llm_tool(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 if path.is_ident("description") {
                     if let Expr::Lit(ExprLit {
-                        lit: Lit::Str(s),
-                        ..
+                        lit: Lit::Str(s), ..
                     }) = value
                     {
                         tool_desc = Some(s.value());

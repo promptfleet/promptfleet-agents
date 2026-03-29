@@ -4,7 +4,7 @@
 //! it sets a thread-local trace context for the duration of a closure and restores
 //! the previous context even if the closure panics.
 
-use observability_core::{get_current_context, with_context, TraceContext};
+use observability_core::{TraceContext, get_current_context, with_context};
 
 fn main() {
     println!("🔒 Scoped trace context demo");

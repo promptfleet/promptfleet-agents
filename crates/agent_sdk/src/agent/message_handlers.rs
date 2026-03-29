@@ -17,7 +17,7 @@ use crate::error::{SdkError, SdkResult};
 #[cfg(feature = "llm-engine")]
 use crate::agent::{
     history_policy::HistoryPolicyRuntime,
-    llm_orchestrator::{execute_runtime, LlmInvoker, LlmPolicy, LlmRequestDefaults},
+    llm_orchestrator::{LlmInvoker, LlmPolicy, LlmRequestDefaults, execute_runtime},
     tools::{ToolExecutor, ToolRegistry, ToolSpec},
 };
 #[cfg(feature = "llm-engine")]
@@ -442,11 +442,12 @@ mod tests {
         let resp = mgr.handle_message(msg_ctx, None).await.expect("ok");
         match resp {
             RuntimeResponse::Message(msg) => {
-                assert!(msg
-                    .message
-                    .parts
-                    .iter()
-                    .any(|p| matches!(p, agent_core::ContentPart::Text(_))));
+                assert!(
+                    msg.message
+                        .parts
+                        .iter()
+                        .any(|p| matches!(p, agent_core::ContentPart::Text(_)))
+                );
             }
             _ => panic!("expected Message"),
         }

@@ -64,8 +64,6 @@ mod error;
 
 // 🏛️ RE-EXPORT FOUNDATION - Use observability_core as the source of truth
 pub use observability_core::{
-    traits::LogLevel,
-
     BatchingConfig,
     BatchingManager,
     CompactJsonFormatter,
@@ -91,6 +89,7 @@ pub use observability_core::{
     // Utilities
     W3CTraceContext,
     WasmStdoutAdapter,
+    traits::LogLevel,
 };
 
 // Re-export the correct TraceContext from domain
@@ -99,14 +98,14 @@ pub use observability_core::domain::TraceContext;
 // 🎯 ENHANCED FUNCTIONALITY
 pub use error::{Result, StructuredLoggingError};
 pub use extension::{
-    create_performance_extension, create_performance_extension_from_config,
-    EnhancedObservabilityConfig, PerformanceExtension,
+    EnhancedObservabilityConfig, PerformanceExtension, create_performance_extension,
+    create_performance_extension_from_config,
 };
 
 // 🛡️ PANIC HANDLING EXPORTS
 pub use panic_handler::{
-    get_panic_stats, install_panic_handler, install_panic_handler_with_config, reset_panic_stats,
     PanicHandlerConfig, PanicPattern, PanicSeverity, PanicStats, StructuredPanicInfo, ThreadInfo,
+    get_panic_stats, install_panic_handler, install_panic_handler_with_config, reset_panic_stats,
 };
 
 // 🛡️ The `supervised` macro is available at crate root due to #[macro_export]
@@ -129,6 +128,13 @@ pub use correlation::{
 // 🎪 CONVENIENCE EXPORTS (feature-gated)
 #[cfg(feature = "convenience")]
 pub use convenience::{
+    A2AContext,
+    ConvenienceManager,
+    // Processors
+    DomainContextProcessor,
+    // Context types
+    LLMContext,
+    TemplateContext,
     clear_a2a_context,
     clear_all_contexts,
     clear_llm_context,
@@ -151,33 +157,11 @@ pub use convenience::{
     set_llm_context,
     set_request_context,
     set_template_context,
-    A2AContext,
-    ConvenienceManager,
-    // Processors
-    DomainContextProcessor,
-    // Context types
-    LLMContext,
-    TemplateContext,
 };
 
 // 🔌 ADVANCED CONTEXT MANAGEMENT EXPORTS (feature-gated)
 #[cfg(feature = "convenience")]
 pub use context_adapter::{
-    // Initialization
-    init_context_integration,
-
-    set_a2a_context_scoped,
-    set_all_contexts_scoped,
-
-    // Scoped context setting
-    set_llm_context_scoped,
-    set_request_context_scoped,
-    with_a2a_context,
-    with_all_contexts,
-
-    // Scoped callbacks
-    with_llm_context,
-    with_request_context,
     A2aContextGuard,
     A2aContextManager,
     AllContextsGuard,
@@ -197,6 +181,21 @@ pub use context_adapter::{
     StructuredContextRegistry,
     StructuredLlmContextManager,
     StructuredRequestContextManager,
+    // Initialization
+    init_context_integration,
+
+    set_a2a_context_scoped,
+    set_all_contexts_scoped,
+
+    // Scoped context setting
+    set_llm_context_scoped,
+    set_request_context_scoped,
+    with_a2a_context,
+    with_all_contexts,
+
+    // Scoped callbacks
+    with_llm_context,
+    with_request_context,
 };
 
 // Re-export configuration types

@@ -5,7 +5,7 @@
 use crate::{Agent, SdkError, SdkResult};
 
 #[cfg(feature = "config-loader")]
-use pf_config::{load_config_untyped, LoadOptions};
+use pf_config::{LoadOptions, load_config_untyped};
 
 #[cfg(feature = "agent-observability")]
 use observability::{Obs, ObservabilityConfig as ObsConfig};
@@ -13,7 +13,7 @@ use observability::{Obs, ObservabilityConfig as ObsConfig};
 #[cfg(feature = "agent-observability")]
 use crate::ObservabilityRuntime;
 #[cfg(feature = "context-window")]
-use llm_context_core::{history::Summarizer, LongTermMemory};
+use llm_context_core::{LongTermMemory, history::Summarizer};
 /// Fluent builder to construct the protocol-neutral [`crate::Agent`] runtime.
 pub struct AgentBuilder {
     config: crate::agent::config::AgentConfig,
@@ -83,11 +83,7 @@ impl AgentBuilder {
                 let is_default = obs_cfg.service_name == ObsConfig::default().service_name
                     && !obs_cfg.otel.enabled
                     && !obs_cfg.prometheus.enabled;
-                if is_default {
-                    None
-                } else {
-                    Some(obs_cfg)
-                }
+                if is_default { None } else { Some(obs_cfg) }
             };
 
             Ok(Self {
@@ -259,7 +255,10 @@ mod tests {
         )
         .unwrap();
         let path = tmp.path().to_str().unwrap();
-        let agent = AgentBuilder::from_config_path(path).unwrap().build().unwrap();
+        let agent = AgentBuilder::from_config_path(path)
+            .unwrap()
+            .build()
+            .unwrap();
         assert_eq!(agent.config().name, "file-agent");
     }
 

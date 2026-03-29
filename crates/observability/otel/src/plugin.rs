@@ -2,7 +2,7 @@
 
 use observability_core::traits::{SpanGuard, SpanStatus};
 use observability_core::{
-    ports::MetricsPort, ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext,
+    ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext, ports::MetricsPort,
 };
 
 use crate::collector_client::{
@@ -447,13 +447,16 @@ impl Otel {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Avoid panicking if called outside a Tokio runtime.
-            match tokio::runtime::Handle::try_current() { Ok(handle) => {
-                handle.spawn(async move {
-                    let _ = this.flush_all_buffers().await;
-                });
-            } _ => {
-                // Best-effort: no runtime available. Keep buffering.
-            }}
+            match tokio::runtime::Handle::try_current() {
+                Ok(handle) => {
+                    handle.spawn(async move {
+                        let _ = this.flush_all_buffers().await;
+                    });
+                }
+                _ => {
+                    // Best-effort: no runtime available. Keep buffering.
+                }
+            }
         }
 
         #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]

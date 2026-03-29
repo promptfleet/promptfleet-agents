@@ -17,11 +17,10 @@ pub mod discovery;
 #[cfg(feature = "protocol-core")]
 pub use params::{
     CancelTaskRequest, CreateTaskPushNotificationConfigRequest,
-    DeleteTaskPushNotificationConfigRequest, GetTaskPushNotificationConfigRequest,
-    GetTaskRequest, ListTaskPushNotificationConfigsRequest, ListTasksRequest, ListTasksResponse,
-    MessageSendParams, MessageSendResponse, SendMessageConfiguration, SendMessageRequest,
-    SendMessageResponse, SubscribeToTaskRequest, TaskCancelParams, TaskGetParams, TaskListParams,
-    TaskListResult,
+    DeleteTaskPushNotificationConfigRequest, GetTaskPushNotificationConfigRequest, GetTaskRequest,
+    ListTaskPushNotificationConfigsRequest, ListTasksRequest, ListTasksResponse, MessageSendParams,
+    MessageSendResponse, SendMessageConfiguration, SendMessageRequest, SendMessageResponse,
+    SubscribeToTaskRequest, TaskCancelParams, TaskGetParams, TaskListParams, TaskListResult,
 };
 
 pub use discovery::{

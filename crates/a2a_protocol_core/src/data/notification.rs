@@ -99,7 +99,10 @@ mod tests {
         };
         let config = TaskPushNotificationConfig::new("cfg-2", "task-2", "https://example.com/hook")
             .with_authentication(auth.clone());
-        assert_eq!(config.authentication.as_ref().unwrap().credentials, "tok-xyz");
+        assert_eq!(
+            config.authentication.as_ref().unwrap().credentials,
+            "tok-xyz"
+        );
     }
 
     #[test]

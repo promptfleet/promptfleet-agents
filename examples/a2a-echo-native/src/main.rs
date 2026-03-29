@@ -1,7 +1,7 @@
 use agent_sdk::{
+    Agent,
     a2a::A2aApp,
     agent::{AgentConfig, MessageContext, Response, TaskContext},
-    Agent,
 };
 
 #[tokio::main]

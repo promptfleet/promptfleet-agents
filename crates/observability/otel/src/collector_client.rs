@@ -441,9 +441,9 @@ impl CollectorClient {
     ) -> ObservabilityResult<Vec<u8>> {
         use opentelemetry_proto::tonic::{
             collector::trace::v1::ExportTraceServiceRequest,
-            common::v1::{any_value, AnyValue, InstrumentationScope, KeyValue},
+            common::v1::{AnyValue, InstrumentationScope, KeyValue, any_value},
             resource::v1::Resource,
-            trace::v1::{span::SpanKind, ResourceSpans, ScopeSpans, Span, Status},
+            trace::v1::{ResourceSpans, ScopeSpans, Span, Status, span::SpanKind},
         };
         use prost::Message;
         use web_time::SystemTime;
@@ -619,8 +619,8 @@ impl CollectorClient {
         spans: Vec<OtelSpanData>,
         resource_manager: &crate::resource_attributes::ResourceAttributeManager,
     ) -> ObservabilityResult<serde_json::Value> {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
-        use serde_json::{json, Value};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use serde_json::{Value, json};
         use web_time::SystemTime;
 
         fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
@@ -797,7 +797,7 @@ impl CollectorClient {
         metrics: Vec<MetricData>,
         resource_manager: &crate::resource_attributes::ResourceAttributeManager,
     ) -> ObservabilityResult<serde_json::Value> {
-        use serde_json::{json, Value};
+        use serde_json::{Value, json};
         use web_time::SystemTime;
 
         fn system_time_to_unix_nanos(t: SystemTime) -> ObservabilityResult<u64> {
@@ -915,8 +915,8 @@ impl CollectorClient {
         logs: Vec<LogData>,
         resource_manager: &crate::resource_attributes::ResourceAttributeManager,
     ) -> ObservabilityResult<serde_json::Value> {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
-        use serde_json::{json, Value};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use serde_json::{Value, json};
         use web_time::SystemTime;
 
         fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
@@ -1205,10 +1205,7 @@ mod tests {
     #[test]
     fn test_log_data_builder() {
         let log = LogData::new("INFO", "Test message")
-            .with_trace_context(
-                "0af7651916cd43dd8448eb211c80319c",
-                "b7ad6b7169203331",
-            )
+            .with_trace_context("0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331")
             .with_attribute("component", "test");
 
         assert_eq!(log.level, "INFO");
@@ -1246,7 +1243,10 @@ mod tests {
         let metrics = payload["resourceMetrics"][0]["instrumentationLibraryMetrics"][0]["metrics"]
             .as_array()
             .expect("metrics array");
-        assert!(metrics[0].get("sum").is_some(), "counter should export as sum");
+        assert!(
+            metrics[0].get("sum").is_some(),
+            "counter should export as sum"
+        );
         assert_eq!(
             metrics[0]["sum"]["isMonotonic"].as_bool(),
             Some(true),
@@ -1283,25 +1283,32 @@ mod tests {
 
         let payload = client
             .create_otlp_logs_payload(
-                vec![LogData::new("INFO", "hello")
-                    .with_trace_context(
-                        "0af7651916cd43dd8448eb211c80319c",
-                        "b7ad6b7169203331",
-                    )
-                    .with_attribute("trace_id", "0af7651916cd43dd8448eb211c80319c")
-                    .with_attribute("span_id", "b7ad6b7169203331")],
+                vec![
+                    LogData::new("INFO", "hello")
+                        .with_trace_context("0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331")
+                        .with_attribute("trace_id", "0af7651916cd43dd8448eb211c80319c")
+                        .with_attribute("span_id", "b7ad6b7169203331"),
+                ],
                 &resource_manager,
             )
             .expect("payload");
 
         let log = &payload["resourceLogs"][0]["instrumentationLibraryLogs"][0]["logs"][0];
-        assert!(log.get("traceId").is_some(), "trace context should be attached");
-        assert!(log.get("spanId").is_some(), "span context should be attached");
-        assert!(log["attributes"]
-            .as_array()
-            .expect("attributes")
-            .iter()
-            .any(|attr| attr["key"].as_str() == Some("trace_id")));
+        assert!(
+            log.get("traceId").is_some(),
+            "trace context should be attached"
+        );
+        assert!(
+            log.get("spanId").is_some(),
+            "span context should be attached"
+        );
+        assert!(
+            log["attributes"]
+                .as_array()
+                .expect("attributes")
+                .iter()
+                .any(|attr| attr["key"].as_str() == Some("trace_id"))
+        );
 
         let resource_attrs = payload["resourceLogs"][0]["resource"]["attributes"]
             .as_array()
@@ -1420,10 +1427,12 @@ mod tests {
             .expect("otlp http request");
 
         assert!(req.url.ends_with("/v1/traces"));
-        assert!(req
-            .headers
-            .iter()
-            .any(|(k, v)| k.eq_ignore_ascii_case("content-type") && v == "application/x-protobuf"));
+        assert!(
+            req.headers
+                .iter()
+                .any(|(k, v)| k.eq_ignore_ascii_case("content-type")
+                    && v == "application/x-protobuf")
+        );
 
         let decoded = ExportTraceServiceRequest::decode(req.body.as_slice()).expect("decode");
         let rs = &decoded.resource_spans[0];

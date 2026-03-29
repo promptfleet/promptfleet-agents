@@ -19,7 +19,7 @@ use a2a_protocol_core::services::TaskStorage;
 
 use super::{
     config::AgentConfig,
-    history_policy::{build_history_policy_runtime, HistoryPolicyRuntime},
+    history_policy::{HistoryPolicyRuntime, build_history_policy_runtime},
     message::{MessageContext, SkillExecutor, TaskContext},
     message_handlers::MessageHandlerManager,
     response::RuntimeResponse,

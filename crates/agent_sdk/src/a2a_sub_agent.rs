@@ -4,7 +4,7 @@ use a2a_http_client::Client;
 use a2a_protocol_core::data::{Message, MessageRole, Part, TaskState};
 use a2a_protocol_core::streaming::StreamResponse;
 use futures_util::StreamExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::agent::tool_context::ToolContext;

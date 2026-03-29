@@ -169,7 +169,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn well_known_agent_card_returns_json() {
-        use axum::body::{to_bytes, Body};
+        use axum::body::{Body, to_bytes};
         use axum::http::{Request, StatusCode};
         use tower::ServiceExt;
 

@@ -17,12 +17,10 @@ use std::sync::Arc;
 // ---------------------------------------------------------------------------
 
 #[cfg(target_arch = "wasm32")]
-type LlmFuture =
-    std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>>>>;
+type LlmFuture = std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>>>>;
 #[cfg(not(target_arch = "wasm32"))]
-type LlmFuture = std::pin::Pin<
-    Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>,
->;
+type LlmFuture =
+    std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // Request-response invoker (WASM + native)

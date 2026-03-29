@@ -3,7 +3,7 @@
 //! Provides task storage and retrieval services for A2A protocol operations.
 //! This is a pure domain service with no infrastructure dependencies.
 
-use crate::{data::message::Message, data::task::Task, A2AError, A2AResult};
+use crate::{A2AError, A2AResult, data::message::Message, data::task::Task};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 

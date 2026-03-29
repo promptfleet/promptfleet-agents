@@ -12,11 +12,11 @@ use crate::agent::llm_invoker::LlmRequestDefaults;
 use crate::agent::tool_context::ToolContext;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::trace::AgentTraceEvent;
-use log::debug;
 use llm_client::{ChatMessage, LlmRequest, ToolChoice, ToolSchema};
+use log::debug;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use super::types::{EngineConfig, EngineError, EngineResult, LlmTurnInvoker};
 

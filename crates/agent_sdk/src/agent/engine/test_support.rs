@@ -2,7 +2,7 @@ use crate::agent::tools::ToolRegistry;
 use crate::agent::trace::AgentTraceEvent;
 use llm_client::ChatMessage;
 
-use super::{core_loop, EngineConfig, EngineError, EngineResult, LlmTurnInvoker};
+use super::{EngineConfig, EngineError, EngineResult, LlmTurnInvoker, core_loop};
 
 /// Test-support wrapper around the engine core loop.
 ///

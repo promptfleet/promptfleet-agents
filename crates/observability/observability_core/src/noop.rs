@@ -394,12 +394,16 @@ mod tests {
         let mut collector = NoOpMetricsCollector::new();
 
         // All operations should succeed but do nothing
-        assert!(collector
-            .register_counter("test", "description", &["label"])
-            .is_ok());
-        assert!(collector
-            .record_counter("test", 1.0, &HashMap::new())
-            .is_ok());
+        assert!(
+            collector
+                .register_counter("test", "description", &["label"])
+                .is_ok()
+        );
+        assert!(
+            collector
+                .record_counter("test", 1.0, &HashMap::new())
+                .is_ok()
+        );
         assert!(collector.get_metrics().is_empty());
 
         collector.clear(); // Should not panic

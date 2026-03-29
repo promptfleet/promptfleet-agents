@@ -5,8 +5,8 @@
 ))]
 
 use a2a_http_server::{A2AHttpServer, AgentCard};
-use agent_sdk::{a2a::A2aClient, SdkError};
-use axum::{routing::get, Json, Router};
+use agent_sdk::{SdkError, a2a::A2aClient};
+use axum::{Json, Router, routing::get};
 use serde_json::Value;
 use tokio::net::TcpListener;
 

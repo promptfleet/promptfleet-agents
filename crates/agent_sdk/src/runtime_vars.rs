@@ -95,7 +95,11 @@ impl ActivationEnv {
 
         debug!(
             "Loaded activation vars: max_cold_start_ms={} initial_backoff_ms={} max_backoff_ms={} max_retries={} jitter={}",
-            env.max_cold_start_ms, env.initial_backoff_ms, env.max_backoff_ms, env.max_retries, env.jitter
+            env.max_cold_start_ms,
+            env.initial_backoff_ms,
+            env.max_backoff_ms,
+            env.max_retries,
+            env.jitter
         );
         env
     }

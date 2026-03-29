@@ -7,7 +7,7 @@ use serde_json::json;
 use web_time::Duration;
 
 use observability_core::traits::LogLevel;
-use structured_logging::{log_llm_request, EnhancedObservabilityConfig, PerformanceExtension};
+use structured_logging::{EnhancedObservabilityConfig, PerformanceExtension, log_llm_request};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Simple Structured Logging Demo for SpinKube");

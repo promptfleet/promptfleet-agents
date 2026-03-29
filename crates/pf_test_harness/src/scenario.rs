@@ -2,8 +2,10 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use agent_sdk::agent::llm_orchestrator::{LlmInvoker, LlmStreamFuture, LlmStreamInvoker};
-use llm_client::{stream::StreamEvent, ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCallRequest, Usage};
-use serde_json::{json, Value};
+use llm_client::{
+    ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCallRequest, Usage, stream::StreamEvent,
+};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Default)]
 pub struct LlmScenario {
@@ -400,7 +402,10 @@ mod tests {
             .expect("second turn response");
 
         assert_eq!(
-            first.choices.first().and_then(|c| c.finish_reason.as_deref()),
+            first
+                .choices
+                .first()
+                .and_then(|c| c.finish_reason.as_deref()),
             Some("tool_calls")
         );
         let tc0 = first

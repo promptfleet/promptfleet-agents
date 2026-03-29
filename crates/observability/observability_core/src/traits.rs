@@ -315,8 +315,8 @@ pub fn validate_metric_label_allowlist(label_keys: &[&str]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]
     struct MockPlugin {

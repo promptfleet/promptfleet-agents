@@ -53,7 +53,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::quote;
 use std::sync::Mutex;
-use syn::{parse_macro_input, spanned::Spanned, ItemFn, ItemStruct, LitStr};
+use syn::{ItemFn, ItemStruct, LitStr, parse_macro_input, spanned::Spanned};
 
 /// Global command registry for compile-time collection
 /// Format: (method_name, handler_function_name, method_type_str, is_async)
@@ -416,8 +416,10 @@ fn parse_method_args(args: TokenStream) -> Result<(String, String), syn::Error> 
     parse_method_args_tokens(proc_macro2::TokenStream::from(args))
 }
 
-fn parse_method_args_tokens(args: proc_macro2::TokenStream) -> Result<(String, String), syn::Error> {
-    use syn::{parse::Parse, parse::ParseStream, Ident, LitStr, Token};
+fn parse_method_args_tokens(
+    args: proc_macro2::TokenStream,
+) -> Result<(String, String), syn::Error> {
+    use syn::{Ident, LitStr, Token, parse::Parse, parse::ParseStream};
 
     // Define a struct to parse the arguments
     struct MethodArgs {

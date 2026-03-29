@@ -46,9 +46,9 @@ use crate::{Agent, SdkError, SdkResult};
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 pub use crate::streaming::{
-    ag_ui_sse_response, ag_ui_sse_response_with_summary, agent_io_sse_stream,
-    map_trace_to_agent_io, AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent,
-    IoEventContext, RunStatus, RunSummary, StreamEnricher, SummaryHandle,
+    AgUiDriverConfig, AgUiStream, AgUiStreamDriver, AgentIoEvent, IoEventContext, RunStatus,
+    RunSummary, StreamEnricher, SummaryHandle, ag_ui_sse_response, ag_ui_sse_response_with_summary,
+    agent_io_sse_stream, map_trace_to_agent_io,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]

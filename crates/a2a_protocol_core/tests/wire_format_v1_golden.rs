@@ -7,14 +7,14 @@
 //! Run: `cargo test -p a2a_protocol_core --features all-features --test wire_format_v1_golden`
 
 use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION,
     agent::{AgentCapabilities, AgentCard, AgentInterface, AgentSkill},
     data::{
         message::{Message, MessageRole, Part},
         task::{Task, TaskState, TaskStatus},
     },
-    A2A_PROTOCOL_VERSION,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn normalize(val: &Value, skip: &[&str]) -> Value {
     match val {

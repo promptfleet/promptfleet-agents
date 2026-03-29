@@ -177,7 +177,6 @@ pub trait A2ATransportFactory: Send + Sync {
     }
 }
 
-
 /// Mock transport for testing
 ///
 /// Simple transport implementation for unit tests and development.

@@ -248,9 +248,10 @@ mod tests {
             .build()
             .err()
             .expect("host without adapters should fail");
-        assert!(err
-            .to_string()
-            .contains("requires at least one protocol adapter"));
+        assert!(
+            err.to_string()
+                .contains("requires at least one protocol adapter")
+        );
     }
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "a2a-server"))]

@@ -330,10 +330,7 @@ mod tests {
         let mut req = LlmRequest::default();
         Gpt5Mutator.mutate(&cfg, &mut req).unwrap();
         let ext = req.extensions.as_ref().unwrap();
-        let reasoning = ext
-            .get("reasoning")
-            .and_then(|v| v.as_object())
-            .unwrap();
+        let reasoning = ext.get("reasoning").and_then(|v| v.as_object()).unwrap();
         assert_eq!(
             reasoning.get("effort").and_then(|v| v.as_str()),
             Some("high")
@@ -372,10 +369,7 @@ mod tests {
             kwargs.get("enable_thinking").and_then(|v| v.as_bool()),
             Some(true)
         );
-        assert_eq!(
-            kwargs.get("custom").and_then(|v| v.as_str()),
-            Some("kv")
-        );
+        assert_eq!(kwargs.get("custom").and_then(|v| v.as_str()), Some("kv"));
     }
 
     #[test]

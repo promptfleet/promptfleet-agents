@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use observability::{attr, metric, span, value, LogLevel, ObsHandle};
+use observability::{LogLevel, ObsHandle, attr, metric, span, value};
 use observability_core::{ObservabilityPlugin, ObservabilityResult, SpanGuard, SpanStatus};
 
 #[derive(Debug, Default, Clone)]

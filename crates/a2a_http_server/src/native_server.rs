@@ -1,19 +1,19 @@
 //! Native A2A HTTP Server using Axum
 
 use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION, A2AProtocol, AgentCard,
     services::{InMemoryTaskStorage, TaskStorage},
-    A2AProtocol, AgentCard, A2A_PROTOCOL_VERSION,
 };
 use anyhow::Result;
 use axum::{
+    Router,
     body::Body,
     http::{HeaderMap, StatusCode},
     response::{Json, Response},
     routing::{get, post},
-    Router,
 };
 use log::{debug, error, info, trace, warn};
-use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION};
+use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -30,8 +30,8 @@ use {
 #[cfg(feature = "observability")]
 use {
     observability::{
-        attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-        with_context_future, ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+        ObsHandle, SpanStatus, TraceContext, W3CTraceContext, attr, clear_current_context,
+        get_current_context, metric, set_current_context, span, value, with_context_future,
     },
     web_time::Instant,
 };
@@ -287,8 +287,10 @@ impl A2AHttpServer {
             "/jsonrpc" | "/" => {
                 debug!("Routing to JSON-RPC simulation for agent: {}", agent_id);
                 if method != "POST" {
-                    warn!("Invalid HTTP method for JSON-RPC simulation: {} (expected POST) for agent: {}", 
-                          method, agent_id);
+                    warn!(
+                        "Invalid HTTP method for JSON-RPC simulation: {} (expected POST) for agent: {}",
+                        method, agent_id
+                    );
                     let error_response = json!({
                         "jsonrpc": JSONRPC_VERSION,
                         "error": {
@@ -412,13 +414,13 @@ impl A2AHttpServer {
                                         root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                                     let response_future = app.handle_send_message_async(params);
                                     #[cfg(feature = "observability")]
-                                    let response_result =
-                                        if let Some(current_context) = get_current_context() {
-                                            with_context_future(current_context, response_future)
-                                                .await
-                                        } else {
-                                            response_future.await
-                                        };
+                                    let response_result = if let Some(current_context) =
+                                        get_current_context()
+                                    {
+                                        with_context_future(current_context, response_future).await
+                                    } else {
+                                        response_future.await
+                                    };
                                     #[cfg(not(feature = "observability"))]
                                     let response_result = response_future.await;
                                     match response_result {
@@ -1196,7 +1198,7 @@ impl A2AHttpServer {
 async fn sigterm_signal() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix::{SignalKind, signal};
         let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
         let ctrl_c = tokio::signal::ctrl_c();
         tokio::select! {
@@ -1356,7 +1358,7 @@ mod tests {
         use a2a_app_ports::{A2AAppPortAsync, AppFuture};
         use a2a_protocol_core::data::{Message, MessageRole};
         use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
-        use observability::{get_current_context, TraceContext};
+        use observability::{TraceContext, get_current_context};
 
         #[derive(Clone)]
         struct TraceCapturingApp {

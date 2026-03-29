@@ -314,7 +314,11 @@ mod tests {
 
     #[test]
     fn test_with_id_constructor() {
-        let msg = Message::with_id("fixed-id".to_string(), MessageRole::Agent, vec![Part::text("hi")]);
+        let msg = Message::with_id(
+            "fixed-id".to_string(),
+            MessageRole::Agent,
+            vec![Part::text("hi")],
+        );
         assert_eq!(msg.message_id, "fixed-id");
         assert_eq!(msg.role, MessageRole::Agent);
         assert!(msg.task_id.is_none());
@@ -322,8 +326,12 @@ mod tests {
 
     #[test]
     fn test_with_context_chaining() {
-        let msg = Message::with_id("m-1".to_string(), MessageRole::User, vec![Part::text("hello")])
-            .with_context("ctx-99".to_string());
+        let msg = Message::with_id(
+            "m-1".to_string(),
+            MessageRole::User,
+            vec![Part::text("hello")],
+        )
+        .with_context("ctx-99".to_string());
         assert_eq!(msg.context_id.as_deref(), Some("ctx-99"));
     }
 
@@ -339,7 +347,11 @@ mod tests {
 
     #[test]
     fn test_is_text_only_mixed_parts() {
-        let text_only = Message::new(MessageRole::User, vec![Part::text("a"), Part::text("b")], "t".to_string());
+        let text_only = Message::new(
+            MessageRole::User,
+            vec![Part::text("a"), Part::text("b")],
+            "t".to_string(),
+        );
         assert!(text_only.is_text_only());
 
         let mixed = Message::new(
@@ -354,7 +366,11 @@ mod tests {
     fn test_get_data_parts_filtering() {
         let msg = Message::new(
             MessageRole::User,
-            vec![Part::text("label"), Part::data(json!({"v": 42})), Part::text("outro")],
+            vec![
+                Part::text("label"),
+                Part::data(json!({"v": 42})),
+                Part::text("outro"),
+            ],
             "t".to_string(),
         );
         let data_parts = msg.get_data_parts();

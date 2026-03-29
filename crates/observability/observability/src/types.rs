@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use observability_core::traits::LogLevel;
 #[cfg(any(feature = "otel", feature = "prometheus"))]
 use observability_core::ObservabilityPlugin;
+use observability_core::traits::LogLevel;
 use observability_core::{
     ObservabilityConfig as CoreLoggingConfig, ObservabilityManager, ObservabilityResult,
 };

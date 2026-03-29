@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_sdk::agent::skill::{build_wired_read_skill_tool, SkillDefinition, SkillRegistry};
+use agent_sdk::agent::skill::{SkillDefinition, SkillRegistry, build_wired_read_skill_tool};
 use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use pf_test_harness::perf::{
     collect_a2a_sse, collect_agent_io_sse, default_a2a_context, default_io_context,
     default_skill_execution_context, default_tool_context, execute_engine_scenario, execute_skill,

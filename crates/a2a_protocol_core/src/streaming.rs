@@ -2,7 +2,7 @@
 
 use crate::data::{Artifact, Message, TaskStatus};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Top-level SSE stream envelope (v1.0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,7 +113,11 @@ mod tests {
     }
 
     fn make_message() -> Message {
-        Message::new(MessageRole::Agent, vec![Part::text("hello")], "t-1".to_string())
+        Message::new(
+            MessageRole::Agent,
+            vec![Part::text("hello")],
+            "t-1".to_string(),
+        )
     }
 
     fn make_status_update(state: TaskState) -> TaskStatusUpdateEvent {
@@ -126,7 +130,10 @@ mod tests {
         }
     }
 
-    fn make_artifact_update(last_chunk: Option<bool>, append: Option<bool>) -> TaskArtifactUpdateEvent {
+    fn make_artifact_update(
+        last_chunk: Option<bool>,
+        append: Option<bool>,
+    ) -> TaskArtifactUpdateEvent {
         use crate::data::artifact::Artifact;
         TaskArtifactUpdateEvent {
             id: json!("ev-2"),
@@ -141,9 +148,18 @@ mod tests {
     #[test]
     fn event_name_all_variants() {
         assert_eq!(StreamResponse::Task(make_task()).event_name(), "task");
-        assert_eq!(StreamResponse::Message(make_message()).event_name(), "message");
-        assert_eq!(StreamResponse::StatusUpdate(make_status_update(TaskState::Working)).event_name(), "statusUpdate");
-        assert_eq!(StreamResponse::ArtifactUpdate(make_artifact_update(None, None)).event_name(), "artifactUpdate");
+        assert_eq!(
+            StreamResponse::Message(make_message()).event_name(),
+            "message"
+        );
+        assert_eq!(
+            StreamResponse::StatusUpdate(make_status_update(TaskState::Working)).event_name(),
+            "statusUpdate"
+        );
+        assert_eq!(
+            StreamResponse::ArtifactUpdate(make_artifact_update(None, None)).event_name(),
+            "artifactUpdate"
+        );
     }
 
     #[test]
@@ -186,17 +202,30 @@ mod tests {
 
     #[test]
     fn is_terminal_status_update_terminal_states() {
-        for state in [TaskState::Completed, TaskState::Failed, TaskState::Canceled, TaskState::Rejected] {
-            assert!(StreamResponse::StatusUpdate(make_status_update(state.clone())).is_terminal(),
-                "{state:?} should be terminal");
+        for state in [
+            TaskState::Completed,
+            TaskState::Failed,
+            TaskState::Canceled,
+            TaskState::Rejected,
+        ] {
+            assert!(
+                StreamResponse::StatusUpdate(make_status_update(state.clone())).is_terminal(),
+                "{state:?} should be terminal"
+            );
         }
-        assert!(!StreamResponse::StatusUpdate(make_status_update(TaskState::Working)).is_terminal());
+        assert!(
+            !StreamResponse::StatusUpdate(make_status_update(TaskState::Working)).is_terminal()
+        );
     }
 
     #[test]
     fn is_terminal_artifact_update_last_chunk_flag() {
-        assert!(StreamResponse::ArtifactUpdate(make_artifact_update(Some(true), None)).is_terminal());
-        assert!(!StreamResponse::ArtifactUpdate(make_artifact_update(Some(false), None)).is_terminal());
+        assert!(
+            StreamResponse::ArtifactUpdate(make_artifact_update(Some(true), None)).is_terminal()
+        );
+        assert!(
+            !StreamResponse::ArtifactUpdate(make_artifact_update(Some(false), None)).is_terminal()
+        );
         assert!(!StreamResponse::ArtifactUpdate(make_artifact_update(None, None)).is_terminal());
     }
 

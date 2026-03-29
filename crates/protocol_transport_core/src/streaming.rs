@@ -58,7 +58,7 @@ mod idle_timeout_impl {
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
-    use tokio::time::{sleep, Sleep};
+    use tokio::time::{Sleep, sleep};
 
     /// Stream wrapper that terminates when no item arrives within `idle_timeout`.
     ///
@@ -122,8 +122,8 @@ pub use idle_timeout_impl::IdleTimeoutStream;
 #[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use futures::stream;
     use futures::StreamExt;
+    use futures::stream;
     use std::time::Duration;
 
     #[test]

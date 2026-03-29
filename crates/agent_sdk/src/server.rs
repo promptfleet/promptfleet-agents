@@ -7,7 +7,7 @@
 #[cfg(all(feature = "a2a-server", target_arch = "wasm32"))]
 use crate::error::SdkError;
 #[cfg(feature = "a2a-server")]
-use crate::{error::SdkResult, Agent};
+use crate::{Agent, error::SdkResult};
 #[cfg(feature = "a2a-server")]
 use a2a_http_server::A2AHttpServer;
 #[cfg(all(

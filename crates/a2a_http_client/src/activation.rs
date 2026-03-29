@@ -254,8 +254,8 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     mod retry_tests {
         use super::*;
-        use std::sync::atomic::{AtomicU32, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         fn fast_config(max_retries: u32) -> ActivationConfig {
             ActivationConfig {

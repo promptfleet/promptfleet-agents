@@ -1,9 +1,9 @@
 //! Main Prometheus 2025 plugin implementation
 
 use observability_core::{
-    ports::MetricsPort,
-    traits::{SpanGuard, SpanStatus, METRIC_LABEL_ALLOWLIST},
     ObservabilityError, ObservabilityPlugin, ObservabilityResult,
+    ports::MetricsPort,
+    traits::{METRIC_LABEL_ALLOWLIST, SpanGuard, SpanStatus},
 };
 
 #[cfg(feature = "cardinality-reduction")]
@@ -845,14 +845,18 @@ mod tests {
         assert_eq!(counter_family.get_metric().len(), 1);
         let counter_metric = &counter_family.get_metric()[0];
         assert_eq!(counter_metric.get_counter().get_value(), 3.0);
-        assert!(counter_metric
-            .get_label()
-            .iter()
-            .any(|label| label.get_name() == "component" && label.get_value() == "sdk"));
-        assert!(!counter_metric
-            .get_label()
-            .iter()
-            .any(|label| label.get_name() == "extra"));
+        assert!(
+            counter_metric
+                .get_label()
+                .iter()
+                .any(|label| label.get_name() == "component" && label.get_value() == "sdk")
+        );
+        assert!(
+            !counter_metric
+                .get_label()
+                .iter()
+                .any(|label| label.get_name() == "extra")
+        );
 
         let histogram_family = families
             .iter()

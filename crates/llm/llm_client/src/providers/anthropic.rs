@@ -3,9 +3,7 @@ use crate::{
     error::LlmError,
     model_client::{ClientCapabilities, HttpModelClient},
     provider::LlmProvider,
-    types::{
-        ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall, ToolCallRequest, Usage,
-    },
+    types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall, ToolCallRequest, Usage},
 };
 use protocol_transport_core::StreamingPolicy;
 use std::collections::HashMap;
@@ -156,10 +154,7 @@ impl AnthropicClient {
             }));
         }
 
-        obj.insert(
-            "messages".to_string(),
-            serde_json::Value::Array(mapped),
-        );
+        obj.insert("messages".to_string(), serde_json::Value::Array(mapped));
 
         // max_tokens is required for Anthropic — default to 4096
         let max_tokens = req.max_tokens.unwrap_or(4096);
@@ -188,22 +183,15 @@ impl AnthropicClient {
                             serde_json::Value::String(desc.clone()),
                         );
                     }
-                    tool_obj
-                        .insert("input_schema".to_string(), t.parameters.clone());
+                    tool_obj.insert("input_schema".to_string(), t.parameters.clone());
                     serde_json::Value::Object(tool_obj)
                 })
                 .collect();
-            obj.insert(
-                "tools".to_string(),
-                serde_json::Value::Array(mapped_tools),
-            );
+            obj.insert("tools".to_string(), serde_json::Value::Array(mapped_tools));
         }
 
         if let Some(choice) = &req.tool_choice {
-            obj.insert(
-                "tool_choice".to_string(),
-                choice.to_anthropic_value(),
-            );
+            obj.insert("tool_choice".to_string(), choice.to_anthropic_value());
         }
 
         if let Some(ext) = &req.extensions {
@@ -225,9 +213,7 @@ impl AnthropicClient {
     /// Extracts text from `content[].type == "text"` blocks, tool calls from
     /// `content[].type == "tool_use"` blocks, and maps `stop_reason` and
     /// `usage` fields to the provider-neutral representation.
-    pub fn normalize_messages_json(
-        raw: serde_json::Value,
-    ) -> Result<LlmResponse, LlmError> {
+    pub fn normalize_messages_json(raw: serde_json::Value) -> Result<LlmResponse, LlmError> {
         let id = raw
             .get("id")
             .and_then(|v| v.as_str())
@@ -245,15 +231,10 @@ impl AnthropicClient {
 
         if let Some(blocks) = content_blocks {
             for block in blocks {
-                let block_type = block
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let block_type = block.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 match block_type {
                     "text" => {
-                        if let Some(text) =
-                            block.get("text").and_then(|v| v.as_str())
-                        {
+                        if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
                             text_parts.push(text.to_string());
                         }
                     }
@@ -268,10 +249,7 @@ impl AnthropicClient {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
-                        let tc_input = block
-                            .get("input")
-                            .cloned()
-                            .unwrap_or(serde_json::json!({}));
+                        let tc_input = block.get("input").cloned().unwrap_or(serde_json::json!({}));
 
                         if !tc_name.is_empty() && !tc_id.is_empty() {
                             tool_call_requests.push(ToolCallRequest {
@@ -358,10 +336,7 @@ impl AnthropicClient {
         })
     }
 
-    pub async fn llm(
-        &self,
-        req: LlmRequest,
-    ) -> Result<LlmResponse, LlmError> {
+    pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         let payload = Self::to_messages_payload(&req);
         log::info!("AnthropicClient::llm endpoint=/v1/messages");
         let raw = self.inner.post_json("/v1/messages", payload).await?;
@@ -408,7 +383,10 @@ impl AnthropicClient {
 
         log::info!("AnthropicClient::llm_stream (wasm) endpoint=/v1/messages");
 
-        let body = self.inner.post_sse_buffered("/v1/messages", payload).await?;
+        let body = self
+            .inner
+            .post_sse_buffered("/v1/messages", payload)
+            .await?;
         Ok(Self::stream_from_buffer(body))
     }
 
@@ -493,13 +471,8 @@ pub(crate) fn parse_anthropic_chunk(
         }
         "content_block_start" => {
             let block = json.get("content_block");
-            let index = json
-                .get("index")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let block_type = block
-                .and_then(|b| b.get("type"))
-                .and_then(|v| v.as_str());
+            let index = json.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            let block_type = block.and_then(|b| b.get("type")).and_then(|v| v.as_str());
 
             if block_type == Some("tool_use") {
                 let id = block
@@ -517,20 +490,13 @@ pub(crate) fn parse_anthropic_chunk(
             // text block starts are ignored — we wait for content_block_delta
         }
         "content_block_delta" => {
-            let index = json
-                .get("index")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
+            let index = json.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
             let delta = json.get("delta");
-            let delta_type = delta
-                .and_then(|d| d.get("type"))
-                .and_then(|v| v.as_str());
+            let delta_type = delta.and_then(|d| d.get("type")).and_then(|v| v.as_str());
 
             match delta_type {
                 Some("text_delta") => {
-                    if let Some(text) =
-                        delta.and_then(|d| d.get("text")).and_then(|v| v.as_str())
-                    {
+                    if let Some(text) = delta.and_then(|d| d.get("text")).and_then(|v| v.as_str()) {
                         if !text.is_empty() {
                             events.push(StreamEvent::ContentDelta {
                                 delta: text.to_string(),
@@ -602,8 +568,7 @@ pub(crate) fn sse_event_stream_anthropic(
     use crate::stream::SseParser;
     use futures::StreamExt;
 
-    let (tx, rx) =
-        tokio::sync::mpsc::channel::<Result<crate::stream::StreamEvent, LlmError>>(64);
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<crate::stream::StreamEvent, LlmError>>(64);
 
     tokio::spawn(async move {
         let mut parser = SseParser::new();
@@ -614,14 +579,11 @@ pub(crate) fn sse_event_stream_anthropic(
                 Ok(chunk) => {
                     parser.feed(&chunk);
 
-                    while let Some((event_type, data)) = parser.next_typed_event()
-                    {
+                    while let Some((event_type, data)) = parser.next_typed_event() {
                         let evt = event_type.as_deref().unwrap_or("");
 
                         if evt == "message_stop" {
-                            log::debug!(
-                                "sse_event_stream_anthropic: message_stop"
-                            );
+                            log::debug!("sse_event_stream_anthropic: message_stop");
                             return;
                         }
                         if evt == "ping" {
@@ -638,10 +600,7 @@ pub(crate) fn sse_event_stream_anthropic(
                                 }
                             }
                             Err(e) => {
-                                log::warn!(
-                                    "sse_event_stream_anthropic: parse error: {}",
-                                    e
-                                );
+                                log::warn!("sse_event_stream_anthropic: parse error: {}", e);
                                 let _ = tx.send(Err(e)).await;
                                 return;
                             }
@@ -649,14 +608,9 @@ pub(crate) fn sse_event_stream_anthropic(
                     }
                 }
                 Err(e) => {
-                    log::warn!(
-                        "sse_event_stream_anthropic: byte stream error: {}",
-                        e
-                    );
+                    log::warn!("sse_event_stream_anthropic: byte stream error: {}", e);
                     let err = LlmError::Transport(
-                        protocol_transport_core::TransportError::Network(
-                            e.to_string(),
-                        ),
+                        protocol_transport_core::TransportError::Network(e.to_string()),
                     );
                     let _ = tx.send(Err(err)).await;
                     return;
@@ -957,10 +911,7 @@ mod tests {
         let resp = AnthropicClient::normalize_messages_json(raw).unwrap();
 
         assert!(resp.choices[0].message.content.is_none());
-        assert_eq!(
-            resp.choices[0].finish_reason.as_deref(),
-            Some("tool_calls")
-        );
+        assert_eq!(resp.choices[0].finish_reason.as_deref(), Some("tool_calls"));
 
         let reqs = resp.choices[0].message.tool_calls.as_ref().unwrap();
         assert_eq!(reqs.len(), 1);
@@ -1032,8 +983,7 @@ mod tests {
                 "stop_reason": anthropic,
                 "usage": {"input_tokens": 1, "output_tokens": 1}
             });
-            let resp =
-                AnthropicClient::normalize_messages_json(raw).unwrap();
+            let resp = AnthropicClient::normalize_messages_json(raw).unwrap();
             assert_eq!(
                 resp.choices[0].finish_reason.as_deref(),
                 Some(expected),
@@ -1060,8 +1010,7 @@ mod tests {
     #[test]
     fn test_parse_anthropic_chunk_tool_use_start() {
         let data = r#"{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_abc","name":"get_weather","input":{}}}"#;
-        let events =
-            parse_anthropic_chunk("content_block_start", data).unwrap();
+        let events = parse_anthropic_chunk("content_block_start", data).unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
             StreamEvent::ToolCallStart { index, id, name } => {
@@ -1075,17 +1024,16 @@ mod tests {
 
     #[test]
     fn test_parse_anthropic_chunk_text_block_start_ignored() {
-        let data = r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#;
-        let events =
-            parse_anthropic_chunk("content_block_start", data).unwrap();
+        let data =
+            r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#;
+        let events = parse_anthropic_chunk("content_block_start", data).unwrap();
         assert!(events.is_empty());
     }
 
     #[test]
     fn test_parse_anthropic_chunk_input_json_delta() {
         let data = r#"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}"#;
-        let events =
-            parse_anthropic_chunk("content_block_delta", data).unwrap();
+        let events = parse_anthropic_chunk("content_block_delta", data).unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
             StreamEvent::ToolCallDelta {
@@ -1102,8 +1050,7 @@ mod tests {
     #[test]
     fn test_parse_anthropic_chunk_message_delta_done() {
         let data = r#"{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":42}}"#;
-        let events =
-            parse_anthropic_chunk("message_delta", data).unwrap();
+        let events = parse_anthropic_chunk("message_delta", data).unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
             StreamEvent::Done {
@@ -1122,8 +1069,7 @@ mod tests {
     #[test]
     fn test_parse_anthropic_chunk_message_start() {
         let data = r#"{"type":"message_start","message":{"id":"msg_stream","model":"claude-3-5-sonnet","role":"assistant","content":[],"usage":{"input_tokens":10,"output_tokens":1}}}"#;
-        let events =
-            parse_anthropic_chunk("message_start", data).unwrap();
+        let events = parse_anthropic_chunk("message_start", data).unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
             StreamEvent::StreamStart { id, model } => {
@@ -1137,8 +1083,7 @@ mod tests {
     #[test]
     fn test_parse_anthropic_chunk_content_block_stop_ignored() {
         let data = r#"{"type":"content_block_stop","index":0}"#;
-        let events =
-            parse_anthropic_chunk("content_block_stop", data).unwrap();
+        let events = parse_anthropic_chunk("content_block_stop", data).unwrap();
         assert!(events.is_empty());
     }
 
@@ -1193,12 +1138,8 @@ mod tests {
             matches!(&all_events[0], StreamEvent::StreamStart { id, model }
                 if id.as_deref() == Some("msg_t") && model.as_deref() == Some("claude-3-5-sonnet"))
         );
-        assert!(
-            matches!(&all_events[1], StreamEvent::ContentDelta { delta } if delta == "Hello")
-        );
-        assert!(
-            matches!(&all_events[2], StreamEvent::ContentDelta { delta } if delta == " world")
-        );
+        assert!(matches!(&all_events[1], StreamEvent::ContentDelta { delta } if delta == "Hello"));
+        assert!(matches!(&all_events[2], StreamEvent::ContentDelta { delta } if delta == " world"));
         match &all_events[3] {
             StreamEvent::Done {
                 finish_reason,

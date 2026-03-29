@@ -136,11 +136,7 @@ mod tests {
     use std::sync::Mutex;
 
     fn dummy_entry() -> LogEntry {
-        crate::domain::create_log_entry(
-            LogLevel::Info,
-            "test",
-            serde_json::json!({"key": "value"}),
-        )
+        crate::domain::create_log_entry(LogLevel::Info, "test", serde_json::json!({"key": "value"}))
     }
 
     // --- TransportPort default batch ---
@@ -215,10 +211,7 @@ mod tests {
         }
 
         fn emit_gauge_simple(&self, name: &str, value: f64) -> ObservabilityResult<()> {
-            self.gauges
-                .lock()
-                .unwrap()
-                .push((name.to_string(), value));
+            self.gauges.lock().unwrap().push((name.to_string(), value));
             Ok(())
         }
 

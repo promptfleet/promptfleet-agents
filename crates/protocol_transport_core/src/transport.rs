@@ -657,11 +657,13 @@ mod tests {
         #[tokio::test]
         async fn test_native_http_transport() {
             let transport = HttpTransport::new();
-            assert!(transport
-                .client
-                .get("https://httpbin.org/get")
-                .build()
-                .is_ok());
+            assert!(
+                transport
+                    .client
+                    .get("https://httpbin.org/get")
+                    .build()
+                    .is_ok()
+            );
         }
 
         #[test]
@@ -704,9 +706,11 @@ mod tests {
         assert_eq!(sse_transport.endpoint_url, "http://example.com/sse");
 
         let sse_auth_transport = TransportFactory::mcp_sse_auth("http://example.com", "token123");
-        assert!(sse_auth_transport
-            .default_headers
-            .contains_key("Authorization"));
+        assert!(
+            sse_auth_transport
+                .default_headers
+                .contains_key("Authorization")
+        );
         assert_eq!(
             sse_auth_transport.default_headers.get("Authorization"),
             Some(&"Bearer token123".to_string())

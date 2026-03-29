@@ -196,10 +196,7 @@ mod tests {
     fn subject_roundtrip() {
         let slug = AgentSlug::from_names("acme", "staging", "weather-bot").unwrap();
         let subject = slug.to_subject();
-        assert_eq!(
-            subject,
-            "tenants/acme/spaces/staging/agents/weather-bot"
-        );
+        assert_eq!(subject, "tenants/acme/spaces/staging/agents/weather-bot");
         assert_eq!(AgentSlug::from_subject(&subject).unwrap(), slug);
     }
 

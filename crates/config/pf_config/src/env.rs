@@ -1,5 +1,5 @@
 use crate::{ConfigError, EnvKeyTransform};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn read_env(
     enable_dotenv: bool,

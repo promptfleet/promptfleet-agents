@@ -302,7 +302,7 @@ impl SkillRegistry {
                     return Err(SkillError::ExecutionFailed {
                         skill_id: skill_id.to_string(),
                         reason,
-                    })
+                    });
                 }
             }
         }
@@ -831,18 +831,10 @@ impl<'a> SkillEntryBuilder<'a> {
             id: name.clone(),
             name: display.to_string(),
             description: desc,
-            input_modes: input_modes.unwrap_or_else(|| {
-                vec![
-                    "application/json".to_string(),
-                    "text/plain".to_string(),
-                ]
-            }),
-            output_modes: output_modes.unwrap_or_else(|| {
-                vec![
-                    "application/json".to_string(),
-                    "text/plain".to_string(),
-                ]
-            }),
+            input_modes: input_modes
+                .unwrap_or_else(|| vec!["application/json".to_string(), "text/plain".to_string()]),
+            output_modes: output_modes
+                .unwrap_or_else(|| vec!["application/json".to_string(), "text/plain".to_string()]),
             schema,
             examples,
             tags,

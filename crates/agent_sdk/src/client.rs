@@ -12,13 +12,13 @@ use uuid::Uuid;
 use a2a_http_client::{Client, RpcError};
 
 use a2a_protocol_core::{
+    A2AError, A2AResult, JsonRpcRequest, JsonRpcResponse,
     agent::AgentCard,
     data::{
-        message::{Message, MessageRole, Part},
         Task,
+        message::{Message, MessageRole, Part},
     },
     methods::params::{GetTaskRequest, SendMessageConfiguration, SendMessageRequest},
-    A2AError, A2AResult, JsonRpcRequest, JsonRpcResponse,
 };
 
 use crate::callable::CallableSkill;

@@ -137,9 +137,11 @@ mod tests {
             scope: None,
             metadata: None,
         };
-        assert!(discovery
-            .agent_authenticated_extended_card(params_with_token)
-            .is_ok());
+        assert!(
+            discovery
+                .agent_authenticated_extended_card(params_with_token)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -185,6 +187,9 @@ mod tests {
         let result = discovery
             .agent_authenticated_extended_card(AuthenticatedExtendedCardParams::default())
             .unwrap();
-        assert!(result.timestamp.is_some(), "timestamp should be set when time-stamps feature is enabled");
+        assert!(
+            result.timestamp.is_some(),
+            "timestamp should be set when time-stamps feature is enabled"
+        );
     }
 }

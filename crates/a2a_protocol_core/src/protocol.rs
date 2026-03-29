@@ -1,13 +1,13 @@
 //! A2A v1.0 Protocol Handler
 
 use crate::{
-    jsonrpc_error_codes, A2AError, A2AMethodRegistry, A2AResult, A2ATransport, AgentCard,
-    MethodMetadata,
+    A2AError, A2AMethodRegistry, A2AResult, A2ATransport, AgentCard, MethodMetadata,
+    jsonrpc_error_codes,
 };
 use protocol_transport_core::{
     JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -368,12 +368,16 @@ mod tests {
             None,
             Arc::new(|req| Ok(JsonRpcResponse::success(req.id, json!({})))),
         );
-        assert!(protocol
-            .validate_request_params("test", &json!(null))
-            .is_err());
-        assert!(protocol
-            .validate_request_params("test", &json!({"a": 1}))
-            .is_ok());
+        assert!(
+            protocol
+                .validate_request_params("test", &json!(null))
+                .is_err()
+        );
+        assert!(
+            protocol
+                .validate_request_params("test", &json!({"a": 1}))
+                .is_ok()
+        );
     }
 
     #[tokio::test]

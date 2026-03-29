@@ -1,12 +1,12 @@
 //! WASM A2A HTTP Server using Spin SDK
 
 use a2a_protocol_core::{
+    A2A_PROTOCOL_VERSION, A2AProtocol, AgentCard,
     services::{InMemoryTaskStorage, TaskStorage},
-    A2AProtocol, AgentCard, A2A_PROTOCOL_VERSION,
 };
 use anyhow::Result;
 use log::{debug, error, info, trace, warn};
-use protocol_transport_core::{JsonRpcIncoming, JsonRpcResponse, JSONRPC_VERSION};
+use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
 use serde_json::json;
 use spin_sdk::http::{Method, Request as SpinRequest, Response as SpinResponse};
 use std::sync::Arc;
@@ -15,8 +15,8 @@ use web_time::Instant;
 
 #[cfg(feature = "observability")]
 use observability::{
-    attr, clear_current_context, get_current_context, metric, set_current_context, span, value,
-    with_context_future, ObsHandle, SpanStatus, TraceContext, W3CTraceContext,
+    ObsHandle, SpanStatus, TraceContext, W3CTraceContext, attr, clear_current_context,
+    get_current_context, metric, set_current_context, span, value, with_context_future,
 };
 
 const STATUS_OK: &str = "ok";
@@ -459,7 +459,18 @@ impl A2AHttpServer {
         let method = req.method().to_string();
         let agent_id = self.agent_id();
 
-        debug!("Incoming request: {} {} for agent: {} (app_present={}, app_async_present={}, storage_ptr={})", method, path, agent_id, self.app.is_some(), self.app_async.is_some(), self.task_storage.as_ref().map(|s| format!("{:p}", Arc::as_ptr(s))).unwrap_or_else(|| "<none>".to_string()));
+        debug!(
+            "Incoming request: {} {} for agent: {} (app_present={}, app_async_present={}, storage_ptr={})",
+            method,
+            path,
+            agent_id,
+            self.app.is_some(),
+            self.app_async.is_some(),
+            self.task_storage
+                .as_ref()
+                .map(|s| format!("{:p}", Arc::as_ptr(s)))
+                .unwrap_or_else(|| "<none>".to_string())
+        );
         trace!("Request headers: <omitted>");
 
         let result = match path.as_str() {
@@ -557,8 +568,13 @@ impl A2AHttpServer {
                 )
                 .build());
         }
-        debug!("Parsing JSON-RPC request for agent: {} (size: {} bytes) app_present={} app_async_present={}", 
-               agent_id, request_str.len(), self.app.is_some(), self.app_async.is_some());
+        debug!(
+            "Parsing JSON-RPC request for agent: {} (size: {} bytes) app_present={} app_async_present={}",
+            agent_id,
+            request_str.len(),
+            self.app.is_some(),
+            self.app_async.is_some()
+        );
         trace!("JSON-RPC request body: {}", request_str);
 
         let root_val: serde_json::Value = match serde_json::from_str(request_str) {
@@ -975,7 +991,7 @@ mod tests {
         use a2a_app_ports::{A2AAppPortAsync, AppFuture};
         use a2a_protocol_core::data::{Message, MessageRole};
         use a2a_protocol_core::methods::params::{SendMessageRequest, SendMessageResponse};
-        use observability::{get_current_context, TraceContext};
+        use observability::{TraceContext, get_current_context};
 
         #[derive(Clone)]
         struct TraceCapturingApp {

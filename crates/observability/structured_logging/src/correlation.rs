@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use crate::error::{Result, StructuredLoggingError};
 use crate::extension::CorrelationConfig;
-use observability_core::domain::TraceContext;
 use observability_core::LogEntry;
+use observability_core::domain::TraceContext;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -639,13 +639,17 @@ mod tests {
         let manager = BaggageManager::new(config);
 
         // Test validation
-        assert!(manager
-            .validate_baggage_item("valid_key", "valid_value")
-            .is_ok());
+        assert!(
+            manager
+                .validate_baggage_item("valid_key", "valid_value")
+                .is_ok()
+        );
         assert!(manager.validate_baggage_item("", "value").is_err());
-        assert!(manager
-            .validate_baggage_item("key", &"x".repeat(2000))
-            .is_err());
+        assert!(
+            manager
+                .validate_baggage_item("key", &"x".repeat(2000))
+                .is_err()
+        );
     }
 
     #[test]

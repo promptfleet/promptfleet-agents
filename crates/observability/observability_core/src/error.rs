@@ -163,10 +163,7 @@ mod tests {
                 ObservabilityError::batching("queue full"),
                 "Batching error: queue full",
             ),
-            (
-                ObservabilityError::buffer("oom"),
-                "Buffer error: oom",
-            ),
+            (ObservabilityError::buffer("oom"), "Buffer error: oom"),
             (
                 ObservabilityError::feature_not_enabled("otel"),
                 "Feature not enabled: otel",

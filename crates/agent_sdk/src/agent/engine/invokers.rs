@@ -21,7 +21,7 @@ use crate::agent::llm_invoker::LlmStreamInvoker;
 use crate::agent::trace::AgentTraceEvent;
 
 #[cfg(feature = "agent-observability")]
-use observability::{attr, metric, span, value, ObsHandle, SpanGuard, SpanStatus};
+use observability::{ObsHandle, SpanGuard, SpanStatus, attr, metric, span, value};
 
 // ===========================================================================
 // Request-response invoker (WASM + native)
@@ -491,11 +491,7 @@ fn extract_model_name(req: &LlmRequest) -> String {
 }
 
 fn infer_operation(req: &LlmRequest) -> String {
-    if req
-        .tools
-        .as_ref()
-        .is_some_and(|t| !t.is_empty())
-    {
+    if req.tools.as_ref().is_some_and(|t| !t.is_empty()) {
         "chat_completions_tools".to_string()
     } else {
         "chat_completions".to_string()

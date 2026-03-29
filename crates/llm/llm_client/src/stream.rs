@@ -451,7 +451,7 @@ pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
 
 #[cfg(test)]
 pub(crate) mod test_fixtures {
-    use super::{parse_chat_chunk, SseParser, StreamEvent};
+    use super::{SseParser, StreamEvent, parse_chat_chunk};
 
     /// OpenAI-style SSE transcript: start + 2 content chunks + usage + `[DONE]`.
     pub fn openai_full_chat() -> &'static str {
@@ -607,7 +607,9 @@ mod tests {
     #[test]
     fn parser_typed_events_multiple() {
         let mut p = SseParser::new();
-        p.feed(b"event: content_block_delta\ndata: delta1\n\nevent: message_delta\ndata: done1\n\n");
+        p.feed(
+            b"event: content_block_delta\ndata: delta1\n\nevent: message_delta\ndata: done1\n\n",
+        );
 
         let (e1, d1) = p.next_typed_event().unwrap();
         assert_eq!(e1.as_deref(), Some("content_block_delta"));
@@ -930,7 +932,9 @@ mod tests {
         let transcript = test_fixtures::openai_repeat_role_each_chunk();
         let raw = test_fixtures::collect_openai_transcript_events(transcript);
         assert_eq!(
-            raw.iter().filter(|e| matches!(e, StreamEvent::StreamStart { .. })).count(),
+            raw.iter()
+                .filter(|e| matches!(e, StreamEvent::StreamStart { .. }))
+                .count(),
             2,
             "fixture must repeat role per chunk"
         );
@@ -953,10 +957,7 @@ mod tests {
         let collected: Vec<_> = futures::executor::block_on_stream(stream).collect();
 
         assert_eq!(collected.len(), 4);
-        assert!(matches!(
-            &collected[0],
-            Ok(StreamEvent::StreamStart { .. })
-        ));
+        assert!(matches!(&collected[0], Ok(StreamEvent::StreamStart { .. })));
         assert!(matches!(
             &collected[1],
             Ok(StreamEvent::ContentDelta { delta }) if delta == "Hello"
@@ -1064,12 +1065,11 @@ mod native_sse_parity_tests {
     #[tokio::test]
     async fn buffer_vs_native_sse_parity_repeat_role_chunks() {
         let transcript = test_fixtures::openai_repeat_role_each_chunk();
-        let buffer_events: Vec<StreamEvent> = sse_event_stream_from_buffer(
-            transcript.as_bytes().to_vec(),
-        )
-        .map(|r| r.unwrap())
-        .collect()
-        .await;
+        let buffer_events: Vec<StreamEvent> =
+            sse_event_stream_from_buffer(transcript.as_bytes().to_vec())
+                .map(|r| r.unwrap())
+                .collect()
+                .await;
 
         for chunk_size in [1_usize, 5, 99, transcript.len()] {
             let resp = openai_sse_response_chunked(transcript.as_bytes(), chunk_size);

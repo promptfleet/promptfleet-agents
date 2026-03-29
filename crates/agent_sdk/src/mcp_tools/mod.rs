@@ -45,8 +45,8 @@ pub use error::McpToolError;
 pub use server_adapter::McpServerAdapter;
 pub use types::{McpCallResult, McpContent, McpToolDescriptor, McpToolSource};
 pub use web_search::{
-    tool_category, ExtractOptions, ExtractedContent, SearchDepth, SearchOptions, SearchResponse,
-    SearchResult, WebSearchError, WebSearchProvider,
+    ExtractOptions, ExtractedContent, SearchDepth, SearchOptions, SearchResponse, SearchResult,
+    WebSearchError, WebSearchProvider, tool_category,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

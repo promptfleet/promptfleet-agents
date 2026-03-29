@@ -4,19 +4,19 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
+use axum::http::header::CONTENT_TYPE;
 use axum::routing::post;
-use axum::Router;
-use llm_client::stream::StreamEvent;
 use llm_client::LlmResponse;
-use serde_json::{json, Value};
+use llm_client::stream::StreamEvent;
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
-use crate::scenario::{fold_stream_events_to_llm_response, LlmScenario};
+use crate::scenario::{LlmScenario, fold_stream_events_to_llm_response};
 
 #[derive(Clone)]
 struct MockState {
@@ -219,8 +219,7 @@ async fn chat_completions(
     State(state): State<MockState>,
     body: axum::body::Bytes,
 ) -> Result<axum::response::Response, StatusCode> {
-    let payload: Value =
-        serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let payload: Value = serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
     let stream = payload
         .get("stream")
         .and_then(|v| v.as_bool())
@@ -239,7 +238,8 @@ async fn chat_completions(
             .body(Body::from(sse))
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     } else {
-        let resp = fold_stream_events_to_llm_response(&turn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let resp = fold_stream_events_to_llm_response(&turn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let json = openai_chat_completion_json(&resp);
         axum::response::Response::builder()
             .status(StatusCode::OK)
@@ -276,9 +276,7 @@ impl OpenAiScenarioMock {
             .expect("bind mock listener");
         let addr = listener.local_addr().expect("local_addr");
         let handle = tokio::spawn(async move {
-            axum::serve(listener, app)
-                .await
-                .expect("mock serve");
+            axum::serve(listener, app).await.expect("mock serve");
         });
         (format!("http://{addr}"), handle)
     }

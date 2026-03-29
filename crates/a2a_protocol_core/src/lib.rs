@@ -28,7 +28,7 @@ pub use agent::{
 };
 
 // Error types and A2A error codes
-pub use error::{a2a_error_codes, A2AError, A2AResult};
+pub use error::{A2AError, A2AResult, a2a_error_codes};
 
 // Protocol handler
 pub use protocol::A2AProtocol;
@@ -41,8 +41,8 @@ pub use registry::{
 // Security scheme types
 pub use security::{
     ApiKeySecurityScheme, AuthorizationCodeOAuthFlow, ClientCredentialsOAuthFlow,
-    DeviceCodeOAuthFlow, HttpAuthSecurityScheme, MutualTlsSecurityScheme, OAuthFlows,
-    OAuth2SecurityScheme, OpenIdConnectSecurityScheme, SecurityRequirement, SecurityScheme,
+    DeviceCodeOAuthFlow, HttpAuthSecurityScheme, MutualTlsSecurityScheme, OAuth2SecurityScheme,
+    OAuthFlows, OpenIdConnectSecurityScheme, SecurityRequirement, SecurityScheme,
 };
 
 // Transport traits (no MockTransport — test-only helper)
@@ -51,8 +51,8 @@ pub use transport::{A2ATransport, A2ATransportFactory};
 // Data types (feature = "protocol-core")
 #[cfg(feature = "protocol-core")]
 pub use data::{
-    Artifact, AuthenticationInfo, Message, MessageRole, Part,
-    Task, TaskPushNotificationConfig, TaskState, TaskStatus,
+    Artifact, AuthenticationInfo, Message, MessageRole, Part, Task, TaskPushNotificationConfig,
+    TaskState, TaskStatus,
 };
 
 // Method params and discovery types (feature = "protocol-core")
@@ -81,6 +81,6 @@ pub use services::{ConversationContext, InMemoryTaskStorage, TaskStorage};
 pub const A2A_PROTOCOL_VERSION: &str = "1.0";
 
 pub use protocol_transport_core::{
-    error_codes as jsonrpc_error_codes, JsonRpcError, JsonRpcId, JsonRpcIncoming,
-    JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest,
+    JsonRpcResponse, error_codes as jsonrpc_error_codes,
 };

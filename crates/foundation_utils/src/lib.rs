@@ -43,7 +43,7 @@ pub mod scoped;
 pub use context::{ContextManager, ThreadLocalContext};
 pub use raii::{Guard, ScopedGuard};
 pub use resource::{ResourceGuard, ResourcePool};
-pub use scoped::{with_context, ScopedBuilder, ScopedCallback};
+pub use scoped::{ScopedBuilder, ScopedCallback, with_context};
 
 /// Version of the foundation utils
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

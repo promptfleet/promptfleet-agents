@@ -82,14 +82,22 @@ impl HttpModelClient {
             .iter()
             .enumerate()
             .map(|(i, (k, v))| {
-                let prefix = if i == 0 { String::new() } else { "&".to_string() };
+                let prefix = if i == 0 {
+                    String::new()
+                } else {
+                    "&".to_string()
+                };
                 format!("{prefix}{k}={v}")
             })
             .collect();
         format!("{base}{sep}{tail}")
     }
 
-    fn build_universal_request(&self, path: &str, body: Vec<u8>) -> Result<UniversalRequest, LlmError> {
+    fn build_universal_request(
+        &self,
+        path: &str,
+        body: Vec<u8>,
+    ) -> Result<UniversalRequest, LlmError> {
         let url = self.build_full_url(path);
         log::debug!(
             "HttpModelClient::build_universal_request path={} url={} body_len={}",
@@ -364,10 +372,7 @@ mod tests {
             )),
         );
         let url = client.build_full_url("/chat/completions");
-        assert!(
-            url.contains("api-version=2024-02-15-preview"),
-            "url={url}"
-        );
+        assert!(url.contains("api-version=2024-02-15-preview"), "url={url}");
         assert!(url.starts_with("https://myresource.openai.azure.com/"));
     }
 }
@@ -378,10 +383,10 @@ mod transport_integration_tests {
     use crate::auth::ApiKeyAuth;
     use crate::error::LlmError;
     use axum::{
-        http::{header::CONTENT_TYPE, HeaderValue, StatusCode},
+        Router,
+        http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
         response::Response,
         routing::post,
-        Router,
     };
     use protocol_transport_core::TransportError;
     use serde_json::json;
@@ -401,11 +406,17 @@ mod transport_integration_tests {
     }
 
     fn build_client(base_url: String) -> HttpModelClient {
-        HttpModelClient::new(base_url, HashMap::new(), None, Arc::new(ApiKeyAuth::new("")))
+        HttpModelClient::new(
+            base_url,
+            HashMap::new(),
+            None,
+            Arc::new(ApiKeyAuth::new("")),
+        )
     }
 
     async fn json_http_error_handler() -> Response<String> {
-        let mut response = Response::new(r#"{"error":"rate_limited","retry_after":30}"#.to_string());
+        let mut response =
+            Response::new(r#"{"error":"rate_limited","retry_after":30}"#.to_string());
         *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
         response
             .headers_mut()
@@ -429,7 +440,10 @@ mod transport_integration_tests {
     }
 
     async fn anthropic_shaped_bad_gateway() -> Response<String> {
-        let mut response = Response::new("{\"type\":\"error\",\"error\":{\"type\":\"overloaded\",\"message\":\"upstream\"}}".to_string());
+        let mut response = Response::new(
+            "{\"type\":\"error\",\"error\":{\"type\":\"overloaded\",\"message\":\"upstream\"}}"
+                .to_string(),
+        );
         *response.status_mut() = StatusCode::BAD_GATEWAY;
         response
             .headers_mut()
@@ -472,7 +486,8 @@ mod transport_integration_tests {
                 assert!(
                     headers
                         .iter()
-                        .any(|(k, v)| k.eq_ignore_ascii_case("x-ratelimit-reset") && v == "1735689600"),
+                        .any(|(k, v)| k.eq_ignore_ascii_case("x-ratelimit-reset")
+                            && v == "1735689600"),
                     "expected x-ratelimit-reset header to be preserved, got {headers:?}"
                 );
             }
@@ -539,7 +554,10 @@ mod transport_integration_tests {
         let client = build_client(base_url);
 
         let err = client
-            .post_json("/v1/messages", json!({"model":"claude-3","messages":[],"max_tokens":1}))
+            .post_json(
+                "/v1/messages",
+                json!({"model":"claude-3","messages":[],"max_tokens":1}),
+            )
             .await
             .expect_err("HTTP 502 must map to transport");
         server.abort();

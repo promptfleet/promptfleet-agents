@@ -27,18 +27,18 @@ pub mod ports;
 // Re-export commonly used types
 pub use batching::{BatchingConfig, BatchingManager};
 pub use context::{
-    clear_current_context,
-    get_current_context,
-    // Thread-local management
-    set_current_context,
-    with_context,
-    with_context_future,
     ContextFuture,
     HeaderExtractor,
     // Header utilities
     HeaderInjector,
     TraceContext,
     W3CTraceContext,
+    clear_current_context,
+    get_current_context,
+    // Thread-local management
+    set_current_context,
+    with_context,
+    with_context_future,
 };
 pub use error::{ObservabilityError, ObservabilityResult};
 pub use noop::NoOpObservabilityPlugin;
@@ -54,12 +54,12 @@ pub use adapters::{
 #[cfg(feature = "structured-logging")]
 pub use adapters::{TracingIntegrationBuilder, TracingSubscriberAdapter};
 pub use domain::{
-    create_counter_metric, create_gauge_metric, create_histogram_metric, BasicMetricType,
-    EnhancedContextEnricher, LogEntry, LogKvExtractor, MetricsEntry, MetricsSource, ProcessorChain,
-    TraceCorrelation,
+    BasicMetricType, EnhancedContextEnricher, LogEntry, LogKvExtractor, MetricsEntry,
+    MetricsSource, ProcessorChain, TraceCorrelation, create_counter_metric, create_gauge_metric,
+    create_histogram_metric,
 };
 pub use extension::{
-    create_observability_manager, GlobalLoggerSingleton, ObservabilityConfig, ObservabilityManager,
+    GlobalLoggerSingleton, ObservabilityConfig, ObservabilityManager, create_observability_manager,
 };
 pub use ports::{
     BatchingPort, ContextPort, FormatterPort, MetricsPort, StandardLoggingPort, TransportPort,

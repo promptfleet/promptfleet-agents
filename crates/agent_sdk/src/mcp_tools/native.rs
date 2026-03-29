@@ -14,10 +14,10 @@ use std::time::Duration;
 use rmcp::{model::CallToolRequestParams, service::ServiceExt, transport::TokioChildProcess};
 use tokio::process::Command;
 
-use crate::mcp_tools::config::{resolve_env_vars, McpServersConfig, McpTransportType};
+use crate::mcp_tools::config::{McpServersConfig, McpTransportType, resolve_env_vars};
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{
-    build_forwarded_headers_meta, McpCallResult, McpContent, McpToolDescriptor, McpToolSource,
+    McpCallResult, McpContent, McpToolDescriptor, McpToolSource, build_forwarded_headers_meta,
 };
 
 // ── Shared service wrapper ──────────────────────────────────────────────────
@@ -505,24 +505,25 @@ impl McpToolSource for NativeMcpBackend {
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::Request,
         middleware::{self, Next},
         response::Response,
-        Router,
     };
     use rmcp::{
+        ErrorData as McpError, RoleServer, ServerHandler,
         handler::server::{tool::ToolRouter, wrapper::Parameters},
         model::{
             CallToolResult, Content, Implementation, ListToolsResult, PaginatedRequestParams,
             ServerCapabilities, ServerInfo,
         },
         service::RequestContext,
-        tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
+        tool, tool_router,
     };
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
     use tokio::net::TcpListener;
 

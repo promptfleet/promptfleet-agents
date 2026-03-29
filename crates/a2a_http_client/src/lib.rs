@@ -23,13 +23,13 @@ mod native_client;
 use native_client as implementation;
 
 // Unified public interface (identical for both targets)
-pub use activation::{activation_delay, idempotency_key, retry_with_activation, ActivationConfig};
-pub use implementation::{check_connectivity, Client, ClientError, RpcError};
+pub use activation::{ActivationConfig, activation_delay, idempotency_key, retry_with_activation};
+pub use implementation::{Client, ClientError, RpcError, check_connectivity};
 
 // Re-export core types for convenience
-pub use a2a_protocol_core::{data::message::Message, data::task::Task, A2A_PROTOCOL_VERSION};
+pub use a2a_protocol_core::{A2A_PROTOCOL_VERSION, data::message::Message, data::task::Task};
 pub use protocol_transport_core::{
-    JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, StreamingPolicy, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, StreamingPolicy,
 };
 
 // ============================================================================

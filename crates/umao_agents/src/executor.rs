@@ -1,8 +1,8 @@
 //! PromptFleetExecutor — bridges UMAO orchestration to real A2A agents.
 
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::future::Future;
+use std::pin::Pin;
 
 use serde_json::Value;
 use tracing::{debug, warn};
@@ -86,10 +86,7 @@ impl AsyncNodeExecutor for PromptFleetExecutor {
                             sections.join("\n\n")
                         )
                     };
-                    Ok(NodeOutput::completed(
-                        serde_json::json!(combined),
-                        0.0,
-                    ))
+                    Ok(NodeOutput::completed(serde_json::json!(combined), 0.0))
                 }
                 CfbType::Monitor => {
                     let data = umao_core::deterministic::deterministic_monitor_response(
@@ -240,8 +237,7 @@ mod tests {
                         let body = &request[body_start + 4..];
                         if let Ok(rpc) = serde_json::from_str::<serde_json::Value>(body) {
                             let id = rpc.get("id").cloned().unwrap_or(serde_json::json!(null));
-                            let method =
-                                rpc.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                            let method = rpc.get("method").and_then(|v| v.as_str()).unwrap_or("");
 
                             let result = if method == "SendMessage" || method == "message/send" {
                                 let text = rpc
@@ -344,10 +340,7 @@ mod tests {
         let synthesizer_port = start_mock_agent("synthesizer").await;
 
         let mut exec = PromptFleetExecutor::new();
-        exec.register(
-            "researcher",
-            &format!("http://127.0.0.1:{researcher_port}"),
-        );
+        exec.register("researcher", &format!("http://127.0.0.1:{researcher_port}"));
         exec.register(
             "synthesizer",
             &format!("http://127.0.0.1:{synthesizer_port}"),
@@ -424,11 +417,7 @@ mod tests {
 
         let result = orchestrator::execute_async(&graph, &exec, &event_sink).await;
 
-        assert!(
-            result.is_ok(),
-            "Orchestration failed: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "Orchestration failed: {:?}", result.err());
         let exec_result = result.unwrap();
         assert_eq!(
             exec_result.status,
@@ -449,11 +438,15 @@ mod tests {
 
         let captured = events.lock().unwrap();
         assert!(
-            captured.iter().any(|e| e.contains("completed:DELEGATE_researcher")),
+            captured
+                .iter()
+                .any(|e| e.contains("completed:DELEGATE_researcher")),
             "Should have researcher completed event. Events: {captured:?}"
         );
         assert!(
-            captured.iter().any(|e| e.contains("completed:DELEGATE_synthesizer")),
+            captured
+                .iter()
+                .any(|e| e.contains("completed:DELEGATE_synthesizer")),
             "Should have synthesizer completed event. Events: {captured:?}"
         );
         assert!(

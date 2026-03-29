@@ -287,7 +287,10 @@ impl ToolEngine {
         .await
     }
 
-    pub fn run_messages_stream(&self, mut messages: Vec<llm_client::ChatMessage>) -> AgentTraceStream {
+    pub fn run_messages_stream(
+        &self,
+        mut messages: Vec<llm_client::ChatMessage>,
+    ) -> AgentTraceStream {
         use super::invokers::StreamingTurnInvoker;
 
         let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);

@@ -3,8 +3,8 @@
 use crate::auth::AuthProvider;
 use crate::error::LlmError;
 use crate::model_client::ApiMode;
-use crate::providers::{AnthropicClient, OpenAIClient};
 use crate::provider::LlmProvider;
+use crate::providers::{AnthropicClient, OpenAIClient};
 use crate::stream::LlmEventStream;
 use crate::types::{LlmRequest, LlmResponse};
 use protocol_transport_core::StreamingPolicy;

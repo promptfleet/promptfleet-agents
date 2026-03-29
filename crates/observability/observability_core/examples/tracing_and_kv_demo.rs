@@ -9,7 +9,7 @@ use observability_core::{
     WasmStdoutAdapter,
 };
 use std::sync::Arc;
-use tracing::{debug, error, info, span, Level};
+use tracing::{Level, debug, error, info, span};
 
 #[cfg(feature = "structured-logging")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {

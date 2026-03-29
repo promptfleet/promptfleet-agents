@@ -24,7 +24,10 @@ use umao_core::graph::ir::GraphIR;
 use umao_executor::orchestrator;
 
 #[derive(Parser)]
-#[command(name = "umao-orchestrator", about = "Run a UMAO graph against local A2A agents")]
+#[command(
+    name = "umao-orchestrator",
+    about = "Run a UMAO graph against local A2A agents"
+)]
 struct Args {
     /// Path to a graph JSON file.
     #[arg(long)]
@@ -80,23 +83,34 @@ async fn main() {
         executor.register(name, endpoint);
     }
 
-    let event_sink: Option<umao_core::events::EventSink> = Some(Arc::new(|event: UmaoEvent| {
-        match &event {
-            UmaoEvent::NodeStateChanged { fb_id, new_state, .. } => {
+    let event_sink: Option<umao_core::events::EventSink> =
+        Some(Arc::new(|event: UmaoEvent| match &event {
+            UmaoEvent::NodeStateChanged {
+                fb_id, new_state, ..
+            } => {
                 info!(node = %fb_id, state = %new_state, "Node state changed");
             }
-            UmaoEvent::NodeCompleted { fb_id, duration_ms, .. } => {
+            UmaoEvent::NodeCompleted {
+                fb_id, duration_ms, ..
+            } => {
                 info!(node = %fb_id, duration_ms, "Node completed");
             }
-            UmaoEvent::ExecutionComplete { total_duration_ms, steps_completed, .. } => {
-                info!(duration_ms = total_duration_ms, steps = steps_completed, "Execution complete");
+            UmaoEvent::ExecutionComplete {
+                total_duration_ms,
+                steps_completed,
+                ..
+            } => {
+                info!(
+                    duration_ms = total_duration_ms,
+                    steps = steps_completed,
+                    "Execution complete"
+                );
             }
             UmaoEvent::NodeFailed { fb_id, error, .. } => {
                 error!(node = %fb_id, error, "Node failed");
             }
             _ => {}
-        }
-    }));
+        }));
 
     info!("Starting graph execution...");
 

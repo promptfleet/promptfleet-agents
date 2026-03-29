@@ -27,8 +27,8 @@ use crate::agent::{Response, RuntimeResponse, TaskOpts};
 use crate::error::SdkResult;
 use agent_core::{ContentPart, TaskPhase};
 use log::debug;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // All utility helpers (apply_request_defaults, build_tools_json, context-window
 // management) now live in engine::core_loop — the single source of truth.
@@ -169,7 +169,7 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
     request_headers: Option<Arc<std::collections::HashMap<String, String>>>,
     history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
 ) -> crate::agent::trace::AgentTraceStream {
-    use crate::agent::engine::{core_loop, StreamingTurnInvoker};
+    use crate::agent::engine::{StreamingTurnInvoker, core_loop};
     use crate::agent::trace::AgentTraceEvent;
 
     let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);
@@ -505,7 +505,7 @@ pub(crate) async fn execute_runtime(
     skill_summary: Option<&str>,
     history_policy_runtime: &dyn HistoryPolicyRuntime,
 ) -> SdkResult<RuntimeResponse> {
-    use crate::agent::engine::{core_loop, RequestResponseTurnInvoker};
+    use crate::agent::engine::{RequestResponseTurnInvoker, core_loop};
 
     let original_task_ctx = task_ctx.clone();
     let prepared_history = match task_ctx.as_ref() {
@@ -927,13 +927,15 @@ mod adapter_compat_tests {
             Ok(llm_response_from_chat_json(text_response(
                 "plain text that should be superseded",
             ))),
-            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(json!({
-                "task_patch": {
-                    "state": "completed",
-                    "append_history_text": "finalized via checkpoint"
-                },
-                "respond": { "kind": "task" }
-            })))),
+            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(
+                json!({
+                    "task_patch": {
+                        "state": "completed",
+                        "append_history_text": "finalized via checkpoint"
+                    },
+                    "respond": { "kind": "task" }
+                }),
+            ))),
         ]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 
@@ -972,7 +974,9 @@ mod adapter_compat_tests {
     #[tokio::test]
     async fn execute_a2a_finalize_required_falls_back_to_plain_text_when_checkpoint_not_called() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![
-            Ok(llm_response_from_chat_json(text_response("plain fallback text"))),
+            Ok(llm_response_from_chat_json(text_response(
+                "plain fallback text",
+            ))),
             Ok(llm_response_from_chat_json(text_response(
                 "still no checkpoint tool call",
             ))),
@@ -1011,13 +1015,15 @@ mod adapter_compat_tests {
     async fn execute_a2a_finalize_required_on_error_uses_checkpoint_turn_then_failed_state() {
         let invoker = Arc::new(MockRequestInvoker::new(vec![
             Err("upstream 503".to_string()),
-            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(json!({
-                "task_patch": {
-                    "state": "failed",
-                    "status_text": "structured failure reason"
-                },
-                "respond": { "kind": "task" }
-            })))),
+            Ok(llm_response_from_chat_json(checkpoint_tool_call_response(
+                json!({
+                    "task_patch": {
+                        "state": "failed",
+                        "status_text": "structured failure reason"
+                    },
+                    "respond": { "kind": "task" }
+                }),
+            ))),
         ]));
         let llm: Arc<dyn LlmInvoker> = invoker.clone();
 

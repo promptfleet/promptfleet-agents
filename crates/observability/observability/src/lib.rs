@@ -23,9 +23,9 @@ pub use types::{
 
 // Re-export core context helpers for convenience.
 pub use observability_core::{
+    ContextFuture, HeaderExtractor, HeaderInjector, TraceContext, W3CTraceContext,
     clear_current_context, get_current_context, set_current_context, with_context,
-    with_context_future, ContextFuture, HeaderExtractor, HeaderInjector, TraceContext,
-    W3CTraceContext,
+    with_context_future,
 };
 
 // Re-export core logging config (used as the `logging` field of `ObservabilityConfig`).

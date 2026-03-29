@@ -1,7 +1,7 @@
 //! Universal serialization traits for all protocols
 
-use crate::error::TransportResult;
 use crate::TransportError;
+use crate::error::TransportResult;
 use serde::{Deserialize, Serialize};
 
 /// **Serialization Format**

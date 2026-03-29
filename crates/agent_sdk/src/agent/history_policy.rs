@@ -1,7 +1,4 @@
-#![cfg_attr(
-    not(feature = "context-window"),
-    allow(dead_code, unused_imports)
-)]
+#![cfg_attr(not(feature = "context-window"), allow(dead_code, unused_imports))]
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -451,9 +448,9 @@ pub(crate) fn continuation_state_from_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::RuntimeResponse;
     use crate::agent::config::HistoryPolicyConfig;
     use crate::agent::response::{RuntimeContinuationUpdate, RuntimeTask};
-    use crate::agent::RuntimeResponse;
 
     fn task_ctx_with_history() -> TaskContext {
         TaskContext {

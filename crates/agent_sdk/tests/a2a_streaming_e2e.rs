@@ -3,7 +3,7 @@
 use a2a_http_client::Client;
 use a2a_protocol_core::data::{Message, MessageRole, Part, TaskState};
 use a2a_protocol_core::streaming::StreamResponse;
-use agent_sdk::{a2a::A2aServer, Agent};
+use agent_sdk::{Agent, a2a::A2aServer};
 use futures_util::StreamExt;
 use std::time::Duration;
 

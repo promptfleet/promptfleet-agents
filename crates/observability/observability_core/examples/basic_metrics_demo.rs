@@ -1,7 +1,7 @@
 use observability_core::domain::TraceContext;
 use observability_core::{
-    create_counter_metric, create_histogram_metric, BasicMetricType, MetricsEntry, MetricsPort,
-    ObservabilityResult, UnifiedWasmStdoutAdapter, WasmStdoutMetricsAdapter,
+    BasicMetricType, MetricsEntry, MetricsPort, ObservabilityResult, UnifiedWasmStdoutAdapter,
+    WasmStdoutMetricsAdapter, create_counter_metric, create_histogram_metric,
 };
 
 fn main() -> ObservabilityResult<()> {

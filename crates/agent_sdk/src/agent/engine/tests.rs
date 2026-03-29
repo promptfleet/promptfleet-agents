@@ -719,15 +719,18 @@ mod core_loop_tests {
         assert!(result.stop_signal.is_none());
 
         let ev = events.lock().unwrap();
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::TurnStarted { turn: 1, .. })));
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::TurnCompleted { turn: 1, .. })));
-        assert!(ev
-            .iter()
-            .any(|e| matches!(e, AgentTraceEvent::Completed { .. })));
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::TurnStarted { turn: 1, .. }))
+        );
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::TurnCompleted { turn: 1, .. }))
+        );
+        assert!(
+            ev.iter()
+                .any(|e| matches!(e, AgentTraceEvent::Completed { .. }))
+        );
     }
 
     #[tokio::test]

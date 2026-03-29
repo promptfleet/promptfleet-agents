@@ -414,7 +414,7 @@ pub fn reset_panic_stats() -> Result<()> {
 macro_rules! supervised {
     ($body:expr_2021) => {{
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)).map_err(|_| {
-            crate::StructuredLoggingError::enhanced_config("Supervised operation panicked")
+            $crate::StructuredLoggingError::enhanced_config("Supervised operation panicked")
         })
     }};
 }

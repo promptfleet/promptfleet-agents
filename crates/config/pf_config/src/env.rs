@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn coerce_float() {
-        assert_eq!(coerce_env_value("3.14"), json!(3.14));
+        assert_eq!(coerce_env_value("2.5"), json!(2.5));
         assert_eq!(coerce_env_value("-0.5"), json!(-0.5));
     }
 

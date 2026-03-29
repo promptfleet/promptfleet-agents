@@ -102,8 +102,8 @@ impl Default for PoolConfig {
             max_size: 10,
             min_size: 1,
             acquire_timeout: Duration::from_secs(30),
-            max_idle_time: Duration::from_mins(10), // 10 minutes
-            health_check_interval: Duration::from_mins(1), // 1 minute
+            max_idle_time: Duration::from_secs(600), // 10 minutes
+            health_check_interval: Duration::from_secs(60), // 1 minute
         }
     }
 }

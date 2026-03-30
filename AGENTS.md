@@ -64,6 +64,42 @@ Exceptions:
 4. **Update `ai_changelogs.md`** — only after tests pass
 5. **Commit** (if requested)
 
+## Commits & PRs (Conventional Commits)
+
+This repo enforces **Conventional Commits**. PR titles are validated by CI (`action-semantic-pull-request`), and `release-plz` parses commit messages to generate changelogs and bump versions.
+
+**Format**: `<type>(<scope>): <description>`
+
+- Scope is optional but encouraged — use the crate name (e.g. `feat(pf_llm_client): add streaming retry`).
+- Description: imperative mood, lowercase start, no trailing period.
+
+**Allowed types**:
+
+| Type | When to use | Version bump |
+|------|-------------|-------------|
+| `feat` | New feature or capability | minor |
+| `fix` | Bug fix | patch |
+| `docs` | Documentation only | — |
+| `chore` | Maintenance, deps, config | — |
+| `test` | Adding or updating tests | — |
+| `refactor` | Code change that neither fixes nor adds | — |
+| `perf` | Performance improvement | patch |
+| `ci` | CI/CD changes | — |
+| `build` | Build system or tooling | — |
+| `style` | Formatting, whitespace (no logic change) | — |
+| `revert` | Revert a previous commit | patch |
+
+**Breaking changes**: append `!` after the type/scope (e.g. `feat(a2a_protocol_core)!: rename Task to AgentTask`). This triggers a major bump.
+
+**Examples**:
+```
+feat(pf_agent_sdk): add agent health check endpoint
+fix(a2a_http_server): handle empty JSON-RPC batch
+refactor(pf_llm_client): extract provider trait
+docs: update README with quick-start guide
+chore: bump workspace dependencies
+```
+
 ## FMT
 
 - never use cargo fmt without user permission

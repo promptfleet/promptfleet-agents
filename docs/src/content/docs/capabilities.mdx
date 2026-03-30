@@ -1,12 +1,12 @@
 ---
 title: Capabilities Matrix
-description: Full feature matrix across the promptfleet-agents workspace.
+description: Full feature matrix across the PromptFleet Agents ecosystem — LLM, A2A, AG-UI, MCP, observability, and more.
 ---
 
 import { Aside, Badge } from '@astrojs/starlight/components';
 
 <Aside type="note">
-Feature names below match [`agent_sdk` `Cargo.toml`](https://github.com/promptfleet/promptfleet-agents/blob/main/crates/agent_sdk/Cargo.toml) unless the capability is crate-only. **WASM** / **Native** indicate where the capability is intended to run in supported configurations.
+Most capabilities below are available as **standalone crates** — you don't need the full SDK. Feature names match [`agent_sdk` `Cargo.toml`](https://github.com/promptfleet/promptfleet-agents/blob/main/crates/agent_sdk/Cargo.toml) when the capability is composed through the SDK. **WASM** / **Native** indicate supported targets.
 </Aside>
 
 Deep dive on A2A JSON-RPC methods: [A2A v1.0 compliance](/promptfleet-agents/a2a/capabilities/).

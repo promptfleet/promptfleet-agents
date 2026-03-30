@@ -1,10 +1,10 @@
 ---
 title: PromptFleet Agents
-description: Rust crate ecosystem for building, deploying, and scaling A2A agents.
+description: Rust crates for building AI agents, LLM apps, and agentic workflows — WASM and native.
 template: splash
 hero:
   title: PromptFleet Agents
-  tagline: Build WASM-native A2A agents in Rust. 25 crates. One SDK.
+  tagline: "Rust crates for AI agents, LLM apps, and agentic workflows. WASM-native. Independently usable. Composable."
   actions:
     - text: Quickstart
       link: /promptfleet-agents/quickstart/
@@ -17,34 +17,39 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+## What you can build
+
 <CardGrid>
-  <Card title="SDK / Core" icon="rocket">
-    AgentBuilder, skills, config, proc macros. Zero to agent in 10 lines.
+  <Card title="LLM Integration" icon="star">
+    Provider-agnostic client for OpenAI, Anthropic, Azure. Tool calling, context window management. Works standalone — no SDK required.
   </Card>
-  <Card title="A2A Protocol" icon="random">
-    Full Google A2A v1.0 implementation. JSON-RPC, SSE streaming, agent discovery.
+  <Card title="Agent-to-Agent (A2A)" icon="random">
+    Full Google A2A v1.0. JSON-RPC, SSE streaming, agent discovery. Build agents that find and delegate tasks to each other. WASM + native.
   </Card>
-  <Card title="LLM" icon="star">
-    Provider-agnostic client, tool registry, context window management.
+  <Card title="AG-UI Streaming" icon="laptop">
+    Stream agent execution to user interfaces via SSE. Run status, IO events, enrichers. Serve alongside A2A on one router.
   </Card>
-  <Card title="Observability" icon="magnifier">
-    Structured logging, OpenTelemetry, Prometheus. WASM-compatible.
+  <Card title="MCP Tools" icon="setting">
+    Connect to any MCP server. Tool discovery, execution, OAuth 2.1. FastMCP compatible. WASM + native.
+  </Card>
+  <Card title="Production Observability" icon="magnifier">
+    Structured logging, OpenTelemetry, Prometheus — all WASM-safe. Use in any Rust project, not just agents.
   </Card>
 </CardGrid>
 
 ## Why PromptFleet?
 
 <CardGrid>
-  <Card title="Dual-Target" icon="laptop">
-    Same codebase compiles to **WASM** (local Spin or SpinKube on Kubernetes) and **native** (Axum). Pick your runtime.
+  <Card title="Use What You Need" icon="rocket">
+    Every crate works standalone. Import just the LLM client, or just observability, or just MCP. Compose them when you're ready for the full stack.
   </Card>
-  <Card title="Feature-Flag Composition" icon="setting">
-    Only pay for what you use. Every capability is behind an opt-in feature flag.
+  <Card title="WASM + Native" icon="seti:wasm">
+    Same codebase compiles to **Fermyon Spin** (WASM) and **Axum** (native). No rewrites, no feature-flag gymnastics.
   </Card>
-  <Card title="A2A v1.0 Compliant" icon="approve-check">
-    First-class Google A2A protocol support — JSON-RPC 2.0, SSE streaming, agent cards.
+  <Card title="Standards-First" icon="approve-check">
+    Google A2A v1.0, AG-UI, MCP, JSON-RPC 2.0, OpenTelemetry. Built on open protocols — not locked into a proprietary runtime.
   </Card>
-  <Card title="Production Observability" icon="magnifier">
-    OpenTelemetry traces, Prometheus metrics, structured logging — all WASM-safe.
+  <Card title="Feature-Flag Composition" icon="puzzle">
+    Only pay for what you use. Every capability is behind an opt-in feature flag. Zero hidden dependencies.
   </Card>
 </CardGrid>

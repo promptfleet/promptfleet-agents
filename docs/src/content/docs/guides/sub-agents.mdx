@@ -17,7 +17,7 @@ Sub-agent delegation lets an agent call other A2A agents as LLM tools. The `SubA
 
 ```toml
 [dependencies]
-agent_sdk = { path = "../../crates/agent_sdk", features = ["llm-engine", "sub-agents"] }
+agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["llm-engine", "sub-agents"] }
 ```
 
 ## How to use it

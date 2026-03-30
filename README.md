@@ -8,16 +8,22 @@ Rust workspace for building [A2A Protocol v1.0](https://google.github.io/A2A/) a
 
 | Crate | Purpose | Primary target |
 |---|---|---|
-| `agent_sdk` | High-level SDK: skills, tools, A2A + AG-UI adapters | WASM + native |
+| `pf_agent_sdk` | High-level SDK: skills, tools, A2A + AG-UI adapters | WASM + native |
 | `a2a_http_server` | A2A JSON-RPC HTTP server (Spin WASM / Axum native) | WASM + native |
 | `a2a_http_client` | A2A JSON-RPC HTTP client (Spin HTTP / Reqwest native) | WASM + native |
 | `a2a_protocol_core` | Pure domain layer: protocol, registry, task storage, data types | WASM + native |
 | `a2a_app_ports` | Port traits connecting HTTP server to application layer | WASM + native |
 | `protocol_transport_core` | JSON-RPC 2.0 wire types shared across crates | WASM + native |
-| `agent_core` | Low-level agent runtime primitives | WASM + native |
-| `observability` | Metrics, spans, trace context propagation | WASM + native |
-| `llm` | LLM client abstraction (OpenAI-compatible) | native |
-| `mcp_protocol` | MCP (Model Context Protocol) types and client | native |
+| `pf_agent_core` | Low-level agent runtime primitives | WASM + native |
+| `pf_observability` | Metrics, spans, trace context propagation | WASM + native |
+| `pf_llm_client` | LLM client abstraction (OpenAI-compatible) | native |
+| `pf_mcp_protocol` | MCP (Model Context Protocol) types and client | native |
+
+Published packages use `pf_` prefixes where needed for crates.io uniqueness. In code examples we keep the local dependency key as `agent_sdk`, for example:
+
+```toml
+agent_sdk = { package = "pf_agent_sdk", version = "0.1.0", features = ["a2a-agent"] }
+```
 
 ### Documentation site (Starlight)
 
@@ -71,7 +77,7 @@ Add dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-agent_sdk = { path = "crates/agent_sdk", features = ["a2a-agent"] }
+agent_sdk = { package = "pf_agent_sdk", path = "crates/agent_sdk", features = ["a2a-agent"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 ```

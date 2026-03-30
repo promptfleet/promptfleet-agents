@@ -68,24 +68,24 @@ license = "Apache-2.0"
 
 [workspace.dependencies]
 # ── Internal crates ──
-agent_core = { path = "crates/agent_core", version = "0.1.0" }
-agent_sdk = { path = "crates/agent_sdk", version = "0.1.0", default-features = false }
+agent_core = { package = "pf_agent_core", path = "crates/agent_core", version = "0.1.0" }
+agent_sdk = { package = "pf_agent_sdk", path = "crates/agent_sdk", version = "0.1.0", default-features = false }
 a2a_protocol_core = { path = "crates/a2a_protocol_core", version = "0.1.0" }
 a2a_http_client = { path = "crates/a2a_http_client", version = "0.1.0" }
 a2a_http_server = { path = "crates/a2a_http_server", version = "0.1.0" }
 a2a_app_ports = { path = "crates/a2a_app_ports", version = "0.1.0" }
 a2a_rpc_macros = { path = "crates/a2a_rpc_macros", version = "0.1.0" }
 protocol_transport_core = { path = "crates/protocol_transport_core", version = "0.1.0" }
-foundation_utils = { path = "crates/foundation_utils", version = "0.1.0" }
-observability = { path = "crates/observability/observability", version = "0.1.0" }
-observability_core = { path = "crates/observability/observability_core", version = "0.1.0" }
-structured_logging = { path = "crates/observability/structured_logging", version = "0.1.0" }
-llm_client = { path = "crates/llm/llm_client", version = "0.1.0" }
-llm_context_core = { path = "crates/llm_context_core", version = "0.1.0" }
-llm_tools = { path = "crates/llm_tools", version = "0.1.0" }
-llm_tool_macros = { path = "crates/llm_tool_macros", version = "0.1.0" }
-tool_web_search = { path = "crates/llm_tools/tool_web_search", version = "0.1.0" }
-mcp_protocol = { path = "crates/mcp_protocol", version = "0.1.0" }
+foundation_utils = { package = "pf_foundation_utils", path = "crates/foundation_utils", version = "0.1.0" }
+observability = { package = "pf_observability", path = "crates/observability/observability", version = "0.1.0" }
+observability_core = { package = "pf_observability_core", path = "crates/observability/observability_core", version = "0.1.0" }
+structured_logging = { package = "pf_structured_logging", path = "crates/observability/structured_logging", version = "0.1.0" }
+llm_client = { package = "pf_llm_client", path = "crates/llm/llm_client", version = "0.1.0" }
+llm_context_core = { package = "pf_llm_context_core", path = "crates/llm_context_core", version = "0.1.0" }
+llm_tools = { package = "pf_llm_tools", path = "crates/llm_tools", version = "0.1.0" }
+llm_tool_macros = { package = "pf_llm_tool_macros", path = "crates/llm_tool_macros", version = "0.1.0" }
+tool_web_search = { package = "pf_tool_web_search", path = "crates/llm_tools/tool_web_search", version = "0.1.0" }
+mcp_protocol = { package = "pf_mcp_protocol", path = "crates/mcp_protocol", version = "0.1.0" }
 pf_config = { path = "crates/config/pf_config", version = "0.1.0" }
 pf_macros = { path = "crates/pf_macros", version = "0.1.0" }
 pf-types = { path = "crates/commons/pf-types", version = "0.1.0" }

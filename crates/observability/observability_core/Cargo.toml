@@ -1,5 +1,5 @@
 [package]
-name = "observability_core"
+name = "pf_observability_core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Core observability types and traits for the PromptFleet agent ecosystem"
 
 [lib]
+name = "observability_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]

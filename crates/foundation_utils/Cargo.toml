@@ -1,11 +1,14 @@
 [package]
-name = "foundation_utils"
+name = "pf_foundation_utils"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Foundation utilities for RAII patterns, resource management, and scoped operations"
+
+[lib]
+name = "foundation_utils"
 
 [features]
 default = []

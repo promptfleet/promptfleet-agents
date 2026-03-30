@@ -1,5 +1,5 @@
 [package]
-name = "otel"
+name = "pf_otel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "OpenTelemetry extension for SpinKube WASM environments"
 
 [lib]
+name = "otel"
 crate-type = ["cdylib", "rlib"]
 
 [features]

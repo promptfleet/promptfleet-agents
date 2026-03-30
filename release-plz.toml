@@ -112,6 +112,8 @@ git_release_enable = true
 [[package]]
 name = "pf_tool_web_search"
 version_group = "pf"
+publish = false
+release = false
 
 [[package]]
 name = "pf_test_harness"

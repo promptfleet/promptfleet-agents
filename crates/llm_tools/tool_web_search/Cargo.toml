@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+publish = false
 description = "Reusable LLM tool: web search via Tavily API. Returns a ToolSpec for any agent's ToolRegistry."
 
 [lib]

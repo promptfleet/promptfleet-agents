@@ -16,8 +16,8 @@ Rust workspace for building [A2A Protocol v1.0](https://google.github.io/A2A/) a
 | `protocol_transport_core` | JSON-RPC 2.0 wire types shared across crates | WASM + native |
 | `pf_agent_core` | Low-level agent runtime primitives | WASM + native |
 | `pf_observability` | Metrics, spans, trace context propagation | WASM + native |
-| `pf_llm_client` | LLM client abstraction (OpenAI-compatible) | native |
-| `pf_mcp_protocol` | MCP (Model Context Protocol) types and client | native |
+| `pf_llm_client` | LLM client abstraction (OpenAI-compatible) | WASM + native |
+| `pf_mcp_protocol` | MCP (Model Context Protocol) types and client | WASM + native |
 
 Published packages use `pf_` prefixes where needed for crates.io uniqueness. In code examples we keep the local dependency key as `agent_sdk`, for example:
 

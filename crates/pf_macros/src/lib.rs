@@ -1,3 +1,7 @@
+//! > **⚠️ Experimental** — This crate is not yet integrated into the SDK pipeline.
+//! > The API is unstable and may change significantly. Do not depend on it for production use.
+//! > It is kept in-repo only (`publish = false`); it is not released to crates.io.
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{

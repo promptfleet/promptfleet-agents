@@ -38,6 +38,8 @@ version_group = "pf"
 [[package]]
 name = "pf_macros"
 version_group = "pf"
+publish = false
+release = false
 
 [[package]]
 name = "pf-types"

@@ -5,10 +5,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "PromptFleet macros: pf_agent attribute for Spin/A2aApp wiring"
+publish = false
+description = "PromptFleet macros: pf_agent attribute for Spin/A2aApp wiring (experimental, not published)"
 
 [lib]
 proc-macro = true
+doctest = false
 
 [dependencies]
 proc-macro2 = "1"

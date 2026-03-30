@@ -24,6 +24,8 @@ version_group = "pf"
 [[package]]
 name = "a2a_rpc_macros"
 version_group = "pf"
+publish = false
+release = false
 
 [[package]]
 name = "pf_llm_context_core"

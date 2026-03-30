@@ -1,5 +1,5 @@
 [package]
-name = "agent_core"
+name = "pf_agent_core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Protocol-agnostic agent domain types — the universal vocabulary for messages, tasks, and artifacts independent of A2A, MCP, or any wire protocol"
 
 [lib]
+name = "agent_core"
 crate-type = ["rlib"]
 
 [dependencies]

@@ -1,5 +1,5 @@
 [package]
-name = "mcp_protocol"
+name = "pf_mcp_protocol"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

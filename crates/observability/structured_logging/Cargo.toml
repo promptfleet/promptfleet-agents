@@ -1,5 +1,5 @@
 [package]
-name = "structured_logging"
+name = "pf_structured_logging"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Enhanced structured logging with performance optimizations and convenience APIs for SpinKube agents"
 
 [lib]
+name = "structured_logging"
 crate-type = ["cdylib", "rlib"]
 
 [features]

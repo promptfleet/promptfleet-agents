@@ -9,7 +9,7 @@ pr_labels = ["release"]
 # ── Tier 0: Leaves ──
 
 [[package]]
-name = "foundation_utils"
+name = "pf_foundation_utils"
 version_group = "pf"
 
 [[package]]
@@ -17,7 +17,7 @@ name = "protocol_transport_core"
 version_group = "pf"
 
 [[package]]
-name = "agent_core"
+name = "pf_agent_core"
 version_group = "pf"
 
 [[package]]
@@ -25,11 +25,11 @@ name = "a2a_rpc_macros"
 version_group = "pf"
 
 [[package]]
-name = "llm_context_core"
+name = "pf_llm_context_core"
 version_group = "pf"
 
 [[package]]
-name = "llm_tool_macros"
+name = "pf_llm_tool_macros"
 version_group = "pf"
 
 [[package]]
@@ -47,7 +47,7 @@ version_group = "pf"
 # ── Tier 1 ──
 
 [[package]]
-name = "observability_core"
+name = "pf_observability_core"
 version_group = "pf"
 
 [[package]]
@@ -55,11 +55,11 @@ name = "a2a_protocol_core"
 version_group = "pf"
 
 [[package]]
-name = "llm_client"
+name = "pf_llm_client"
 version_group = "pf"
 
 [[package]]
-name = "mcp_protocol"
+name = "pf_mcp_protocol"
 version_group = "pf"
 
 # ── Tier 2 ──
@@ -69,11 +69,11 @@ name = "a2a_app_ports"
 version_group = "pf"
 
 [[package]]
-name = "llm_tools"
+name = "pf_llm_tools"
 version_group = "pf"
 
 [[package]]
-name = "otel"
+name = "pf_otel"
 version_group = "pf"
 
 [[package]]
@@ -81,13 +81,13 @@ name = "pf_prometheus"
 version_group = "pf"
 
 [[package]]
-name = "structured_logging"
+name = "pf_structured_logging"
 version_group = "pf"
 
 # ── Tier 3 ──
 
 [[package]]
-name = "observability"
+name = "pf_observability"
 version_group = "pf"
 
 [[package]]
@@ -101,14 +101,14 @@ version_group = "pf"
 # ── Tier 4 ──
 
 [[package]]
-name = "agent_sdk"
+name = "pf_agent_sdk"
 version_group = "pf"
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
 git_release_enable = true
 
 [[package]]
-name = "tool_web_search"
+name = "pf_tool_web_search"
 version_group = "pf"
 
 [[package]]

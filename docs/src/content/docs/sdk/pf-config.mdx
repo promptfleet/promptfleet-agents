@@ -59,6 +59,6 @@ let opts = LoadOptions {
 let cfg: AgentCfg = load_config(opts)?;
 ```
 
-<Aside type="note">In `agent_sdk`, config loading is opt-in via the `config-loader` feature flag. Enable it with `agent_sdk = { features = ["config-loader"] }` to use `AgentBuilder::from_config_path()`. See the [Configuration guide](/promptfleet-agents/guides/config/) for details.</Aside>
+<Aside type="note">In `agent_sdk`, config loading is opt-in via the `config-loader` feature flag. Enable it with `agent_sdk = { package = "pf_agent_sdk", version = "0.1", features = ["config-loader"] }` to use `AgentBuilder::from_config_path()`. See the [Configuration guide](/promptfleet-agents/guides/config/) for details.</Aside>
 
 **Full API reference:** `cargo doc -p pf_config --no-deps --all-features`

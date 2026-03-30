@@ -15,7 +15,7 @@ LLM tools let the agent's language model call deterministic functions during a c
 
 ```toml
 [dependencies]
-agent_sdk = { path = "../../crates/agent_sdk", features = ["llm-engine"] }
+agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["llm-engine"] }
 llm_tools = { path = "../../crates/llm_tools" }
 llm_tool_macros = { path = "../../crates/llm_tool_macros" }
 ```

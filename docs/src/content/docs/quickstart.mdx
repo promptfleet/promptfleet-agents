@@ -48,7 +48,7 @@ This tutorial builds a simple echo agent that receives A2A messages and replies 
    ```
 
    <Aside type="note">
-   These lines match [`examples/a2a-echo-native`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-native). `workspace = true` applies when your crate is a member of the `promptfleet-agents` workspace. For a standalone crate, depend on `agent_sdk` with a `path = "…/crates/agent_sdk"` (or a published version when available) and the same `features`.
+   These lines match [`examples/a2a-echo-native`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-native). `workspace = true` applies when your crate is a member of the `promptfleet-agents` workspace. For a standalone crate, use `agent_sdk = { package = "pf_agent_sdk", path = "…/crates/agent_sdk", ... }` (or the same `package = "pf_agent_sdk"` pattern with a published version) and keep the same `features`.
    </Aside>
 
    </TabItem>
@@ -67,7 +67,7 @@ This tutorial builds a simple echo agent that receives A2A messages and replies 
    Also set `crate-type = ["cdylib"]` under `[lib]` in `Cargo.toml`, as in the example.
 
    <Aside type="note">
-   Same as the native tab: `workspace = true` matches the library repo layout. The crate is not a member of the root `promptfleet-agents` workspace, so a plain `cargo build` from that folder alone will not resolve `workspace.dependencies` unless you add a workspace root or switch to `path` dependencies on `agent_sdk`. Copy [`examples/a2a-echo-wasm`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-wasm) into your own repo layout or depend on `agent_sdk` by path as you wire Spin.
+   Same as the native tab: `workspace = true` matches the library repo layout. The crate is not a member of the root `promptfleet-agents` workspace, so a plain `cargo build` from that folder alone will not resolve `workspace.dependencies` unless you add a workspace root or switch to `path` dependencies on `agent_sdk = { package = "pf_agent_sdk", ... }`. Copy [`examples/a2a-echo-wasm`](https://github.com/promptfleet/promptfleet-agents/tree/main/examples/a2a-echo-wasm) into your own repo layout or depend on `agent_sdk` by path as you wire Spin.
    </Aside>
 
    </TabItem>
@@ -234,9 +234,9 @@ This tutorial builds a simple echo agent that receives A2A messages and replies 
 
 ## What just happened?
 
-You configured an [`Agent`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html) with [`AgentConfig`](https://docs.rs/agent_sdk/latest/agent_sdk/agent/struct.AgentConfig.html) and [`Agent::new_with_config`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.new_with_config), registered a skill with [`add_skill`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.add_skill), and installed a user message handler with [`set_message_handler`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.Agent.html#method.set_message_handler). That runtime is protocol-neutral. [`A2aApp::from_agent`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.from_agent) wraps it as an **A2A v1** HTTP app: native code calls [`serve`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve) on Tokio, while the Spin path uses [`#[http_component]`](https://developer.fermyon.com/spin/http-trigger) and [`serve_async`](https://docs.rs/agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve_async) with a [`OnceLock<A2aApp>`](https://doc.rust-lang.org/std/sync/struct.OnceLock.html) so the agent is built once per process.
+You configured an [`Agent`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/struct.Agent.html) with [`AgentConfig`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/agent/struct.AgentConfig.html) and [`Agent::new_with_config`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/struct.Agent.html#method.new_with_config), registered a skill with [`add_skill`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/struct.Agent.html#method.add_skill), and installed a user message handler with [`set_message_handler`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/struct.Agent.html#method.set_message_handler). That runtime is protocol-neutral. [`A2aApp::from_agent`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.from_agent) wraps it as an **A2A v1** HTTP app: native code calls [`serve`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve) on Tokio, while the Spin path uses [`#[http_component]`](https://developer.fermyon.com/spin/http-trigger) and [`serve_async`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/a2a/struct.A2aApp.html#method.serve_async) with a [`OnceLock<A2aApp>`](https://doc.rust-lang.org/std/sync/struct.OnceLock.html) so the agent is built once per process.
 
-For config-first setups (JSON or files), the SDK also offers [`AgentBuilder`](https://docs.rs/agent_sdk/latest/agent_sdk/struct.AgentBuilder.html); this tutorial uses explicit `AgentConfig` to keep the example small.
+For config-first setups (JSON or files), the SDK also offers [`AgentBuilder`](https://docs.rs/pf_agent_sdk/latest/agent_sdk/struct.AgentBuilder.html); this tutorial uses explicit `AgentConfig` to keep the example small.
 
 ## Next steps
 

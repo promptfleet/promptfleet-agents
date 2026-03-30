@@ -1,5 +1,5 @@
 [package]
-name = "observability"
+name = "pf_observability"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "PromptFleet observability facade (happy path)"
 
 [lib]
+name = "observability"
 crate-type = ["rlib"]
 
 [features]
@@ -39,6 +40,5 @@ serde_json = { workspace = true, optional = true }
 web-time = { workspace = true }
 
 # Optional backend crates (renamed to avoid name collisions in dependents).
-otel = { path = "../otel", package = "otel", optional = true }
+otel = { path = "../otel", package = "pf_otel", optional = true }
 obs_prometheus = { path = "../prometheus", package = "pf_prometheus", optional = true }
-

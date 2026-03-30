@@ -23,7 +23,7 @@ umao_executor = { path = "../../../umao-rs/crates/umao_executor" }
 umao_agents = { path = "../../crates/umao_agents" }
 a2a_http_server = { path = "../../crates/a2a_http_server" }
 a2a_protocol_core = { path = "../../crates/a2a_protocol_core" }
-agent_sdk = { path = "../../crates/agent_sdk", features = ["a2a-client"] }
+agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["a2a-client"] }
 
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

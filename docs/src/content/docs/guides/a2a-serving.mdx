@@ -18,7 +18,7 @@ The A2A serving layer wraps a configured `Agent` as an HTTP application that spe
 
 ```toml
 [dependencies]
-agent_sdk = { path = "../../crates/agent_sdk", features = ["a2a-server", "event-stream"] }
+agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["a2a-server", "event-stream"] }
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -27,7 +27,7 @@ tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 
 ```toml
 [dependencies]
-agent_sdk = { path = "../../crates/agent_sdk", features = ["a2a-server"], default-features = false }
+agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["a2a-server"], default-features = false }
 spin-sdk = "5.2"
 ```
 

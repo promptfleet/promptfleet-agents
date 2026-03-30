@@ -6,8 +6,8 @@ version = 4
 name = "a2a-echo-native"
 version = "0.1.0"
 dependencies = [
- "agent_sdk",
  "anyhow",
+ "pf_agent_sdk",
  "tokio",
 ]
 
@@ -30,7 +30,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "futures-util",
- "observability",
+ "pf_observability",
  "protocol_transport_core",
  "reqwest",
  "serde",
@@ -57,7 +57,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "log",
- "observability",
+ "pf_observability",
  "pf_test_harness",
  "protocol_transport_core",
  "schemars 0.8.22",
@@ -98,54 +98,6 @@ dependencies = [
  "quote",
  "serde_json",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "agent_core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "agent_sdk"
-version = "0.1.0"
-dependencies = [
- "a2a_app_ports",
- "a2a_http_client",
- "a2a_http_server",
- "a2a_protocol_core",
- "agent_core",
- "anyhow",
- "async-stream",
- "async-trait",
- "axum 0.7.9",
- "criterion",
- "futures",
- "futures-util",
- "getrandom 0.2.17",
- "getrandom 0.3.4",
- "llm_client",
- "llm_context_core",
- "llm_tools",
- "log",
- "mcp_protocol",
- "observability",
- "pf_config",
- "pf_test_harness",
- "protocol_transport_core",
- "redis",
- "rmcp",
- "serde",
- "serde_json",
- "spin-sdk",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tower 0.4.13",
- "uuid",
 ]
 
 [[package]]
@@ -988,15 +940,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "foundation_utils"
-version = "0.1.0"
-dependencies = [
- "tokio",
- "wasm-bindgen",
- "web-time",
-]
-
-[[package]]
 name = "futures"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1770,58 +1713,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
-name = "llm_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.7.9",
- "bytes",
- "futures",
- "http 1.4.0",
- "indexmap 2.13.0",
- "log",
- "pf_test_harness",
- "protocol_transport_core",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "llm_context_core"
-version = "0.1.0"
-dependencies = [
- "log",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "llm_tool_macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "schemars 0.8.22",
- "serde_json",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "llm_tools"
-version = "0.1.0"
-dependencies = [
- "llm_client",
- "paste",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1856,24 +1747,6 @@ name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
-
-[[package]]
-name = "mcp_protocol"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.7.9",
- "log",
- "protocol_transport_core",
- "reqwest",
- "serde",
- "serde_json",
- "spin-sdk",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "md-5"
@@ -1979,40 +1852,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "observability"
-version = "0.1.0"
-dependencies = [
- "log",
- "observability_core",
- "otel",
- "pf_prometheus",
- "serde",
- "serde_json",
- "web-time",
-]
-
-[[package]]
-name = "observability_core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "foundation_utils",
- "js-sys",
- "log",
- "opentelemetry 0.21.0",
- "opentelemetry-semantic-conventions 0.13.0",
- "prometheus",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
- "uuid",
- "wasm-bindgen",
- "web-time",
 ]
 
 [[package]]
@@ -2198,35 +2037,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "otel"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "futures",
- "js-sys",
- "log",
- "observability_core",
- "opentelemetry 0.20.0",
- "opentelemetry-otlp",
- "opentelemetry-proto",
- "opentelemetry-semantic-conventions 0.12.0",
- "prost",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "spin-executor",
- "spin-sdk",
- "thiserror 1.0.69",
- "tokio",
- "url",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-time",
-]
-
-[[package]]
 name = "parking_lot"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2283,6 +2093,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "pf_agent_core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "pf_agent_sdk"
+version = "0.1.0"
+dependencies = [
+ "a2a_app_ports",
+ "a2a_http_client",
+ "a2a_http_server",
+ "a2a_protocol_core",
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum 0.7.9",
+ "criterion",
+ "futures",
+ "futures-util",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "log",
+ "pf_agent_core",
+ "pf_config",
+ "pf_llm_client",
+ "pf_llm_context_core",
+ "pf_llm_tools",
+ "pf_mcp_protocol",
+ "pf_observability",
+ "pf_test_harness",
+ "protocol_transport_core",
+ "redis",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "spin-sdk",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tower 0.4.13",
+ "uuid",
+]
+
+[[package]]
 name = "pf_config"
 version = "0.1.0"
 dependencies = [
@@ -2296,12 +2154,154 @@ dependencies = [
 ]
 
 [[package]]
+name = "pf_foundation_utils"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "wasm-bindgen",
+ "web-time",
+]
+
+[[package]]
+name = "pf_llm_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.9",
+ "bytes",
+ "futures",
+ "http 1.4.0",
+ "indexmap 2.13.0",
+ "log",
+ "pf_test_harness",
+ "protocol_transport_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "pf_llm_context_core"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "pf_llm_tool_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "schemars 0.8.22",
+ "serde_json",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "pf_llm_tools"
+version = "0.1.0"
+dependencies = [
+ "paste",
+ "pf_llm_client",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pf_macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "pf_mcp_protocol"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.9",
+ "log",
+ "protocol_transport_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spin-sdk",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "pf_observability"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "pf_observability_core",
+ "pf_otel",
+ "pf_prometheus",
+ "serde",
+ "serde_json",
+ "web-time",
+]
+
+[[package]]
+name = "pf_observability_core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "js-sys",
+ "log",
+ "opentelemetry 0.21.0",
+ "opentelemetry-semantic-conventions 0.13.0",
+ "pf_foundation_utils",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+ "wasm-bindgen",
+ "web-time",
+]
+
+[[package]]
+name = "pf_otel"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures",
+ "js-sys",
+ "log",
+ "opentelemetry 0.20.0",
+ "opentelemetry-otlp",
+ "opentelemetry-proto",
+ "opentelemetry-semantic-conventions 0.12.0",
+ "pf_observability_core",
+ "prost",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spin-executor",
+ "spin-sdk",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
@@ -2313,7 +2313,7 @@ dependencies = [
  "indexmap 2.13.0",
  "js-sys",
  "log",
- "observability_core",
+ "pf_observability_core",
  "prometheus",
  "reqwest",
  "serde",
@@ -2329,12 +2329,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pf_structured_logging"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "js-sys",
+ "log",
+ "pf_observability_core",
+ "serde",
+ "serde_json",
+ "string-interner",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+ "wasm-bindgen",
+ "web-time",
+]
+
+[[package]]
 name = "pf_test_harness"
 version = "0.1.0"
 dependencies = [
  "a2a_http_server",
  "a2a_protocol_core",
- "agent_sdk",
  "axum 0.7.9",
  "bytes",
  "futures",
@@ -2342,12 +2359,27 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
- "llm_client",
+ "pf_agent_sdk",
+ "pf_llm_client",
  "reqwest",
  "serde_json",
  "tokio",
  "tokio-stream",
  "tower 0.5.3",
+]
+
+[[package]]
+name = "pf_tool_web_search"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "pf_agent_sdk",
+ "reqwest",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "spin-sdk",
+ "tokio",
 ]
 
 [[package]]
@@ -3460,24 +3492,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
-name = "structured_logging"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "js-sys",
- "log",
- "observability_core",
- "serde",
- "serde_json",
- "string-interner",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
- "wasm-bindgen",
- "web-time",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3819,20 +3833,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tool_web_search"
-version = "0.1.0"
-dependencies = [
- "agent_sdk",
- "log",
- "reqwest",
- "schemars 0.8.22",
- "serde",
- "serde_json",
- "spin-sdk",
- "tokio",
 ]
 
 [[package]]

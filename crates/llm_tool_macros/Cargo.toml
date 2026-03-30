@@ -1,5 +1,5 @@
 [package]
-name = "llm_tool_macros"
+name = "pf_llm_tool_macros"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Attribute macros to register Rust functions as LLM tools with JSON Schema via schemars"
 
 [lib]
+name = "llm_tool_macros"
 proc-macro = true
 
 [dependencies]

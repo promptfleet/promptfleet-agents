@@ -24,11 +24,11 @@ d) Use Tavily/Fetch/context7 for third-party library grounding before formalizin
 
 | Area | Key crates | Role |
 |------|-----------|------|
-| **SDK / Core** | `agent_sdk`, `agent_core`, `pf_macros`, `pf-types`, `pf_config` | Agent types, SDK facade, proc macros, config |
+| **SDK / Core** | `pf_agent_sdk`, `pf_agent_core`, `pf_macros`, `pf-types`, `pf_config` | Agent types, SDK facade, proc macros, config |
 | **A2A Protocol** | `a2a_protocol_core`, `a2a_http_client`, `a2a_http_server`, `a2a_app_ports`, `a2a_rpc_macros`, `protocol_transport_core` | A2A domain, transport, JSON-RPC |
-| **LLM** | `llm_client`, `llm_context_core`, `llm_tools`, `llm_tool_macros`, `tool_web_search` | Provider-agnostic LLM, tool registry |
-| **Observability** | `observability`, `observability_core`, `structured_logging`, `otel`, `prometheus` | Logging, tracing, metrics |
-| **Support** | `foundation_utils`, `mcp_protocol` | Utilities, MCP protocol |
+| **LLM** | `pf_llm_client`, `pf_llm_context_core`, `pf_llm_tools`, `pf_llm_tool_macros`, `pf_tool_web_search` | Provider-agnostic LLM, tool registry |
+| **Observability** | `pf_observability`, `pf_observability_core`, `pf_structured_logging`, `pf_otel`, `pf_prometheus` | Logging, tracing, metrics |
+| **Support** | `pf_foundation_utils`, `pf_mcp_protocol` | Utilities, MCP protocol |
 | **Test** | `pf_test_harness` | Native-only test harness for streaming, SSE, A2A routes |
 
 ## WASM Compatibility (MANDATORY)

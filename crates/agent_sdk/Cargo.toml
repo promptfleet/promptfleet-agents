@@ -1,5 +1,5 @@
 [package]
-name = "agent_sdk"
+name = "pf_agent_sdk"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,6 +11,7 @@ keywords = ["agent", "a2a", "agui", "sdk", "wasm"]
 categories = ["api-bindings", "asynchronous", "wasm"]
 
 [lib]
+name = "agent_sdk"
 crate-type = ["rlib"]
 
 [dependencies]

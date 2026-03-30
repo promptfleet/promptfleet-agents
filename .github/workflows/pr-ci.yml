@@ -141,3 +141,35 @@ jobs:
       - name: Build site
         working-directory: docs
         run: yarn build
+
+  ci-pass:
+    name: CI Pass
+    if: always()
+    needs:
+      - pr-title-check
+      - fmt
+      - clippy
+      - test
+      - wasm-check
+      - publish-dry-run
+      - docs-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all checks
+        run: |
+          results=( \
+            "${{ needs.pr-title-check.result }}" \
+            "${{ needs.fmt.result }}" \
+            "${{ needs.clippy.result }}" \
+            "${{ needs.test.result }}" \
+            "${{ needs.wasm-check.result }}" \
+            "${{ needs.publish-dry-run.result }}" \
+            "${{ needs.docs-build.result }}" \
+          )
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::CI check failed or was cancelled ($r)"
+              exit 1
+            fi
+          done
+          echo "All checks passed or were skipped"

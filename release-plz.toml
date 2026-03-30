@@ -116,6 +116,7 @@ version_group = "pf"
 [[package]]
 name = "pf_test_harness"
 version_group = "pf"
+publish = false
 release = false
 
 # ── Excluded ──

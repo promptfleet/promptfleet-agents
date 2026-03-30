@@ -1,9 +1,11 @@
 ---
-import type { Props } from '@astrojs/starlight/props';
+const { siteTitleHref } = Astro.locals.starlightRoute;
+const baseWithSlash = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const logoSrc = `${baseWithSlash}favicon.svg`;
 ---
 
-<a href={Astro.props.siteTitleHref} class="site-title sl-flex">
-  <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="" class="logo" />
+<a href={siteTitleHref} class="site-title sl-flex">
+  <img src={logoSrc} alt="" class="logo" />
   <span class="title-text">
     promptfleet <span class="title-accent">Agents</span>
   </span>

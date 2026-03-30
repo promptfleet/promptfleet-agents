@@ -10,7 +10,7 @@ export default defineConfig({
 		mermaid(),
 		starlight({
 			title: 'PromptFleet Agents',
-			description: 'Rust library workspace: SDK, A2A, LLM, observability.',
+			description: 'Rust crates for AI agents, LLM apps, and agentic workflows — WASM and native.',
 			favicon: '/favicon.svg',
 			components: {
 				SiteTitle: './src/components/SiteTitle.astro',
@@ -115,11 +115,17 @@ export default defineConfig({
 					],
 				},
 				{
-					label: 'Support / Integration',
+					label: 'MCP (Model Context Protocol)',
+					items: [
+						{ label: 'Overview', link: '/mcp/' },
+						{ label: 'mcp_protocol', link: '/mcp/mcp-protocol/' },
+					],
+				},
+				{
+					label: 'Support / Foundation',
 					items: [
 						{ label: 'Overview', link: '/support/' },
 						{ label: 'foundation_utils', link: '/support/foundation-utils/' },
-						{ label: 'mcp_protocol', link: '/support/mcp-protocol/' },
 						{
 							label: 'pf_test_harness',
 							link: '/support/pf-test-harness/',

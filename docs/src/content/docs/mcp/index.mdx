@@ -1,0 +1,73 @@
+---
+title: MCP (Model Context Protocol)
+description: Standards-compliant MCP implementation — connect agents to external tools, run MCP servers, and bridge tool ecosystems. WASM + native.
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">MCP is one of the key building blocks of the AI agentic ecosystem. PromptFleet's `mcp_protocol` crate works **standalone** — you don't need the agent SDK to use it.</Aside>
+
+The [Model Context Protocol](https://modelcontextprotocol.io/) is the open standard for connecting AI agents and LLM apps to external tools, data sources, and services. PromptFleet provides a full, WASM-compatible implementation.
+
+## What you get
+
+- **JSON-RPC 2.0** wire format with full request/response lifecycle
+- **Tool discovery** (`tools/list`) and **tool execution** (`tools/call`)
+- **Memory operations** for persistent context
+- **OAuth 2.1 Bearer token** authentication
+- **HTTP+SSE** and **Streamable HTTP** transports
+- **FastMCP compatible** — interoperates with Python FastMCP and TypeScript MCP SDKs
+- **Client, server, and proxy** modes via feature flags
+
+## Two ways to use MCP
+
+### Standalone (`mcp_protocol` crate)
+
+Use `pf_mcp_protocol` directly when you want MCP in any Rust app — no agent SDK needed.
+
+```toml
+[dependencies]
+mcp_protocol = { package = "pf_mcp_protocol", version = "0.1", features = ["client"] }
+```
+
+```rust
+use mcp_protocol::{McpProtocolHandler, create_mcp_handler};
+
+let handler = create_mcp_handler();
+// Or customize:
+// let handler = McpProtocolHandler::new()
+//     .with_capabilities(ServerCapabilities::default())
+//     .with_query_mode(mcp_protocol::QueryMode::Single);
+```
+
+### Via the Agent SDK (`mcp-client` feature)
+
+When building agents with `agent_sdk`, enable `mcp-client` to auto-discover and register MCP tools into the agent's `ToolRegistry`. The SDK uses the correct backend automatically — `NativeMcpBackend` on native (via `rmcp`), `WasmMcpBackend` on WASM (via `mcp_protocol` + Spin HTTP).
+
+```toml
+[dependencies]
+agent_sdk = { package = "pf_agent_sdk", version = "0.1", features = ["llm-engine", "mcp-client"] }
+```
+
+MCP tools become available to the LLM alongside local tools — the agent doesn't need to know the difference.
+
+## Crate details
+
+<CardGrid>
+  <LinkCard title="mcp_protocol" description="Core MCP implementation — JSON-RPC 2.0, tool discovery, execution, auth, proxy. WASM + native." href="/promptfleet-agents/mcp/mcp-protocol/" />
+</CardGrid>
+
+## Guides
+
+- [MCP Integration guide](/promptfleet-agents/guides/mcp/) — step-by-step: connect external MCP servers, configure tool policies, wire into agents
+- [API reference](/promptfleet-agents/api/mcp-protocol/) — full type and module documentation
+
+## Feature flags
+
+| Feature | Purpose |
+|---------|---------|
+| `client` | MCP client module (included in default) |
+| `server` | MCP server module (included in default) |
+| `proxy` | Connect to external MCP servers outside Kubernetes (included in default) |
+| `sse-client` | Direct SSE client — avoids proxy hop for performance |
+| `sse-server` | Direct SSE server — accepts direct SSE connections |

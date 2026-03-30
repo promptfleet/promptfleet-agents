@@ -281,6 +281,15 @@ If you are validating WASM compatibility with `cargo check --target wasm32-wasip
 
 ---
 
+## Documentation
+
+Full docs, API reference, and guides: [promptfleet.github.io/promptfleet-agents](https://promptfleet.github.io/promptfleet-agents/)
+
+```bash
+# Run the docs site locally
+cd docs && corepack enable && yarn install && yarn dev
+```
+
 ## License
 
 Apache-2.0

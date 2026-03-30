@@ -10,7 +10,7 @@ A collection of **independent, composable Rust crates** for AI agent development
 
 The ecosystem covers LLM integration, agent-to-agent communication (A2A), user-facing streaming (AG-UI), Model Context Protocol (MCP), observability, and tool calling. Use one crate for a single concern, or bring in `agent_sdk` to compose the full stack.
 
-**[Docs, guides, and API reference →](https://promptfleet.dev/promptfleet-agents/)**
+**[Docs, guides, and API reference →](https://promptfleet.github.io/promptfleet-agents/)**
 
 ---
 
@@ -270,15 +270,6 @@ Target selection is compile-time via `cfg(target_arch = "wasm32")` — no runtim
 | OpenTelemetry | OTLP | Traces, metrics, auto-instrumentation |
 
 ---
-
-## Documentation
-
-Full docs, API reference, and guides: [promptfleet.dev/promptfleet-agents](https://promptfleet.dev/promptfleet-agents/)
-
-```bash
-# Run the docs site locally
-cd docs && corepack enable && yarn install && yarn dev
-```
 
 ## License
 

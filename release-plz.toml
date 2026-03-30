@@ -1,6 +1,7 @@
 [workspace]
 changelog_update = true
 semver_check = true
+release_always = false
 git_release_enable = false
 git_tag_enable = false
 dependencies_update = false
@@ -118,16 +119,6 @@ version_group = "pf"
 # ── Excluded ──
 
 [[package]]
-name = "umao_agents"
-release = false
-publish = false
-
-[[package]]
 name = "a2a-echo-native"
-release = false
-publish = false
-
-[[package]]
-name = "umao-local-orchestration"
 release = false
 publish = false

@@ -13,7 +13,6 @@ Exceptions: `pf_test_harness` is native-only, and examples are intentionally tar
 The ecosystem covers LLM integration, agent-to-agent communication (A2A), user-facing streaming (AG-UI), Model Context Protocol (MCP), observability, and tool calling. Use one crate for a single concern, or bring in `agent_sdk` to compose the full stack.
 
 **[Docs, guides, and API reference →](https://promptfleet.github.io/promptfleet-agents/)**
-
 ---
 
 ## Pick What You Need

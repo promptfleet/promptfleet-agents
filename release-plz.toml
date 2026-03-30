@@ -1,7 +1,7 @@
 [workspace]
 changelog_update = true
 semver_check = true
-release_always = false
+release_always = true
 git_release_enable = false
 git_tag_enable = false
 dependencies_update = false

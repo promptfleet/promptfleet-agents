@@ -6,7 +6,9 @@ Rust crates for building AI agents, LLM apps, and agentic workflows — WASM and
 
 ## What is PromptFleet Agents?
 
-A collection of **independent, composable Rust crates** for AI agent development. Each crate works standalone or composes with others. All target both **WASM** (Fermyon Spin / SpinKube) and **native** (Axum / Tokio) runtimes.
+A collection of **independent, composable Rust crates** for AI agent development. Most library crates work standalone or compose with others, and target both **WASM** (Fermyon Spin / SpinKube) and **native** (Axum / Tokio) runtimes. 
+
+Exceptions: `pf_test_harness` is native-only, and examples are intentionally target-specific.
 
 The ecosystem covers LLM integration, agent-to-agent communication (A2A), user-facing streaming (AG-UI), Model Context Protocol (MCP), observability, and tool calling. Use one crate for a single concern, or bring in `agent_sdk` to compose the full stack.
 
@@ -247,7 +249,7 @@ The server exposes:
 
 ## WASM + Native
 
-Every crate compiles to both `wasm32-wasip1` (Fermyon Spin / SpinKube on Kubernetes) and native (Axum / Tokio). The same code, the same APIs — the transport layer adapts automatically:
+All library crates except `pf_test_harness` compile to both `wasm32-wasip1` (Fermyon Spin / SpinKube on Kubernetes) and native (Axum / Tokio). The same code, the same APIs — the transport layer adapts automatically:
 
 | | WASM | Native |
 |---|---|---|
@@ -257,6 +259,14 @@ Every crate compiles to both `wasm32-wasip1` (Fermyon Spin / SpinKube on Kuberne
 | AG-UI | — | Axum + SSE |
 
 Target selection is compile-time via `cfg(target_arch = "wasm32")` — no runtime overhead.
+
+Native-only / target-specific exceptions:
+- `pf_test_harness` is native-only and exists for Tokio/Axum-based seam and integration testing.
+- `examples/a2a-echo-native` is a native-only example and is included in the workspace.
+- `examples/a2a-echo-wasm` is the WASM example and is built separately from the workspace.
+- `examples/umao-local-orchestration` is a native-only example excluded from the workspace because it depends on sibling-path crates.
+
+If you are validating WASM compatibility with `cargo check --target wasm32-wasip1`, exclude `pf_test_harness` and the native-only examples from blanket workspace checks.
 
 ---
 

@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/pf_llm_context_core-v0.1.0) - 2026-03-30
 
-### Other
+Initial release.
 
-- Refactor crate names for consistency and clarity
-- Enhance default implementations and refactor code for clarity
-- Refactor project structure and enhance documentation
-- Add AI changelogs for recent updates, including the introduction of `Duration::from_mins` and `from_hours` for better time handling in Rust 1.91+, and removal of redundant `Future` prelude imports in Rust 2024. Update Cargo.toml files across multiple crates to reflect the new Rust edition. Ensure all tests pass after modifications.
-- Refactor code for improved readability and consistency; apply formatting changes across multiple files, including test assertions and error handling. Enhance clarity in JSON-RPC responses and method implementations.
-- init commit 2
+### Added
+
+- Context window builder with token-budget tracking
+- Configurable history strategies (sliding window, summarization ports)
+- System prompt management with fixed and dynamic segments
+- Long-term memory trait ports for retrieval-augmented generation
+- WASM-compatible token estimation without native tokenizer dependencies

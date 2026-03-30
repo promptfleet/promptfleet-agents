@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/pf_test_harness-v0.1.0) - 2026-03-30
 
-### Other
+Initial release.
 
-- Refactor imports and improve code organization across multiple crates
-- Refactor project structure and enhance documentation
-- Enhance A2A Protocol documentation and testing framework. Introduce `a2a_app_ports` and `a2a_http_client` crates with comprehensive README files detailing usage, features, and integration. Implement `pf_test_harness` for local OpenAI-compatible mock testing, including new scenario integration tests for `LlmClient`. Update dependencies in `Cargo.toml` and ensure all tests pass across modules, improving overall reliability and coverage.
-- Implement deduplication of `StreamStart` events in OpenAI SSE drivers within `llm_client`. Introduce `dedupe_stream_starts` to ensure only one `StreamEvent::StreamStart` per HTTP response, addressing issues with repeated `delta.role` in certain streams. Update related functions and add new tests for deduplication behavior. Modify README to reflect this guarantee. Update dependencies in `Cargo.lock` for improved functionality.
-- Add AI changelogs for recent updates, including the introduction of `Duration::from_mins` and `from_hours` for better time handling in Rust 1.91+, and removal of redundant `Future` prelude imports in Rust 2024. Update Cargo.toml files across multiple crates to reflect the new Rust edition. Ensure all tests pass after modifications.
-- Refactor code for improved readability and consistency; apply formatting changes across multiple files, including test assertions and error handling. Enhance clarity in JSON-RPC responses and method implementations.
-- init commit 2
+### Added
+
+- `LlmScenario` for deterministic LLM turn sequences (text, tool calls, errors, reasoning)
+- `TestPipeline` for end-to-end streaming tests: scenario → engine → mapper → SSE capture
+- `SseCollector` / `SseCapture` for asserting SSE frame sequences, event names, and JSON paths
+- A2A HTTP helpers: JSON-RPC body builders and `collect_send_subscribe_sse` for axum router testing
+- Native-only crate (tokio/axum) — not compiled for WASM targets

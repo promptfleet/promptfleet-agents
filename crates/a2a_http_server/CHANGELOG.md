@@ -9,16 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/a2a_http_server-v0.1.0) - 2026-03-30
 
-### Other
+Initial release.
 
-- Refactor imports and improve code organization across multiple crates
-- Refactor project structure and enhance documentation
-- Enhance A2A Protocol documentation and testing framework. Introduce `a2a_app_ports` and `a2a_http_client` crates with comprehensive README files detailing usage, features, and integration. Implement `pf_test_harness` for local OpenAI-compatible mock testing, including new scenario integration tests for `LlmClient`. Update dependencies in `Cargo.toml` and ensure all tests pass across modules, improving overall reliability and coverage.
-- Update README with comprehensive documentation for the A2A Protocol v1.0 agents, including crate map, architecture overview, quick start guide, feature flags, and protocol compatibility details. Refactor A2A HTTP client and server methods to standardize the use of "Ping" instead of "pf.agent.ping". Enhance tests across various modules to improve coverage and reliability, including new tests for messaging and task handling. Remove deprecated error codes and streamline transport builder functionality.
-- Refactor observability handling in A2A HTTP server to conditionally manage async responses based on the observability feature flag. Update Cargo.toml in a2a_rpc_macros to disable doctests and enhance method argument parsing with a new helper function. Adjust task store logic to refine conditional compilation for WASM and server features.
-- Add AI changelogs for recent updates, including the introduction of `Duration::from_mins` and `from_hours` for better time handling in Rust 1.91+, and removal of redundant `Future` prelude imports in Rust 2024. Update Cargo.toml files across multiple crates to reflect the new Rust edition. Ensure all tests pass after modifications.
-- Enhance Cargo.toml with new development and local release profiles for improved build performance. Update native_server.rs to conditionally handle observability features in async operations, ensuring compatibility with and without the observability feature flag.
-- Enhance observability features by introducing context-aware futures for async operations. Update A2A HTTP and WASM servers to utilize new context management, ensuring trace context is preserved across async calls. Add tests for W3C trace context handling in WASM server. Refactor observability configuration to include metrics enabling options and improve metric export functionality in OTLP collector client.
-- Refactor code for improved readability and consistency; apply formatting changes across multiple files, including test assertions and error handling. Enhance clarity in JSON-RPC responses and method implementations.
-- Refactor project structure and dependencies; remove unused WASM example, update Cargo.toml for agent_sdk, and enhance A2A HTTP server with new JSON-RPC methods. Add tests for environment variable handling and improve deep merge functionality in config management.
-- init commit 2
+### Added
+
+- A2A v1.0 HTTP server with target-specific implementations: Spin on WASM, Axum on native
+- Full JSON-RPC 2.0 method dispatch for SendMessage, GetTask, CancelTask, ListTasks, GetAgentCard, Ping
+- SSE streaming support for `message/stream` subscriptions
+- In-memory task store with feature-gated persistence
+- Optional observability integration for trace-context-aware async handling

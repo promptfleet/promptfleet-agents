@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/pf_llm_tools-v0.1.0) - 2026-03-30
 
-### Other
+Initial release.
 
-- Refactor crate names for consistency and clarity
-- Refactor project structure and enhance documentation
-- Add AI changelogs for recent updates, including the introduction of `Duration::from_mins` and `from_hours` for better time handling in Rust 1.91+, and removal of redundant `Future` prelude imports in Rust 2024. Update Cargo.toml files across multiple crates to reflect the new Rust edition. Ensure all tests pass after modifications.
-- Refactor project structure and dependencies; remove unused WASM example, update Cargo.toml for agent_sdk, and enhance A2A HTTP server with new JSON-RPC methods. Add tests for environment variable handling and improve deep merge functionality in config management.
-- init commit 2
+### Added
+
+- `ToolRegistry` for collecting and managing LLM tool definitions
+- `registry_from!` macro for compile-time tool registration from `#[llm_tool]` functions
+- JSON Schema generation for tool parameters via `schemars`
+- Name-based tool dispatch with optional context-aware executors
+- WASM-safe implementation with no dynamic registration overhead

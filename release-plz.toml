@@ -104,6 +104,7 @@ version_group = "pf"
 [[package]]
 name = "pf_agent_sdk"
 version_group = "pf"
+release = false
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
 git_release_enable = true
@@ -115,6 +116,7 @@ version_group = "pf"
 [[package]]
 name = "pf_test_harness"
 version_group = "pf"
+release = false
 
 # ── Excluded ──
 

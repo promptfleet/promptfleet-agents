@@ -18,12 +18,12 @@ name = "orchestrator"
 path = "src/main.rs"
 
 [dependencies]
-umao_core = { path = "../../../umao-rs/crates/umao_core" }
-umao_executor = { path = "../../../umao-rs/crates/umao_executor" }
+umao_core = { workspace = true }
+umao_executor = { workspace = true }
 umao_agents = { path = "../../crates/umao_agents" }
-a2a_http_server = { path = "../../crates/a2a_http_server" }
-a2a_protocol_core = { path = "../../crates/a2a_protocol_core" }
-agent_sdk = { package = "pf_agent_sdk", path = "../../crates/agent_sdk", features = ["a2a-client"] }
+a2a_http_server = { workspace = true }
+a2a_protocol_core = { workspace = true }
+agent_sdk = { workspace = true, features = ["a2a-client"] }
 
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

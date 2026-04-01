@@ -42,20 +42,18 @@ members = [
     # SDK
     "crates/agent_sdk",
 
+    # UMAO
+    "crates/umao_agents",
+
     # Test Harness
     "crates/pf_test_harness",
 
     # Examples
     "examples/a2a-echo-native",
+    "examples/umao-local-orchestration",
 ]
 
-# Excluded from workspace: these depend on sibling repos (umao-rs) via path deps
-# and cannot be resolved without that repo present. Build locally with:
-#   cargo build -p umao_agents
-#   cargo build -p umao-local-orchestration
 exclude = [
-    "crates/umao_agents",
-    "examples/umao-local-orchestration",
     "examples/a2a-echo-wasm",
 ]
 
@@ -90,6 +88,8 @@ pf_config = { path = "crates/config/pf_config", version = "0.1.0" }
 pf_macros = { path = "crates/pf_macros", version = "0.1.0" }
 pf-types = { path = "crates/commons/pf-types", version = "0.1.0" }
 pf_test_harness = { path = "crates/pf_test_harness", version = "0.1.0" }
+umao_core = { version = "0.1.0" }
+umao_executor = { version = "0.1.0" }
 
 # ── External dependencies ──
 serde = { version = "1.0", features = ["derive"] }

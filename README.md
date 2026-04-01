@@ -6,13 +6,16 @@ Rust crates for building AI agents, LLM apps, and agentic workflows — WASM and
 
 ## What is PromptFleet Agents?
 
-A collection of **independent, composable Rust crates** for AI agent development. Most library crates work standalone or compose with others, and target both **WASM** (Fermyon Spin / SpinKube) and **native** (Axum / Tokio) runtimes.
+
+A collection of **independent, composable Rust crates** for AI agent development. Most library crates work standalone or compose with others, and target both **WASM** (Fermyon Spin / SpinKube) and **native** (Axum / Tokio) runtimes. 
+
 
 Exceptions: `pf_test_harness` is native-only, and examples are intentionally target-specific.
 
 The ecosystem covers LLM integration, agent-to-agent communication (A2A), user-facing streaming (AG-UI), Model Context Protocol (MCP), observability, and tool calling. Use one crate for a single concern, or bring in `agent_sdk` to compose the full stack.
 
 **[Docs, guides, and API reference →](https://promptfleet.github.io/promptfleet-agents/)**
+
 ---
 
 ## Pick What You Need
@@ -279,15 +282,6 @@ If you are validating WASM compatibility with `cargo check --target wasm32-wasip
 | OpenTelemetry | OTLP | Traces, metrics, auto-instrumentation |
 
 ---
-
-## Documentation
-
-Full docs, API reference, and guides: [promptfleet.github.io/promptfleet-agents](https://promptfleet.github.io/promptfleet-agents/)
-
-```bash
-# Run the docs site locally
-cd docs && corepack enable && yarn install && yarn dev
-```
 
 ## License
 

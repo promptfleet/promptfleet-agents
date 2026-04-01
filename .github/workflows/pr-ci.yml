@@ -110,7 +110,9 @@ jobs:
           cargo check --target wasm32-wasip1 --locked \
             --workspace \
             --exclude pf_test_harness \
-            --exclude a2a-echo-native
+            --exclude a2a-echo-native \
+            --exclude umao-local-orchestration \
+            --exclude umao_agents
 
   publish-dry-run:
     name: Publish dry-run

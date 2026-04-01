@@ -15,7 +15,6 @@ umao_executor = { workspace = true }
 agent_sdk = { workspace = true, features = ["a2a-client"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

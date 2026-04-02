@@ -24,9 +24,9 @@ http-body = "1"
 http-body-util = "0.1"
 
 # Optional integrations
-agent_sdk = { package = "pf_agent_sdk", path = "../agent_sdk", version = "0.1.0", default-features = false, features = ["llm-engine", "event-stream", "test-support"], optional = true }
-a2a_protocol_core = { path = "../a2a_protocol_core", version = "0.1.0", features = ["streaming"], optional = true }
-a2a_http_server = { path = "../a2a_http_server", version = "0.1.0", features = ["streaming"], optional = true }
+agent_sdk = { package = "pf_agent_sdk", path = "../agent_sdk", version = "0.1.1", default-features = false, features = ["llm-engine", "event-stream", "test-support"], optional = true }
+a2a_protocol_core = { path = "../a2a_protocol_core", version = "0.1.1", features = ["streaming"], optional = true }
+a2a_http_server = { path = "../a2a_http_server", version = "0.1.1", features = ["streaming"], optional = true }
 axum = { version = "0.7", optional = true }
 tower = { version = "0.5", features = ["util"], optional = true }
 tokio-stream = { version = "0.1", optional = true }

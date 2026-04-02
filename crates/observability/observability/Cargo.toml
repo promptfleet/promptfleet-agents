@@ -40,5 +40,5 @@ serde_json = { workspace = true, optional = true }
 web-time = { workspace = true }
 
 # Optional backend crates (renamed to avoid name collisions in dependents).
-otel = { path = "../otel", package = "pf_otel", version = "0.1.0", optional = true }
-obs_prometheus = { path = "../prometheus", package = "pf_prometheus", version = "0.1.0", optional = true }
+otel = { path = "../otel", package = "pf_otel", version = "0.1.1", optional = true }
+obs_prometheus = { path = "../prometheus", package = "pf_prometheus", version = "0.1.1", optional = true }

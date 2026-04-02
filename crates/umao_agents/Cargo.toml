@@ -13,10 +13,15 @@ categories = ["network-programming", "asynchronous"]
 umao_core = { workspace = true }
 umao_executor = { workspace = true }
 agent_sdk = { workspace = true, features = ["a2a-client"] }
+futures = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "net"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+tokio = { version = "1.0", default-features = false, features = ["macros", "rt"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.0", default-features = false, features = ["io-util", "macros", "net", "rt"] }

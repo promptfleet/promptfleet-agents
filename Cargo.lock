@@ -4112,6 +4112,7 @@ dependencies = [
 name = "umao_agents"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "pf_agent_sdk",
  "serde_json",
  "tokio",

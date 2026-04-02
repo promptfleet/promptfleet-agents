@@ -56,56 +56,75 @@ impl AsyncNodeExecutor for PromptFleetExecutor {
         inputs: &'a HashMap<String, Value>,
         _system_prompt: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<NodeOutput, UmaoError>> + Send + 'a>> {
-        Box::pin(async move {
-            match cfb_type {
-                CfbType::Delegate => self.execute_delegate(node_id, inputs).await,
-                CfbType::Select => {
-                    let data = umao_core::deterministic::deterministic_monitor_response(
-                        &serde_json::to_string(inputs).unwrap_or_default(),
-                    );
-                    Ok(NodeOutput::completed(data, 0.0))
-                }
-                CfbType::Aggregate => {
-                    let mut sections = Vec::new();
-                    for (port, value) in inputs {
-                        if port.starts_with("__") {
-                            continue;
-                        }
-                        let text = match value.as_str() {
-                            Some(s) => s.to_string(),
-                            None => serde_json::to_string(value).unwrap_or_default(),
-                        };
-                        sections.push(format!("[{port}] {text}"));
-                    }
-                    let combined = if sections.is_empty() {
-                        "No inputs to aggregate.".to_string()
-                    } else {
-                        format!(
-                            "## Aggregated Results ({} sources)\n\n{}",
-                            sections.len(),
-                            sections.join("\n\n")
-                        )
-                    };
-                    Ok(NodeOutput::completed(serde_json::json!(combined), 0.0))
-                }
-                CfbType::Monitor => {
-                    let data = umao_core::deterministic::deterministic_monitor_response(
-                        &serde_json::to_string(inputs).unwrap_or_default(),
-                    );
-                    Ok(NodeOutput::completed(data, 0.0))
-                }
-                CfbType::FlowControl => {
-                    let data = umao_core::deterministic::deterministic_flow_control_response(
-                        &serde_json::to_string(inputs).unwrap_or_default(),
-                    );
-                    Ok(NodeOutput::completed(data, 0.0))
-                }
+        match cfb_type {
+            CfbType::Delegate => self.execute_delegate_future(node_id, inputs),
+            CfbType::Select => {
+                let data = umao_core::deterministic::deterministic_monitor_response(
+                    &serde_json::to_string(inputs).unwrap_or_default(),
+                );
+                Box::pin(async move { Ok(NodeOutput::completed(data, 0.0)) })
             }
-        })
+            CfbType::Aggregate => {
+                let mut sections = Vec::new();
+                for (port, value) in inputs {
+                    if port.starts_with("__") {
+                        continue;
+                    }
+                    let text = match value.as_str() {
+                        Some(s) => s.to_string(),
+                        None => serde_json::to_string(value).unwrap_or_default(),
+                    };
+                    sections.push(format!("[{port}] {text}"));
+                }
+                let combined = if sections.is_empty() {
+                    "No inputs to aggregate.".to_string()
+                } else {
+                    format!(
+                        "## Aggregated Results ({} sources)\n\n{}",
+                        sections.len(),
+                        sections.join("\n\n")
+                    )
+                };
+                Box::pin(async move { Ok(NodeOutput::completed(serde_json::json!(combined), 0.0)) })
+            }
+            CfbType::Monitor => {
+                let data = umao_core::deterministic::deterministic_monitor_response(
+                    &serde_json::to_string(inputs).unwrap_or_default(),
+                );
+                Box::pin(async move { Ok(NodeOutput::completed(data, 0.0)) })
+            }
+            CfbType::FlowControl => {
+                let data = umao_core::deterministic::deterministic_flow_control_response(
+                    &serde_json::to_string(inputs).unwrap_or_default(),
+                );
+                Box::pin(async move { Ok(NodeOutput::completed(data, 0.0)) })
+            }
+        }
     }
 }
 
 impl PromptFleetExecutor {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn execute_delegate_future<'a>(
+        &'a self,
+        node_id: &'a str,
+        inputs: &'a HashMap<String, Value>,
+    ) -> Pin<Box<dyn Future<Output = Result<NodeOutput, UmaoError>> + Send + 'a>> {
+        Box::pin(self.execute_delegate(node_id, inputs))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn execute_delegate_future<'a>(
+        &'a self,
+        node_id: &'a str,
+        inputs: &'a HashMap<String, Value>,
+    ) -> Pin<Box<dyn Future<Output = Result<NodeOutput, UmaoError>> + Send + 'a>> {
+        // `umao_executor::AsyncNodeExecutor` requires a `Send` future, but the
+        // Spin-backed outbound HTTP path used by `A2aClient` is `!Send` on wasm.
+        let result = futures::executor::block_on(self.execute_delegate(node_id, inputs));
+        Box::pin(async move { result })
+    }
+
     async fn execute_delegate(
         &self,
         node_id: &str,
@@ -213,6 +232,7 @@ mod tests {
         assert!(err.to_string().contains("No endpoint registered"));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Start a minimal A2A-compatible HTTP server that handles SendMessage JSON-RPC.
     /// Returns the port the server is listening on.
     async fn start_mock_agent(name: &'static str) -> u16 {
@@ -300,6 +320,7 @@ mod tests {
         port
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn delegate_calls_real_agent_server() {
         let port = start_mock_agent("researcher").await;
@@ -328,6 +349,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn full_sequential_graph_orchestration() {
         use std::sync::Arc;

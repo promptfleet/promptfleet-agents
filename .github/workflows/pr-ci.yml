@@ -111,7 +111,6 @@ jobs:
             --workspace \
             --exclude pf_test_harness \
             --exclude a2a-echo-native \
-            --exclude umao_agents \
             --exclude umao-local-orchestration
 
   publish-dry-run:

@@ -5,7 +5,7 @@ description: "UMAO coordination for promptfleet A2A agents — AsyncNodeExecutor
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution">Native only — this crate requires `tokio` and `tracing` and does **not** compile to WASM.</Aside>
+<Aside type="caution">This crate now compiles to `wasm32-wasip1`, but Delegate nodes still rely on outbound A2A HTTP access at runtime. For Spin-based deployments, the component manifest must allow those targets via `allowed_outbound_hosts`.</Aside>
 
 <Aside type="note">External dependency — this crate depends on `umao_core` and `umao_executor` from the separate [`umao-rs`](https://github.com/promptfleet/umao-rs) repository via relative path deps (`../../../umao-rs/crates/...`). The UMAO crates must be available locally for compilation.</Aside>
 

@@ -800,6 +800,7 @@ mod adapter_compat_tests {
             name: "checkpoint_task".to_string(),
             description: Some("Sentinel checkpoint tool".to_string()),
             parameters: json!({"type":"object"}),
+            kind: crate::agent::tools::ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -1126,6 +1127,7 @@ mod stream_tests {
             name: "echo".to_string(),
             description: Some("Echo the input".to_string()),
             parameters: serde_json::json!({"type":"object","properties":{"text":{"type":"string"}}}),
+            kind: crate::agent::tools::ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

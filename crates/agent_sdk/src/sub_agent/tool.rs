@@ -4,7 +4,7 @@ use std::{future::Future, pin::Pin};
 use serde_json::Value;
 use serde_json::json;
 
-use crate::agent::tools::{ToolExecutor, ToolSpec};
+use crate::agent::tools::{ToolExecutor, ToolKind, ToolSpec};
 
 use super::adapter::{SharedSubAgentAdapter, SubAgentAdapter};
 
@@ -98,6 +98,7 @@ impl SubAgentToolBuilder {
             name: self.tool_name,
             description: Some(self.tool_description),
             parameters: self.input_schema,
+            kind: ToolKind::A2aDelegate,
             strict: true,
             parallel_ok: false,
             executor: ToolExecutor::WithContext(Arc::new(move |args, ctx| {
@@ -204,6 +205,7 @@ mod tests {
         .build();
 
         assert_eq!(spec.name, "delegate_planner");
+        assert_eq!(spec.kind, ToolKind::A2aDelegate);
         assert!(matches!(spec.executor, ToolExecutor::WithContext(_)));
     }
 }

@@ -258,6 +258,7 @@ impl MessageHandlerManager {
                     .to_string(),
             ),
             parameters: checkpoint_schema,
+            kind: crate::agent::tools::ToolKind::Function,
             strict: true,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| Box::pin(async move {

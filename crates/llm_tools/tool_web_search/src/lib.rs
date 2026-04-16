@@ -25,7 +25,7 @@
 //! should move `tool_web_search` to a top-level `crates/tool_web_search`
 //! to clarify the actual dependency direction.
 
-use agent_sdk::agent::tools::{ToolExecutor, ToolSpec};
+use agent_sdk::agent::tools::{ToolExecutor, ToolKind, ToolSpec};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -253,6 +253,7 @@ pub fn tool_spec(api_key: String, api_url: String) -> ToolSpec {
         name: NAME.to_string(),
         description: Some(DESCRIPTION.to_string()),
         parameters: parameters_schema(),
+        kind: ToolKind::Http,
         strict: true,
         parallel_ok: false,
         executor: ToolExecutor::Simple(Arc::new(move |args| {

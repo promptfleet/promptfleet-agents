@@ -240,7 +240,7 @@ impl TraceRecorder {
 mod tests {
     use super::*;
     use agent_sdk::agent::skill::SkillDefinition;
-    use agent_sdk::agent::tools::{ToolExecutor, ToolSpec};
+    use agent_sdk::agent::tools::{ToolExecutor, ToolKind, ToolSpec};
 
     fn test_tools() -> ToolRegistry {
         let mut tools = ToolRegistry::new();
@@ -248,6 +248,7 @@ mod tests {
             name: "echo".to_string(),
             description: Some("Echo tool".to_string()),
             parameters: json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

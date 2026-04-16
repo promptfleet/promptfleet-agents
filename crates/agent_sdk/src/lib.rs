@@ -201,7 +201,9 @@ pub use agent::skill::SkillDefinition;
 pub use builder::AgentBuilder;
 
 #[cfg(feature = "agent-observability")]
-pub use observability_runtime::ObservabilityRuntime;
+pub use observability_runtime::{
+    ObservabilityRuntime, install_global_observability, shared_observability,
+};
 
 // Re-export A2A tool helpers (when enabled)
 #[cfg(feature = "a2a-tools")]

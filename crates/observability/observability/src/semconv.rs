@@ -52,7 +52,16 @@ pub mod attr {
     pub const LLM_TOKENS_OUTPUT: &str = "llm.tokens.output";
     /// Tool name (bounded by the registered tool surface).
     pub const TOOL_NAME: &str = "tool.name";
-    /// Tool kind / executor family (bounded).
+    /// Tool execution surface / family (bounded).
+    ///
+    /// Recommended values:
+    /// - `function`
+    /// - `mcp`
+    /// - `http`
+    /// - `a2a`
+    /// - `a2a_delegate`
+    /// - `interaction`
+    /// - `skill`
     pub const TOOL_KIND: &str = "tool.kind";
 
     // ---------------------------------------------------------------------

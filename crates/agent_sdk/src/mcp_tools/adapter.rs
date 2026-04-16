@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use crate::agent::tool_context::ToolContext;
-use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+use crate::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
 use crate::mcp_tools::config::ToolPolicy;
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{McpToolDescriptor, McpToolSource};
@@ -87,6 +87,7 @@ impl McpToolAdapter {
             name: canonical_name,
             description: tool.description.clone(),
             parameters: tool.input_schema.clone(),
+            kind: ToolKind::Mcp,
             strict: false,
             parallel_ok: true,
             executor: ToolExecutor::WithContext(Arc::new(move |args, ctx: ToolContext| {
@@ -194,6 +195,7 @@ mod tests {
 
         let search = registry.get("mcp_tavily_search").unwrap();
         assert_eq!(search.description.as_deref(), Some("Search the web"));
+        assert_eq!(search.kind, ToolKind::Mcp);
     }
 
     #[tokio::test]

@@ -40,12 +40,47 @@ pub struct ToolExecutionResult {
     pub output: serde_json::Value,
 }
 
+/// Stable, low-cardinality tool execution surface classification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum ToolKind {
+    /// Generic in-process function tool.
+    #[default]
+    Function,
+    /// Tool backed by an MCP server.
+    Mcp,
+    /// Tool backed by an HTTP/API call.
+    Http,
+    /// Generic A2A agent tool exposed as a callable tool.
+    A2a,
+    /// Delegation tool that hands off work to a sub-agent.
+    A2aDelegate,
+    /// Built-in interaction tool that pauses for user input/approval.
+    Interaction,
+    /// Tool that activates or reads a registered skill.
+    Skill,
+}
+
+impl ToolKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Mcp => "mcp",
+            Self::Http => "http",
+            Self::A2a => "a2a",
+            Self::A2aDelegate => "a2a_delegate",
+            Self::Interaction => "interaction",
+            Self::Skill => "skill",
+        }
+    }
+}
+
 /// Tool specification exposed to the LLM (separate from skills)
 #[derive(Clone)]
 pub struct ToolSpec {
     pub name: String,
     pub description: Option<String>,
     pub parameters: serde_json::Value,
+    pub kind: ToolKind,
     /// Hints
     pub strict: bool,
     pub parallel_ok: bool,
@@ -56,6 +91,7 @@ impl std::fmt::Debug for ToolSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolSpec")
             .field("name", &self.name)
+            .field("kind", &self.kind)
             .field("strict", &self.strict)
             .field("parallel_ok", &self.parallel_ok)
             .finish()
@@ -151,14 +187,7 @@ impl ToolRegistry {
                 &[
                     (attr::COMPONENT, "sdk"),
                     (attr::TOOL_NAME, name),
-                    (
-                        attr::TOOL_KIND,
-                        match tool.executor {
-                            ToolExecutor::Simple(_) => "simple",
-                            #[cfg(feature = "llm-engine")]
-                            ToolExecutor::WithContext(_) => "context",
-                        },
-                    ),
+                    (attr::TOOL_KIND, tool.kind.as_str()),
                     (attr::STATUS, value::STATUS_OK),
                 ],
             )
@@ -199,7 +228,9 @@ impl ToolRegistry {
 #[cfg(feature = "agent-observability")]
 fn obs_from_env_cached() -> Option<observability::Obs> {
     static OBS: OnceLock<Option<observability::Obs>> = OnceLock::new();
-    OBS.get_or_init(|| observability::Obs::init_from_env().ok())
+    OBS.get_or_init(|| {
+        crate::shared_observability().or_else(|| observability::Obs::init_from_env().ok())
+    })
         .clone()
 }
 
@@ -267,6 +298,7 @@ impl IntoTools for llm_tools::ToolRegistry {
                     name: schema.name.clone(),
                     description: schema.description.clone(),
                     parameters: schema.parameters.clone(),
+                    kind: ToolKind::Function,
                     strict: schema.strict.unwrap_or(true),
                     parallel_ok: false,
                     executor,
@@ -293,6 +325,7 @@ mod tests {
             name: "ctx_tool".to_string(),
             description: None,
             parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::WithContext(Arc::new(move |_args, ctx| {

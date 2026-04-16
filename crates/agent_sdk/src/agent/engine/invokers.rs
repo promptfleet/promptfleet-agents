@@ -553,7 +553,9 @@ fn classify_llm_error(err: &EngineError) -> String {
 #[cfg(feature = "agent-observability")]
 fn obs_from_env_cached() -> Option<observability::Obs> {
     static OBS: OnceLock<Option<observability::Obs>> = OnceLock::new();
-    OBS.get_or_init(|| observability::Obs::init_from_env().ok())
+    OBS.get_or_init(|| {
+        crate::shared_observability().or_else(|| observability::Obs::init_from_env().ok())
+    })
         .clone()
 }
 

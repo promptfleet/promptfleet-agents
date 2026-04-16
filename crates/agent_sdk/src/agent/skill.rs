@@ -561,7 +561,7 @@ pub fn inject_skill_context(messages: &mut Vec<llm_client::ChatMessage>, ctx: &S
 /// Returns `None` if no skills are llm_callable.
 #[cfg(feature = "llm-engine")]
 pub fn build_read_skill_tool(registry: &SkillRegistry) -> Option<super::tools::ToolSpec> {
-    use super::tools::{ToolExecutor, ToolSpec};
+    use super::tools::{ToolExecutor, ToolKind, ToolSpec};
 
     let callable = registry.get_llm_callable_skills();
     if callable.is_empty() {
@@ -596,6 +596,7 @@ pub fn build_read_skill_tool(registry: &SkillRegistry) -> Option<super::tools::T
             "Read/activate a registered skill to retrieve context or data.".to_string(),
         ),
         parameters: schema,
+        kind: ToolKind::Skill,
         strict: true,
         parallel_ok: false,
         executor: ToolExecutor::Simple(Arc::new(|_args| {
@@ -612,7 +613,7 @@ pub fn build_read_skill_tool(registry: &SkillRegistry) -> Option<super::tools::T
 /// Build a wired `read_skill` executor that dispatches to the given skill registry.
 #[cfg(feature = "llm-engine")]
 pub fn build_wired_read_skill_tool(registry: Arc<SkillRegistry>) -> Option<super::tools::ToolSpec> {
-    use super::tools::{ToolExecutor, ToolSpec};
+    use super::tools::{ToolExecutor, ToolKind, ToolSpec};
 
     let callable = registry.get_llm_callable_skills();
     if callable.is_empty() {
@@ -648,6 +649,7 @@ pub fn build_wired_read_skill_tool(registry: Arc<SkillRegistry>) -> Option<super
             "Read/activate a registered skill to retrieve context or data.".to_string(),
         ),
         parameters: schema,
+        kind: ToolKind::Skill,
         strict: true,
         parallel_ok: false,
         executor: ToolExecutor::Simple(Arc::new(move |args| {

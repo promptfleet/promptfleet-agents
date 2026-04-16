@@ -86,6 +86,7 @@ pub fn make_tools_from_config(cfg: A2AToolConfig) -> SdkResult<ToolRegistry> {
             name: "agent_card_get".to_string(),
             description: Some("Fetch an AgentCard via JSON-RPC agent/card/get.".to_string()),
             parameters: schema_agent_card_get(),
+            kind: crate::agent::tools::ToolKind::A2a,
             strict: true,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -130,6 +131,7 @@ pub fn make_tools_from_config(cfg: A2AToolConfig) -> SdkResult<ToolRegistry> {
             name: "a2a_message_send".to_string(),
             description: Some("Send an A2A message to an agent via its jsonrpc_url.".to_string()),
             parameters: schema_a2a_message_send(),
+            kind: crate::agent::tools::ToolKind::A2a,
             strict: true,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

@@ -4,7 +4,7 @@
     feature = "test-support"
 ))]
 
-use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+use agent_sdk::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
 use agent_sdk::agent::trace::AgentTraceEvent;
 use agent_sdk::streaming::{
     AgUiDriverConfig, AgUiStreamDriver, IoEventContext, ag_ui_sse_response_with_summary,
@@ -20,6 +20,7 @@ fn test_tools() -> ToolRegistry {
         name: "search".to_string(),
         description: Some("Search test tool".to_string()),
         parameters: serde_json::json!({"type":"object"}),
+        kind: ToolKind::Function,
         strict: false,
         parallel_ok: false,
         executor: ToolExecutor::Simple(Arc::new(|args| {

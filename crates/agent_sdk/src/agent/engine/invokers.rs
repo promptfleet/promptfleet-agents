@@ -66,15 +66,8 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
 
             #[cfg(feature = "agent-observability")]
             let span_guard = obs.as_ref().map(|o| {
-                o.span(
-                    span::LLM_REQUEST,
-                    &[
-                        (attr::COMPONENT, "llm_client"),
-                        (attr::LLM_PROVIDER, provider.as_str()),
-                        (attr::LLM_MODEL, model.as_str()),
-                        (attr::LLM_OPERATION, operation.as_str()),
-                    ],
-                )
+                let attrs = llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
+                o.span(span::LLM_REQUEST, &attrs)
             });
 
             let result = inner
@@ -82,27 +75,28 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
                 .await
                 .map_err(|e| EngineError::LlmFailed(format!("LLM request failed: {}", e)));
 
-            #[cfg(feature = "agent-observability")]
-            {
-                let status = if result.is_ok() {
-                    value::STATUS_OK
-                } else {
-                    value::STATUS_ERROR
-                };
-                let error_type = result.as_ref().err().map(classify_llm_error);
-                emit_llm_request_outcome(
-                    obs.as_ref(),
-                    span_guard.as_ref(),
-                    provider.as_str(),
-                    model.as_str(),
-                    operation.as_str(),
-                    started,
-                    status,
-                    error_type.as_deref(),
-                );
-            }
-
-            let raw = result?;
+            let raw = match result {
+                Ok(raw) => raw,
+                Err(err) => {
+                    #[cfg(feature = "agent-observability")]
+                    {
+                        let error_type = classify_llm_error(&err);
+                        emit_llm_request_outcome(
+                            obs.as_ref(),
+                            span_guard.as_ref(),
+                            provider.as_str(),
+                            model.as_str(),
+                            operation.as_str(),
+                            started,
+                            value::STATUS_ERROR,
+                            Some(error_type.as_str()),
+                            None,
+                            None,
+                        );
+                    }
+                    return Err(err);
+                }
+            };
             let turn = llm_response_to_turn_result(raw);
 
             #[cfg(feature = "agent-observability")]
@@ -130,6 +124,20 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
                     );
                 }
             }
+
+            #[cfg(feature = "agent-observability")]
+            emit_llm_request_outcome(
+                obs.as_ref(),
+                span_guard.as_ref(),
+                provider.as_str(),
+                model.as_str(),
+                operation.as_str(),
+                started,
+                value::STATUS_OK,
+                None,
+                turn.finish_reason.as_deref(),
+                turn.usage.as_ref(),
+            );
 
             Ok(turn)
         })
@@ -235,15 +243,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
 
             #[cfg(feature = "agent-observability")]
             let span_guard = obs.as_ref().map(|o| {
-                o.span(
-                    span::LLM_REQUEST,
-                    &[
-                        (attr::COMPONENT, "llm_client"),
-                        (attr::LLM_PROVIDER, provider.as_str()),
-                        (attr::LLM_MODEL, model.as_str()),
-                        (attr::LLM_OPERATION, operation.as_str()),
-                    ],
-                )
+                let attrs = llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
+                o.span(span::LLM_REQUEST, &attrs)
             });
 
             let mut event_stream = match inner.request_stream(request).await {
@@ -263,6 +264,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                             started,
                             value::STATUS_ERROR,
                             Some(error_type.as_str()),
+                            None,
+                            None,
                         );
                     }
                     return Err(err);
@@ -376,6 +379,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                                 started,
                                 value::STATUS_ERROR,
                                 Some(error_type.as_str()),
+                                None,
+                                None,
                             );
                         }
                         return Err(err);
@@ -395,6 +400,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                                 started,
                                 value::STATUS_ERROR,
                                 Some(error_type.as_str()),
+                                None,
+                                None,
                             );
                         }
                         return Err(err);
@@ -444,6 +451,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                     started,
                     status,
                     error_type,
+                    finish_reason.as_deref(),
+                    usage.as_ref(),
                 );
 
                 if let Some(u) = &usage {
@@ -549,6 +558,23 @@ fn obs_from_env_cached() -> Option<observability::Obs> {
 }
 
 #[cfg(feature = "agent-observability")]
+fn llm_span_attributes<'a>(
+    provider: &'a str,
+    model: &'a str,
+    operation: &'a str,
+) -> [(&'static str, &'a str); 7] {
+    [
+        (attr::COMPONENT, "llm_client"),
+        (attr::LLM_PROVIDER, provider),
+        (attr::LLM_MODEL, model),
+        (attr::LLM_OPERATION, operation),
+        (attr::GEN_AI_SYSTEM, provider),
+        (attr::GEN_AI_REQUEST_MODEL, model),
+        (attr::GEN_AI_OPERATION_NAME, operation),
+    ]
+}
+
+#[cfg(feature = "agent-observability")]
 fn emit_llm_request_outcome(
     obs: Option<&observability::Obs>,
     span_guard: Option<&SpanGuard>,
@@ -558,6 +584,8 @@ fn emit_llm_request_outcome(
     started: Instant,
     status: &str,
     error_type: Option<&str>,
+    finish_reason: Option<&str>,
+    usage: Option<&llm_client::Usage>,
 ) {
     if let Some(o) = obs {
         o.metric(
@@ -583,6 +611,10 @@ fn emit_llm_request_outcome(
     }
 
     if let Some(g) = span_guard {
+        g.add_attribute(attr::GEN_AI_SYSTEM, provider);
+        g.add_attribute(attr::GEN_AI_REQUEST_MODEL, model);
+        g.add_attribute(attr::GEN_AI_OPERATION_NAME, operation);
+        g.add_attribute(attr::GEN_AI_RESPONSE_MODEL, model);
         g.add_attribute(attr::STATUS, status);
         g.add_attribute(
             attr::PF_OUTCOME,
@@ -594,6 +626,21 @@ fn emit_llm_request_outcome(
         );
         if let Some(kind) = error_type {
             g.add_attribute(attr::ERROR_TYPE, kind);
+        }
+        if let Some(reason) = finish_reason {
+            g.add_attribute(attr::GEN_AI_RESPONSE_FINISH_REASONS, reason);
+        }
+        if let Some(usage) = usage {
+            if let Some(in_tokens) = usage.prompt_tokens {
+                let in_tokens = in_tokens.to_string();
+                g.add_attribute(attr::LLM_TOKENS_INPUT, &in_tokens);
+                g.add_attribute(attr::GEN_AI_USAGE_INPUT_TOKENS, &in_tokens);
+            }
+            if let Some(out_tokens) = usage.completion_tokens {
+                let out_tokens = out_tokens.to_string();
+                g.add_attribute(attr::LLM_TOKENS_OUTPUT, &out_tokens);
+                g.add_attribute(attr::GEN_AI_USAGE_OUTPUT_TOKENS, &out_tokens);
+            }
         }
         g.set_status(if status == value::STATUS_OK {
             SpanStatus::Ok

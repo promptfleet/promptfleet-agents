@@ -3,11 +3,16 @@ use std::sync::Arc;
 
 #[cfg(feature = "llm-engine")]
 use crate::agent::tool_context::ToolContext;
+#[cfg(feature = "agent-observability")]
+use std::sync::OnceLock;
 
 #[cfg(target_arch = "wasm32")]
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>>;
 #[cfg(not(target_arch = "wasm32"))]
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send;
+
+#[cfg(feature = "agent-observability")]
+use observability::{ObsHandle, SpanStatus, attr, span, value};
 
 #[derive(Clone)]
 pub enum ToolExecutor {
@@ -132,10 +137,32 @@ impl ToolRegistry {
         args: serde_json::Value,
         #[cfg(feature = "llm-engine")] ctx: Option<ToolContext>,
     ) -> Result<ToolExecutionResult, String> {
+        #[cfg(feature = "agent-observability")]
+        let obs = obs_from_env_cached();
+
         let tool = self
             .tools
             .get(name)
             .ok_or_else(|| format!("Unknown tool: {}", name))?;
+        #[cfg(feature = "agent-observability")]
+        let span_guard = obs.as_ref().map(|obs| {
+            obs.span(
+                span::TOOL_CALL,
+                &[
+                    (attr::COMPONENT, "sdk"),
+                    (attr::TOOL_NAME, name),
+                    (
+                        attr::TOOL_KIND,
+                        match tool.executor {
+                            ToolExecutor::Simple(_) => "simple",
+                            #[cfg(feature = "llm-engine")]
+                            ToolExecutor::WithContext(_) => "context",
+                        },
+                    ),
+                    (attr::STATUS, value::STATUS_OK),
+                ],
+            )
+        });
         let fut = match &tool.executor {
             ToolExecutor::Simple(exec) => (exec)(args),
             #[cfg(feature = "llm-engine")]
@@ -144,12 +171,36 @@ impl ToolRegistry {
                 (exec)(args, context)
             }
         };
-        let out = fut.await?;
+        let out = match fut.await {
+            Ok(out) => out,
+            Err(err) => {
+                #[cfg(feature = "agent-observability")]
+                if let Some(span_guard) = &span_guard {
+                    span_guard.add_attribute(attr::STATUS, value::STATUS_ERROR);
+                    span_guard.add_attribute(attr::PF_OUTCOME, value::OUTCOME_ERROR);
+                    span_guard.add_attribute(attr::ERROR_TYPE, "tool_error");
+                    span_guard.set_status(SpanStatus::Error);
+                }
+                return Err(err);
+            }
+        };
+        #[cfg(feature = "agent-observability")]
+        if let Some(span_guard) = &span_guard {
+            span_guard.add_attribute(attr::PF_OUTCOME, value::OUTCOME_OK);
+            span_guard.set_status(SpanStatus::Ok);
+        }
         Ok(ToolExecutionResult {
             name: name.to_string(),
             output: out,
         })
     }
+}
+
+#[cfg(feature = "agent-observability")]
+fn obs_from_env_cached() -> Option<observability::Obs> {
+    static OBS: OnceLock<Option<observability::Obs>> = OnceLock::new();
+    OBS.get_or_init(|| observability::Obs::init_from_env().ok())
+        .clone()
 }
 
 /// IntoTools: ergonomic adapter for passing tools in different forms

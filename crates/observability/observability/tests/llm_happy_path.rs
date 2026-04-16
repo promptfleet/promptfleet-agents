@@ -202,6 +202,9 @@ fn llm_happy_path_emits_span_and_token_metrics() {
             (attr::LLM_PROVIDER, "openai-compatible"),
             (attr::LLM_MODEL, "gpt-4o"),
             (attr::LLM_OPERATION, "chat_completions"),
+            (attr::GEN_AI_SYSTEM, "openai-compatible"),
+            (attr::GEN_AI_REQUEST_MODEL, "gpt-4o"),
+            (attr::GEN_AI_OPERATION_NAME, "chat_completions"),
             (attr::STATUS, value::STATUS_OK),
         ],
     );
@@ -243,7 +246,14 @@ fn llm_happy_path_emits_span_and_token_metrics() {
     assert!(
         st.spans_started
             .iter()
-            .any(|(_, name, _)| name == span::LLM_REQUEST),
+            .any(|(_, name, attrs)| {
+                name == span::LLM_REQUEST
+                    && attrs.get(attr::GEN_AI_SYSTEM).map(|s| s.as_str())
+                        == Some("openai-compatible")
+                    && attrs.get(attr::GEN_AI_REQUEST_MODEL).map(|s| s.as_str()) == Some("gpt-4o")
+                    && attrs.get(attr::GEN_AI_OPERATION_NAME).map(|s| s.as_str())
+                        == Some("chat_completions")
+            }),
         "expected llm.request span"
     );
 

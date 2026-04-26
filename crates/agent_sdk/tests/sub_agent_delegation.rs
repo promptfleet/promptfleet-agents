@@ -287,6 +287,7 @@ async fn dropping_stream_cancels_inflight_tool_execution() {
         name: "wait_for_cancel".to_string(),
         description: Some("Blocks until cancelled".to_string()),
         parameters: json!({"type":"object"}),
+        kind: agent_sdk::agent::tools::ToolKind::Function,
         strict: true,
         parallel_ok: false,
         executor: ToolExecutor::WithContext(Arc::new({

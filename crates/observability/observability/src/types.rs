@@ -126,6 +126,8 @@ pub struct OtelConfig {
     #[cfg_attr(feature = "serde", serde(with = "duration_millis"))]
     pub export_timeout: Duration,
     pub sampling: OtelSampling,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub resource_attributes: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +184,7 @@ impl OtelConfig {
             batch_size: 512,
             export_timeout: Duration::from_secs(30),
             sampling: OtelSampling::TraceIdRatio(0.1),
+            resource_attributes: HashMap::new(),
         }
     }
 }
@@ -332,7 +335,7 @@ impl Obs {
 
         #[cfg(feature = "otel")]
         let otel = if cfg.otel.enabled {
-            let base = otel::OtelConfig::builder()
+            let mut base = otel::OtelConfig::builder()
                 .with_otlp_endpoint(cfg.otel.otlp_endpoint)
                 .with_service_name(cfg.service_name.clone())
                 .with_service_version(cfg.service_version.clone())
@@ -344,8 +347,11 @@ impl Obs {
                     OtelSampling::AlwaysOff => otel::SamplingStrategy::AlwaysOff,
                     OtelSampling::TraceIdRatio(r) => otel::SamplingStrategy::TraceIdRatio(r),
                     OtelSampling::ParentBased => otel::SamplingStrategy::parent_based(),
-                })
-                .build();
+                });
+            for (key, value) in &cfg.otel.resource_attributes {
+                base = base.with_resource_attribute(key.clone(), value.clone());
+            }
+            let base = base.build();
             match otel::OtelManager::from_config(otel::OtelExtensionConfig::with_base(base)) {
                 Ok(mgr) => Some(mgr),
                 Err(e) => {
@@ -583,6 +589,21 @@ impl ObservabilityConfig {
     /// - OTEL: `OBS_OTEL_ENABLED`, `OBS_OTEL_METRICS_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OBS_OTEL_SAMPLING`, `OBS_OTEL_SAMPLING_RATIO`
     /// - Prometheus: `OBS_PROMETHEUS_ENABLED`, `PROMETHEUS_PUSHGATEWAY`, `PROMETHEUS_JOB_NAME`, `PROMETHEUS_INSTANCE`
     pub fn from_env() -> Self {
+        #[cfg(feature = "otel")]
+        fn parse_resource_attributes(input: &str) -> HashMap<String, String> {
+            let mut attrs = HashMap::new();
+            for attr in input.split(',') {
+                if let Some((key, value)) = attr.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim();
+                    if !key.is_empty() {
+                        attrs.insert(key.to_string(), value.to_string());
+                    }
+                }
+            }
+            attrs
+        }
+
         fn env_bool(key: &str) -> Option<bool> {
             std::env::var(key).ok().and_then(|v| {
                 let v = v.trim().to_ascii_lowercase();
@@ -664,6 +685,9 @@ impl ObservabilityConfig {
             }
             if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
                 cfg.otel.otlp_endpoint = endpoint;
+            }
+            if let Ok(attrs) = std::env::var("OTEL_RESOURCE_ATTRIBUTES") {
+                cfg.otel.resource_attributes = parse_resource_attributes(&attrs);
             }
 
             // Sampling controls (dev-friendly).
@@ -762,6 +786,14 @@ impl ObservabilityConfig {
                 .as_f64()
                 .or_else(|| v.get(key)?.as_u64().map(|n| n as f64))
         }
+        fn get_string_map(v: &ConfigValue, key: &str) -> Option<HashMap<String, String>> {
+            let obj = v.get(key)?.as_object()?;
+            Some(
+                obj.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect(),
+            )
+        }
 
         let obs_val = root.get("observability").unwrap_or(root);
         if !obs_val.is_object() {
@@ -840,6 +872,9 @@ impl ObservabilityConfig {
             } else if let Some(ratio) = get_f64(&otel_val, "sampling_ratio") {
                 cfg.otel.sampling = OtelSampling::TraceIdRatio(ratio);
             }
+            if let Some(attrs) = get_string_map(&otel_val, "resource_attributes") {
+                cfg.otel.resource_attributes = attrs;
+            }
         }
 
         // prometheus
@@ -901,6 +936,8 @@ mod tests {
 
     #[test]
     fn serde_roundtrip_full_config() {
+        let mut resource_attributes = HashMap::new();
+        resource_attributes.insert("deployment.environment".to_string(), "test".to_string());
         let cfg = ObservabilityConfig {
             service_name: "test-agent".to_string(),
             service_version: "2.0.0".to_string(),
@@ -919,6 +956,7 @@ mod tests {
                 batch_size: 256,
                 export_timeout: Duration::from_millis(5000),
                 sampling: OtelSampling::TraceIdRatio(0.25),
+                resource_attributes: resource_attributes.clone(),
             },
             prometheus: PrometheusConfig {
                 enabled: true,
@@ -939,6 +977,7 @@ mod tests {
         assert_eq!(cfg.otel.batch_size, back.otel.batch_size);
         assert_eq!(cfg.otel.export_timeout, back.otel.export_timeout);
         assert_eq!(cfg.otel.sampling, back.otel.sampling);
+        assert_eq!(cfg.otel.resource_attributes, back.otel.resource_attributes);
         assert_eq!(cfg.prometheus.enabled, back.prometheus.enabled);
         assert_eq!(cfg.prometheus.push_interval, back.prometheus.push_interval);
         assert_eq!(
@@ -986,6 +1025,10 @@ mod tests {
             batch_size: 512,
             export_timeout: Duration::from_millis(7500),
             sampling: OtelSampling::AlwaysOn,
+            resource_attributes: HashMap::from([(
+                "deployment.environment".to_string(),
+                "dev".to_string(),
+            )]),
         };
         let json = serde_json::to_string(&otel).unwrap();
         assert!(json.contains("7500"), "Duration should serialize as millis");
@@ -997,6 +1040,8 @@ mod tests {
     #[cfg(feature = "config")]
     #[test]
     fn from_value_roundtrips_canonical_duration_fields() {
+        let mut resource_attributes = HashMap::new();
+        resource_attributes.insert("region".to_string(), "eu-north-1".to_string());
         let cfg = ObservabilityConfig {
             service_name: "test-agent".to_string(),
             service_version: "2.0.0".to_string(),
@@ -1015,6 +1060,7 @@ mod tests {
                 batch_size: 256,
                 export_timeout: Duration::from_millis(5_500),
                 sampling: OtelSampling::ParentBased,
+                resource_attributes,
             },
             prometheus: PrometheusConfig {
                 enabled: true,

@@ -11,14 +11,21 @@ use observability::ObsHandle;
 #[cfg(feature = "agent-observability")]
 fn obs_from_env_cached() -> Option<observability::Obs> {
     static OBS: OnceLock<Option<observability::Obs>> = OnceLock::new();
-    OBS.get_or_init(|| match observability::Obs::init_from_env() {
-        Ok(o) => {
-            log::info!("a2a_tools.observability:initialized_from_env");
-            Some(o)
-        }
-        Err(e) => {
-            log::warn!("a2a_tools.observability:init_from_env_failed error={}", e);
-            None
+    OBS.get_or_init(|| {
+        if let Some(obs) = crate::shared_observability() {
+            log::info!("a2a_tools.observability:using_shared_obs");
+            Some(obs)
+        } else {
+            match observability::Obs::init_from_env() {
+                Ok(o) => {
+                    log::info!("a2a_tools.observability:initialized_from_env");
+                    Some(o)
+                }
+                Err(e) => {
+                    log::warn!("a2a_tools.observability:init_from_env_failed error={}", e);
+                    None
+                }
+            }
         }
     })
     .clone()

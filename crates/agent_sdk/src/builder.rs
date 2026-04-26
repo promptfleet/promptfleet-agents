@@ -18,6 +18,8 @@ use llm_context_core::{LongTermMemory, history::Summarizer};
 pub struct AgentBuilder {
     config: crate::agent::config::AgentConfig,
     timeout_policy: Option<crate::timeout_policy::TimeoutPolicy>,
+    #[cfg(feature = "structured-io")]
+    structured_output_contract: Option<crate::structured::StructuredOutputContract>,
     #[cfg(feature = "context-window")]
     history_summarizer: Option<std::sync::Arc<dyn Summarizer>>,
     #[cfg(feature = "context-window")]
@@ -40,6 +42,8 @@ impl AgentBuilder {
         Ok(Self {
             config,
             timeout_policy: Some(crate::timeout_policy::TimeoutPolicy::streaming_default()),
+            #[cfg(feature = "structured-io")]
+            structured_output_contract: None,
             #[cfg(feature = "context-window")]
             history_summarizer: None,
             #[cfg(feature = "context-window")]
@@ -89,6 +93,8 @@ impl AgentBuilder {
             Ok(Self {
                 config,
                 timeout_policy: Some(crate::timeout_policy::TimeoutPolicy::streaming_default()),
+                #[cfg(feature = "structured-io")]
+                structured_output_contract: None,
                 #[cfg(feature = "context-window")]
                 history_summarizer: None,
                 #[cfg(feature = "context-window")]
@@ -108,6 +114,29 @@ impl AgentBuilder {
     pub fn with_timeout_policy(mut self, policy: crate::timeout_policy::TimeoutPolicy) -> Self {
         self.timeout_policy = Some(policy);
         self
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output_contract(
+        mut self,
+        contract: crate::structured::StructuredOutputContract,
+    ) -> Self {
+        self.structured_output_contract = Some(contract);
+        self
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output<T>(
+        self,
+        schema_name: impl Into<String>,
+        artifact_name: impl Into<String>,
+    ) -> Self
+    where
+        T: schemars::JsonSchema,
+    {
+        self.with_structured_output_contract(
+            crate::structured::StructuredOutputContract::from_type::<T>(schema_name, artifact_name),
+        )
     }
 
     #[cfg(feature = "context-window")]
@@ -160,6 +189,11 @@ impl AgentBuilder {
 
         if let Some(timeout_policy) = self.timeout_policy {
             agent = agent.with_service(timeout_policy);
+        }
+
+        #[cfg(feature = "structured-io")]
+        if let Some(contract) = self.structured_output_contract {
+            agent.configure_structured_output(contract)?;
         }
 
         #[cfg(feature = "context-window")]
@@ -242,6 +276,22 @@ mod tests {
             .unwrap()
             .with_timeout_policy(policy.clone());
         assert!(b.timeout_policy().is_some());
+    }
+
+    #[cfg(feature = "structured-io")]
+    #[test]
+    fn with_structured_output_contract_builds() {
+        #[derive(schemars::JsonSchema)]
+        struct Output {
+            verdict: String,
+        }
+
+        let agent = AgentBuilder::new("structured-builder")
+            .unwrap()
+            .with_structured_output::<Output>("output", "analysis_output")
+            .build()
+            .unwrap();
+        assert!(agent.config().name == "structured-builder");
     }
 
     #[cfg(all(feature = "config-loader", not(target_arch = "wasm32")))]

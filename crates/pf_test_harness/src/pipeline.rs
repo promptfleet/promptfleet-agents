@@ -339,7 +339,7 @@ impl TraceRecorder {
 mod tests {
     use super::*;
     use crate::scenario::LlmScenario;
-    use agent_sdk::agent::tools::{ToolExecutor, ToolSpec};
+    use agent_sdk::agent::tools::{ToolExecutor, ToolKind, ToolSpec};
     use agent_sdk::agent::trace::AgentTraceEvent;
     use llm_client::StreamEvent;
 
@@ -348,6 +348,7 @@ mod tests {
             name: "echo".to_string(),
             description: Some("Echo input".to_string()),
             parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

@@ -13,6 +13,8 @@ pub mod span {
     pub const A2A_CLIENT: &str = "a2a.client";
     /// LLM request (chat/completions/tools loop).
     pub const LLM_REQUEST: &str = "llm.request";
+    /// Tool execution request inside the agent runtime.
+    pub const TOOL_CALL: &str = "tool.call";
 }
 
 /// Common attribute keys (keep stable; values should be low-cardinality).
@@ -48,6 +50,38 @@ pub mod attr {
     /// Token counts (numbers as strings).
     pub const LLM_TOKENS_INPUT: &str = "llm.tokens.input";
     pub const LLM_TOKENS_OUTPUT: &str = "llm.tokens.output";
+    /// Tool name (bounded by the registered tool surface).
+    pub const TOOL_NAME: &str = "tool.name";
+    /// Tool execution surface / family (bounded).
+    ///
+    /// Recommended values:
+    /// - `function`
+    /// - `mcp`
+    /// - `http`
+    /// - `a2a`
+    /// - `a2a_delegate`
+    /// - `interaction`
+    /// - `skill`
+    pub const TOOL_KIND: &str = "tool.kind";
+
+    // ---------------------------------------------------------------------
+    // OTEL GenAI semantic conventions
+    // ---------------------------------------------------------------------
+
+    /// The GenAI system/provider handling the request.
+    pub const GEN_AI_SYSTEM: &str = "gen_ai.system";
+    /// The requested GenAI model.
+    pub const GEN_AI_REQUEST_MODEL: &str = "gen_ai.request.model";
+    /// The GenAI operation name.
+    pub const GEN_AI_OPERATION_NAME: &str = "gen_ai.operation.name";
+    /// Tokens used in the prompt/input.
+    pub const GEN_AI_USAGE_INPUT_TOKENS: &str = "gen_ai.usage.input_tokens";
+    /// Tokens used in the completion/output.
+    pub const GEN_AI_USAGE_OUTPUT_TOKENS: &str = "gen_ai.usage.output_tokens";
+    /// Final finish reason(s) reported by the provider.
+    pub const GEN_AI_RESPONSE_FINISH_REASONS: &str = "gen_ai.response.finish_reasons";
+    /// Final model reported by the provider, if available.
+    pub const GEN_AI_RESPONSE_MODEL: &str = "gen_ai.response.model";
 
     // ---------------------------------------------------------------------
     // PromptFleet Mesh / A2A graph attributes (stable, low-cardinality)
@@ -263,6 +297,7 @@ mod tests {
         assert_eq!(span::A2A_SERVER, "a2a.server");
         assert_eq!(span::A2A_CLIENT, "a2a.client");
         assert_eq!(span::LLM_REQUEST, "llm.request");
+        assert_eq!(span::TOOL_CALL, "tool.call");
     }
 
     #[test]
@@ -273,6 +308,24 @@ mod tests {
         assert_eq!(attr::PEER_SERVICE, "peer.service");
         assert_eq!(attr::LLM_PROVIDER, "llm.provider");
         assert_eq!(attr::LLM_MODEL, "llm.model");
+        assert_eq!(attr::LLM_OPERATION, "llm.operation");
+        assert_eq!(attr::LLM_TOKENS_INPUT, "llm.tokens.input");
+        assert_eq!(attr::LLM_TOKENS_OUTPUT, "llm.tokens.output");
+        assert_eq!(attr::TOOL_NAME, "tool.name");
+        assert_eq!(attr::TOOL_KIND, "tool.kind");
+        assert_eq!(attr::GEN_AI_SYSTEM, "gen_ai.system");
+        assert_eq!(attr::GEN_AI_REQUEST_MODEL, "gen_ai.request.model");
+        assert_eq!(attr::GEN_AI_OPERATION_NAME, "gen_ai.operation.name");
+        assert_eq!(attr::GEN_AI_USAGE_INPUT_TOKENS, "gen_ai.usage.input_tokens");
+        assert_eq!(
+            attr::GEN_AI_USAGE_OUTPUT_TOKENS,
+            "gen_ai.usage.output_tokens"
+        );
+        assert_eq!(
+            attr::GEN_AI_RESPONSE_FINISH_REASONS,
+            "gen_ai.response.finish_reasons"
+        );
+        assert_eq!(attr::GEN_AI_RESPONSE_MODEL, "gen_ai.response.model");
         assert_eq!(attr::PF_SOURCE_WORKLOAD, "pf.source.workload");
         assert_eq!(attr::PF_TARGET_WORKLOAD, "pf.target.workload");
         assert_eq!(attr::PF_OUTCOME, "pf.outcome");

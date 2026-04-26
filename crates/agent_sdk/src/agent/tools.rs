@@ -3,11 +3,16 @@ use std::sync::Arc;
 
 #[cfg(feature = "llm-engine")]
 use crate::agent::tool_context::ToolContext;
+#[cfg(feature = "agent-observability")]
+use std::sync::OnceLock;
 
 #[cfg(target_arch = "wasm32")]
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>>;
 #[cfg(not(target_arch = "wasm32"))]
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send;
+
+#[cfg(feature = "agent-observability")]
+use observability::{ObsHandle, SpanStatus, attr, span, value};
 
 #[derive(Clone)]
 pub enum ToolExecutor {
@@ -35,12 +40,47 @@ pub struct ToolExecutionResult {
     pub output: serde_json::Value,
 }
 
+/// Stable, low-cardinality tool execution surface classification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum ToolKind {
+    /// Generic in-process function tool.
+    #[default]
+    Function,
+    /// Tool backed by an MCP server.
+    Mcp,
+    /// Tool backed by an HTTP/API call.
+    Http,
+    /// Generic A2A agent tool exposed as a callable tool.
+    A2a,
+    /// Delegation tool that hands off work to a sub-agent.
+    A2aDelegate,
+    /// Built-in interaction tool that pauses for user input/approval.
+    Interaction,
+    /// Tool that activates or reads a registered skill.
+    Skill,
+}
+
+impl ToolKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Mcp => "mcp",
+            Self::Http => "http",
+            Self::A2a => "a2a",
+            Self::A2aDelegate => "a2a_delegate",
+            Self::Interaction => "interaction",
+            Self::Skill => "skill",
+        }
+    }
+}
+
 /// Tool specification exposed to the LLM (separate from skills)
 #[derive(Clone)]
 pub struct ToolSpec {
     pub name: String,
     pub description: Option<String>,
     pub parameters: serde_json::Value,
+    pub kind: ToolKind,
     /// Hints
     pub strict: bool,
     pub parallel_ok: bool,
@@ -51,6 +91,7 @@ impl std::fmt::Debug for ToolSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ToolSpec")
             .field("name", &self.name)
+            .field("kind", &self.kind)
             .field("strict", &self.strict)
             .field("parallel_ok", &self.parallel_ok)
             .finish()
@@ -132,10 +173,25 @@ impl ToolRegistry {
         args: serde_json::Value,
         #[cfg(feature = "llm-engine")] ctx: Option<ToolContext>,
     ) -> Result<ToolExecutionResult, String> {
+        #[cfg(feature = "agent-observability")]
+        let obs = obs_from_env_cached();
+
         let tool = self
             .tools
             .get(name)
             .ok_or_else(|| format!("Unknown tool: {}", name))?;
+        #[cfg(feature = "agent-observability")]
+        let span_guard = obs.as_ref().map(|obs| {
+            obs.span(
+                span::TOOL_CALL,
+                &[
+                    (attr::COMPONENT, "sdk"),
+                    (attr::TOOL_NAME, name),
+                    (attr::TOOL_KIND, tool.kind.as_str()),
+                    (attr::STATUS, value::STATUS_OK),
+                ],
+            )
+        });
         let fut = match &tool.executor {
             ToolExecutor::Simple(exec) => (exec)(args),
             #[cfg(feature = "llm-engine")]
@@ -144,12 +200,38 @@ impl ToolRegistry {
                 (exec)(args, context)
             }
         };
-        let out = fut.await?;
+        let out = match fut.await {
+            Ok(out) => out,
+            Err(err) => {
+                #[cfg(feature = "agent-observability")]
+                if let Some(span_guard) = &span_guard {
+                    span_guard.add_attribute(attr::STATUS, value::STATUS_ERROR);
+                    span_guard.add_attribute(attr::PF_OUTCOME, value::OUTCOME_ERROR);
+                    span_guard.add_attribute(attr::ERROR_TYPE, "tool_error");
+                    span_guard.set_status(SpanStatus::Error);
+                }
+                return Err(err);
+            }
+        };
+        #[cfg(feature = "agent-observability")]
+        if let Some(span_guard) = &span_guard {
+            span_guard.add_attribute(attr::PF_OUTCOME, value::OUTCOME_OK);
+            span_guard.set_status(SpanStatus::Ok);
+        }
         Ok(ToolExecutionResult {
             name: name.to_string(),
             output: out,
         })
     }
+}
+
+#[cfg(feature = "agent-observability")]
+fn obs_from_env_cached() -> Option<observability::Obs> {
+    static OBS: OnceLock<Option<observability::Obs>> = OnceLock::new();
+    OBS.get_or_init(|| {
+        crate::shared_observability().or_else(|| observability::Obs::init_from_env().ok())
+    })
+    .clone()
 }
 
 /// IntoTools: ergonomic adapter for passing tools in different forms
@@ -216,6 +298,7 @@ impl IntoTools for llm_tools::ToolRegistry {
                     name: schema.name.clone(),
                     description: schema.description.clone(),
                     parameters: schema.parameters.clone(),
+                    kind: ToolKind::Function,
                     strict: schema.strict.unwrap_or(true),
                     parallel_ok: false,
                     executor,
@@ -242,6 +325,7 @@ mod tests {
             name: "ctx_tool".to_string(),
             description: None,
             parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::WithContext(Arc::new(move |_args, ctx| {

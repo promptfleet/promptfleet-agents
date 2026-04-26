@@ -44,6 +44,8 @@ pub mod trace;
 
 // NEW (gated): Minimal orchestrator surface for tools-first LLM loop
 #[cfg(feature = "llm-engine")]
+pub(crate) mod checkpoint;
+#[cfg(feature = "llm-engine")]
 mod finalization;
 #[cfg(feature = "llm-engine")]
 pub(crate) mod llm_invoker;
@@ -60,6 +62,8 @@ mod tests;
 // Re-export public API for convenient access
 pub use config::{AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind};
 pub use core::Agent;
+#[cfg(feature = "llm-engine")]
+pub use core::LlmRuntimeConfigurator;
 pub use message::{MessageContext, MessageType, SkillCall, SkillExecutor, TaskContext};
 pub use skill::{
     NotificationHandler, SkillContext, SkillDefinition, SkillEntryBuilder, SkillHandler,

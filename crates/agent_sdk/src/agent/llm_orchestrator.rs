@@ -25,6 +25,7 @@ use crate::agent::tools::ToolRegistry;
 use crate::agent::{MessageContext, TaskContext};
 use crate::agent::{Response, RuntimeResponse, TaskOpts};
 use crate::error::SdkResult;
+use crate::structured::StructuredOutputContract;
 use agent_core::{ContentPart, TaskPhase};
 use log::debug;
 use std::sync::Arc;
@@ -504,6 +505,7 @@ pub(crate) async fn execute_runtime(
     skill_context: Option<&crate::agent::skill::SkillContext>,
     skill_summary: Option<&str>,
     history_policy_runtime: &dyn HistoryPolicyRuntime,
+    structured_output_contract: Option<&StructuredOutputContract>,
 ) -> SdkResult<RuntimeResponse> {
     use crate::agent::engine::{RequestResponseTurnInvoker, core_loop};
 
@@ -565,6 +567,7 @@ pub(crate) async fn execute_runtime(
                         msg_ctx,
                         task_ctx.clone(),
                         policy,
+                        structured_output_contract,
                     )?;
                     return attach_continuation_update(
                         history_policy_runtime,
@@ -599,14 +602,22 @@ pub(crate) async fn execute_runtime(
             } else if policy.finalize_required {
                 // Policy requires structured finalization — force a checkpoint turn
                 let post = "Model returned text without calling checkpoint_task; produce a structured checkpoint_task response.";
-                if let Ok(args) =
-                    run_finalization_turn(llm.clone(), model, tools, messages, post).await
+                if let Ok(args) = run_finalization_turn(
+                    llm.clone(),
+                    model,
+                    tools,
+                    messages,
+                    post,
+                    structured_output_contract,
+                )
+                .await
                 {
                     let response = build_response_from_finalization_args(
                         args,
                         msg_ctx,
                         task_ctx.clone(),
                         policy,
+                        structured_output_contract,
                     )?;
                     return attach_continuation_update(
                         history_policy_runtime,
@@ -659,13 +670,23 @@ pub(crate) async fn execute_runtime(
 
             if policy.finalize_required {
                 let post = format!("Stop reason: {}", reason);
-                match run_finalization_turn(llm.clone(), model, tools, messages, &post).await {
+                match run_finalization_turn(
+                    llm.clone(),
+                    model,
+                    tools,
+                    messages,
+                    &post,
+                    structured_output_contract,
+                )
+                .await
+                {
                     Ok(args) => {
                         let response = build_response_from_finalization_args(
                             args,
                             msg_ctx,
                             task_ctx.clone(),
                             policy,
+                            structured_output_contract,
                         )?;
                         attach_continuation_update(
                             history_policy_runtime,
@@ -800,6 +821,7 @@ mod adapter_compat_tests {
             name: "checkpoint_task".to_string(),
             description: Some("Sentinel checkpoint tool".to_string()),
             parameters: json!({"type":"object"}),
+            kind: crate::agent::tools::ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -1126,6 +1148,7 @@ mod stream_tests {
             name: "echo".to_string(),
             description: Some("Echo the input".to_string()),
             parameters: serde_json::json!({"type":"object","properties":{"text":{"type":"string"}}}),
+            kind: crate::agent::tools::ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

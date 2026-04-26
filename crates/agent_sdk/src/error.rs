@@ -6,6 +6,8 @@
 use a2a_protocol_core::error::A2AError;
 use thiserror::Error;
 
+use crate::events::EventError;
+
 /// SDK-specific error types
 ///
 /// Wraps underlying A2A protocol errors and adds SDK-specific error cases
@@ -45,6 +47,10 @@ pub enum SdkError {
     /// Serialization error
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    /// CloudEvents envelope error
+    #[error("CloudEvent error: {0}")]
+    CloudEvent(#[from] EventError),
 
     /// IO error
     #[error("IO error: {0}")]
@@ -156,6 +162,7 @@ impl SdkError {
             SdkError::ClientConnection { .. } => "client",
             SdkError::MethodExecution { .. } => "method_execution",
             SdkError::Serialization(_) => "serialization",
+            SdkError::CloudEvent(_) => "cloud_event",
             SdkError::Io(_) => "io",
             SdkError::Generic(_) => "generic",
             SdkError::FeatureNotEnabled { .. } => "feature",
@@ -173,6 +180,7 @@ impl From<SdkError> for A2AError {
                 A2AError::method_execution_failed(method, details)
             }
             SdkError::Serialization(err) => A2AError::SerializationError(err),
+            SdkError::CloudEvent(err) => A2AError::invalid_params("cloud_event", err.to_string()),
             SdkError::Generic(err) => A2AError::JsonRpcError(err),
             SdkError::FeatureNotEnabled { feature } => {
                 A2AError::unsupported_operation(format!("Feature not enabled: {}", feature))

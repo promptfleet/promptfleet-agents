@@ -329,14 +329,21 @@ impl StreamableHttpClientTransport {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let client = reqwest::Client::new();
+            let client = reqwest::Client::builder()
+                .use_rustls_tls()
+                .build()
+                .map_err(|e| {
+                    ProtocolError::Transport(TransportError::Network(format!(
+                        "streamable HTTP client build failed: {e}; debug={e:?}"
+                    )))
+                })?;
             let mut request = client.post(&self.endpoint);
             for (key, value) in &headers {
                 request = request.header(key, value);
             }
             let response = request.body(body).send().await.map_err(|e| {
                 ProtocolError::Transport(TransportError::Network(format!(
-                    "streamable HTTP request failed: {e}"
+                    "streamable HTTP request failed: {e}; debug={e:?}"
                 )))
             })?;
 

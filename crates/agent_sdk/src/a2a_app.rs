@@ -37,6 +37,10 @@ impl A2aApp {
     pub fn from_shared_agent(agent: Arc<Agent>) -> SdkResult<Self> {
         #[cfg(feature = "agent-observability")]
         let obs = agent.get_service::<Obs>().map(|arc| (*arc).clone());
+        #[cfg(feature = "agent-observability")]
+        if let Some(obs) = obs.as_ref() {
+            let _ = crate::install_global_observability(obs.clone());
+        }
         let server = A2aServer::from_shared_agent(agent)?;
         Ok(Self {
             server,
@@ -58,6 +62,7 @@ impl A2aApp {
                 Obs::noop()
             }),
         };
+        let _ = crate::install_global_observability(obs.clone());
         let agent = Arc::new(agent.with_service(obs.clone()));
         let server = A2aServer::from_shared_agent(agent)?;
         Ok(Self {

@@ -5,7 +5,7 @@
 //! - WASM agents (request-driven time-gated flush)
 
 #[cfg(feature = "agent-observability")]
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(feature = "agent-observability")]
 use std::time::{Duration, Instant};
@@ -15,6 +15,9 @@ use observability::Obs;
 
 #[cfg(feature = "agent-observability")]
 use observability::ObsHandle;
+
+#[cfg(feature = "agent-observability")]
+static GLOBAL_OBS: OnceLock<Obs> = OnceLock::new();
 
 /// SDK-owned helper that orchestrates best-effort flushing.
 ///
@@ -117,6 +120,16 @@ impl ObservabilityRuntime {
             .map(Duration::from_millis)
             .unwrap_or_else(|| Duration::from_millis(default_ms))
     }
+}
+
+#[cfg(feature = "agent-observability")]
+pub fn install_global_observability(obs: Obs) -> bool {
+    GLOBAL_OBS.set(obs).is_ok()
+}
+
+#[cfg(feature = "agent-observability")]
+pub fn shared_observability() -> Option<Obs> {
+    GLOBAL_OBS.get().cloned()
 }
 
 #[cfg(all(test, feature = "agent-observability"))]

@@ -27,7 +27,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["v4"] }
+schemars = { workspace = true, features = ["derive"] }
+jsonschema = { workspace = true }
 
 # Async runtime for user functions
 async-trait = "0.1"
@@ -151,6 +154,9 @@ auto-observability = ["config-loader", "agent-observability"]
 # Typed interaction contracts for reusable ask-question/confirmation flows.
 interactive-tools = ["agent-core"]
 
+# Protocol-free structured input/output helpers and typed finalization contracts.
+structured-io = ["llm-engine"]
+
 # Capability bundles
 agui-agent = ["agent-core", "llm-engine", "agui-stream"]
 a2a-agent = ["agent-core", "llm-engine", "a2a-server", "a2a-client", "event-stream"]
@@ -164,6 +170,7 @@ features = [
     "sub-agents",
     "redis-storage",
     "interactive-tools",
+    "structured-io",
     "context-window",
     "file-handling",
     "spec-compliant",

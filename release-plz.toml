@@ -124,6 +124,12 @@ version_group = "pf"
 publish = false
 release = false
 
+# Internal incubation crate; public CloudEvents helpers are re-exported from pf_agent_sdk.
+[[package]]
+name = "pf-events"
+publish = false
+release = false
+
 # ── Excluded ──
 
 [[package]]

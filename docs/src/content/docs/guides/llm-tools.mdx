@@ -64,6 +64,16 @@ llm_tool_macros = { path = "../../crates/llm_tool_macros" }
 
    This installs the tool-loop handler: the agent automatically calls tools when the LLM requests them and feeds results back.
 
+   If you also enable `structured-io`, the returned runtime configurator can attach a typed
+   final output contract in the same fluent call chain:
+
+   ```rust
+   // assuming AnalysisOutput derives serde::{Serialize, Deserialize} and schemars::JsonSchema
+   agent
+       .configure_llm_runtime(llm_client, "gpt-4o", tools, None, None, None)?
+       .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")?;
+   ```
+
 </Steps>
 
 ## Complete example

@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::agent::tool_context::ToolContext;
-use crate::agent::tools::{ToolExecutor, ToolSpec};
+use crate::agent::tools::{ToolExecutor, ToolKind, ToolSpec};
 use crate::agent::trace::AgentTraceEvent;
 use crate::interaction::{InteractionKind, InteractionOption, InteractionRequest};
 
@@ -97,6 +97,7 @@ fn make_ask_confirmation() -> ToolSpec {
                 .to_string(),
         ),
         parameters: schema_ask_confirmation(),
+        kind: ToolKind::Interaction,
         strict: true,
         parallel_ok: false,
         executor: ToolExecutor::WithContext(Arc::new(|args: Value, ctx: ToolContext| {
@@ -167,6 +168,7 @@ fn make_ask_question() -> ToolSpec {
                 .to_string(),
         ),
         parameters: schema_ask_question(),
+        kind: ToolKind::Interaction,
         strict: false,
         parallel_ok: false,
         executor: ToolExecutor::WithContext(Arc::new(|args: Value, ctx: ToolContext| {

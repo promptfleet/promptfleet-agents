@@ -372,6 +372,7 @@ impl Client {
         mut message: Message,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamResponse, RpcError>> + Send>>, RpcError>
     {
+        const METHOD: &str = "SendStreamingMessage";
         message.context_id = Some(context_id.to_string());
 
         let params = SendMessageRequest {
@@ -392,6 +393,102 @@ impl Client {
         let request_body = serde_json::to_string(&request)
             .map_err(|e| RpcError::internal_error(&format!("serialize request failed: {}", e)))?;
 
+        #[cfg(feature = "observability")]
+        let (span_guard, start_time, prev_ctx, injected, peer, target_id, source_id) = {
+            let prev = get_current_context();
+
+            let parent = prev
+                .clone()
+                .map(|ctx| W3CTraceContext {
+                    trace_id: ctx.trace_id.clone(),
+                    parent_id: ctx.span_id.clone(),
+                    trace_flags: if ctx.sampled {
+                        "01".to_string()
+                    } else {
+                        "00".to_string()
+                    },
+                    trace_state: None,
+                })
+                .unwrap_or_else(W3CTraceContext::new_root);
+
+            let peer = peer_service_from_url(&self.url);
+            let target_id = target_id_from_peer(&peer);
+            let source_id = workload_id(
+                &cluster_name(),
+                &current_namespace(),
+                &current_service_name(),
+            );
+            let kind = if target_id.starts_with(WORKLOAD_PREFIX) {
+                value::KIND_A2A
+            } else {
+                value::KIND_EXTERNAL
+            };
+
+            let span_guard = self.obs.as_ref().and_then(|obs| {
+                if let Some(otel) = obs.otel_plugin() {
+                    Some(otel.start_span_with_w3c_context(
+                        span::A2A_CLIENT,
+                        &parent,
+                        &[
+                            (attr::COMPONENT, "a2a_client"),
+                            (attr::OPERATION, METHOD),
+                            (attr::PEER_SERVICE, peer.as_str()),
+                            (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                            (attr::RPC_METHOD, METHOD),
+                            (attr::PF_SOURCE_WORKLOAD, source_id.as_str()),
+                            (attr::PF_TARGET_WORKLOAD, target_id.as_str()),
+                            (attr::PF_KIND, kind),
+                        ],
+                    ))
+                } else {
+                    Some(obs.span(
+                        span::A2A_CLIENT,
+                        &[
+                            (attr::COMPONENT, "a2a_client"),
+                            (attr::OPERATION, METHOD),
+                            (attr::PEER_SERVICE, peer.as_str()),
+                            (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                            (attr::RPC_METHOD, METHOD),
+                            (attr::PF_SOURCE_WORKLOAD, source_id.as_str()),
+                            (attr::PF_TARGET_WORKLOAD, target_id.as_str()),
+                            (attr::PF_KIND, kind),
+                        ],
+                    ))
+                }
+            });
+
+            let injected = span_guard.as_ref().map(|g| {
+                let child = W3CTraceContext {
+                    trace_id: parent.trace_id.clone(),
+                    parent_id: g.span_id().to_string(),
+                    trace_flags: parent.trace_flags.clone(),
+                    trace_state: None,
+                };
+                let mut out = HashMap::<String, String>::new();
+                observability::Obs::inject_context(&mut out, &child);
+                out
+            });
+
+            if let Some(g) = &span_guard {
+                set_current_context(TraceContext {
+                    trace_id: parent.trace_id.clone(),
+                    span_id: g.span_id().to_string(),
+                    parent_span_id: Some(parent.parent_id.clone()),
+                    sampled: parent.is_sampled(),
+                });
+            }
+
+            (
+                span_guard,
+                Instant::now(),
+                prev,
+                injected,
+                peer,
+                target_id,
+                source_id,
+            )
+        };
+
         let mut request_builder = self
             .http_client
             .post(&self.url)
@@ -405,10 +502,60 @@ impl Client {
             request_builder = request_builder.header(key, value);
         }
 
-        let response = request_builder.send().await.map_err(|e| RpcError {
-            code: -32000,
-            message: format!("SSE request failed: {}", e),
-        })?;
+        #[cfg(feature = "observability")]
+        if let Some(h) = injected.as_ref() {
+            for (k, v) in h {
+                request_builder = request_builder.header(k, v);
+            }
+        }
+
+        let response = match request_builder.send().await {
+            Ok(response) => response,
+            Err(e) => {
+                #[cfg(feature = "observability")]
+                if let Some(obs) = &self.obs {
+                    let duration_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+                    if let Some(g) = &span_guard {
+                        g.add_attribute(attr::STATUS, value::STATUS_ERROR);
+                        g.add_attribute(attr::PF_OUTCOME, value::OUTCOME_ERROR);
+                        g.add_attribute(attr::PEER_SERVICE, peer.as_str());
+                        g.add_attribute(attr::PF_SOURCE_WORKLOAD, source_id.as_str());
+                        g.add_attribute(attr::PF_TARGET_WORKLOAD, target_id.as_str());
+                        g.add_attribute(attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC);
+                        g.add_attribute(attr::RPC_METHOD, METHOD);
+                        g.add_attribute(attr::ERROR_TYPE, "network_error");
+                        g.set_status(SpanStatus::Error);
+                    }
+                    obs.metric(
+                        metric::A2A_REQUESTS_TOTAL,
+                        1.0,
+                        &[
+                            (attr::COMPONENT, "a2a_client"),
+                            (attr::OPERATION, METHOD),
+                            (attr::STATUS, value::STATUS_ERROR),
+                        ],
+                    );
+                    obs.metric(
+                        metric::A2A_LATENCY_MS,
+                        duration_ms,
+                        &[
+                            (attr::COMPONENT, "a2a_client"),
+                            (attr::OPERATION, METHOD),
+                            (attr::STATUS, value::STATUS_ERROR),
+                        ],
+                    );
+                    match prev_ctx.clone() {
+                        Some(ctx) => set_current_context(ctx),
+                        None => clear_current_context(),
+                    }
+                }
+
+                return Err(RpcError {
+                    code: -32000,
+                    message: format!("SSE request failed: {}", e),
+                });
+            }
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -416,10 +563,88 @@ impl Client {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
+            #[cfg(feature = "observability")]
+            if let Some(obs) = &self.obs {
+                let duration_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+                if let Some(g) = &span_guard {
+                    g.add_attribute(attr::STATUS, value::STATUS_ERROR);
+                    g.add_attribute(attr::PF_OUTCOME, value::OUTCOME_ERROR);
+                    g.add_attribute(attr::PEER_SERVICE, peer.as_str());
+                    g.add_attribute(attr::PF_SOURCE_WORKLOAD, source_id.as_str());
+                    g.add_attribute(attr::PF_TARGET_WORKLOAD, target_id.as_str());
+                    g.add_attribute(attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC);
+                    g.add_attribute(attr::RPC_METHOD, METHOD);
+                    g.add_attribute(attr::ERROR_TYPE, "http_error");
+                    g.set_status(SpanStatus::Error);
+                }
+                obs.metric(
+                    metric::A2A_REQUESTS_TOTAL,
+                    1.0,
+                    &[
+                        (attr::COMPONENT, "a2a_client"),
+                        (attr::OPERATION, METHOD),
+                        (attr::STATUS, value::STATUS_ERROR),
+                    ],
+                );
+                obs.metric(
+                    metric::A2A_LATENCY_MS,
+                    duration_ms,
+                    &[
+                        (attr::COMPONENT, "a2a_client"),
+                        (attr::OPERATION, METHOD),
+                        (attr::STATUS, value::STATUS_ERROR),
+                    ],
+                );
+                match prev_ctx.clone() {
+                    Some(ctx) => set_current_context(ctx),
+                    None => clear_current_context(),
+                }
+            }
             return Err(RpcError {
                 code: -32000,
                 message: format!("SSE HTTP error: {} - {}", status, body),
             });
+        }
+
+        #[cfg(feature = "observability")]
+        if let Some(obs) = &self.obs {
+            let duration_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+            let status = value::STATUS_OK;
+
+            if let Some(g) = &span_guard {
+                g.add_attribute(attr::STATUS, status);
+                g.add_attribute(attr::PF_OUTCOME, value::OUTCOME_OK);
+                g.add_attribute(attr::PEER_SERVICE, peer.as_str());
+                g.add_attribute(attr::PF_SOURCE_WORKLOAD, source_id.as_str());
+                g.add_attribute(attr::PF_TARGET_WORKLOAD, target_id.as_str());
+                g.add_attribute(attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC);
+                g.add_attribute(attr::RPC_METHOD, METHOD);
+                g.set_status(SpanStatus::Ok);
+            }
+
+            obs.metric(
+                metric::A2A_REQUESTS_TOTAL,
+                1.0,
+                &[
+                    (attr::COMPONENT, "a2a_client"),
+                    (attr::OPERATION, METHOD),
+                    (attr::STATUS, status),
+                ],
+            );
+            obs.metric(
+                metric::A2A_LATENCY_MS,
+                duration_ms,
+                &[
+                    (attr::COMPONENT, "a2a_client"),
+                    (attr::OPERATION, METHOD),
+                    (attr::STATUS, status),
+                ],
+            );
+
+            match prev_ctx.clone() {
+                Some(ctx) => set_current_context(ctx),
+                None => clear_current_context(),
+            }
         }
 
         let idle_timeout = self.streaming_policy.idle_timeout();

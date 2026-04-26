@@ -60,10 +60,74 @@ fn build_agent() -> SdkResult<()> {
 }
 ```
 
+### Structured I/O with CloudEvents
+
+```rust,no_run
+#[cfg(all(not(target_arch = "wasm32"), feature = "structured-io"))]
+async fn structured_example() -> Result<(), agent_sdk::SdkError> {
+    use agent_sdk::{AgentBuilder, CloudEventEnvelope, StructuredInput};
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+    struct AlertSignal {
+        alert_id: String,
+        severity: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+    struct AnalysisOutput {
+        alert_id: String,
+        disposition: String,
+        confidence: f32,
+    }
+
+    let mut agent = AgentBuilder::new("analysis-agent")?.build()?;
+
+    // Configure your real LLM runtime here.
+    // agent
+    //     .configure_llm_runtime(client, model, tools, system_message, None, None)?
+    //     .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")?;
+
+    let incoming = CloudEventEnvelope::new_json(
+        "com.example.alert_signal",
+        "urn:promptfleet:alerts",
+        AlertSignal {
+            alert_id: "alert-1".to_string(),
+            severity: "critical".to_string(),
+        },
+    );
+
+    let result = agent
+        .run_structured::<_, AnalysisOutput>(StructuredInput::from_cloudevent(incoming)?)
+        .await?;
+
+    let outgoing = result.into_cloud_event(
+        "com.example.analysis_output",
+        "urn:promptfleet:analysis-agent",
+    );
+
+    assert_eq!(
+        outgoing.dataschema.as_deref(),
+        Some("urn:promptfleet:schema:analysis_output")
+    );
+    let _ = outgoing;
+    Ok(())
+}
+```
+
+The runtime configurator returned by `configure_llm_runtime(...)` lets you attach the structured
+output contract at the same call site where the LLM loop is configured.
+
+By default, structured output contracts stamp outbound CloudEvents with
+`dataschema = "urn:promptfleet:schema:<schema_name>"`. Override it with
+`StructuredOutputContract::with_dataschema(...)` when you need a different URI.
+
 ### Which features?
 
 - **Runtime + tools only:** `agent-core`
 - **Built-in LLM tool loop:** add `llm-engine`
+- **Typed structured input/output:** add `structured-io`
 - **A2A wire + server:** add `a2a-server` / `a2a-client` as needed
 - **AG-UI streaming (native):** add `event-stream` and use `AgentHostBuilder::with_agui`
 - **Opinionated bundle:** `pf-agent` pulls the common platform stack; trim with default features off if you need a smaller graph
@@ -112,6 +176,7 @@ Core runtime:
 - `llm-engine`
 - `context-window`
 - `interactive-tools`
+- `structured-io`
 
 A2A:
 
@@ -146,4 +211,4 @@ Maintenance-only:
 
 ## Examples
 
-Minimal examples live under the crate’s [`examples/`](./examples/) directory (relative to `crates/agent_sdk`).
+Minimal examples live under the crate’s [`examples/`](./examples/) directory (relative to `crates/agent_sdk`), including `structured_cloud_event.rs` for the typed structured I/O flow.

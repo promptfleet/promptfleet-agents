@@ -4,7 +4,7 @@
 mod tool_engine_tests {
     use crate::agent::engine::types::*;
     use crate::agent::llm_invoker::{LlmStreamFuture, LlmStreamInvoker};
-    use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+    use crate::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
     use futures::StreamExt;
     use llm_client::LlmError;
@@ -49,6 +49,7 @@ mod tool_engine_tests {
             name: "echo".to_string(),
             description: Some("Echo the input".to_string()),
             parameters: serde_json::json!({"type":"object","properties":{"text":{"type":"string"}}}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -397,6 +398,7 @@ mod tool_engine_tests {
             name: "emitter".to_string(),
             description: Some("emits a progress event".to_string()),
             parameters: serde_json::json!({"type":"object","properties":{"text":{"type":"string"}}}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::WithContext(Arc::new(|_args, ctx| {
@@ -585,6 +587,7 @@ mod tool_engine_tests {
             name: "checkpoint_task".to_string(),
             description: Some("Sentinel tool".to_string()),
             parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -623,7 +626,7 @@ mod tool_engine_tests {
 mod core_loop_tests {
     use crate::agent::engine::core_loop;
     use crate::agent::engine::types::*;
-    use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+    use crate::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
     use llm_client::ChatMessage;
     use llm_client::LlmRequest;
@@ -666,6 +669,7 @@ mod core_loop_tests {
             name: "echo".to_string(),
             description: Some("Echo".to_string()),
             parameters: serde_json::json!({"type":"object","properties":{"text":{"type":"string"}}}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -846,6 +850,7 @@ mod core_loop_tests {
             name: "sentinel".to_string(),
             description: Some("Sentinel".to_string()),
             parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Function,
             strict: false,
             parallel_ok: false,
             executor: ToolExecutor::Simple(Arc::new(|args| {

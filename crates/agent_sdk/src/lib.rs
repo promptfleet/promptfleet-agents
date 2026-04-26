@@ -24,6 +24,7 @@
 //!
 //! - Building a runtime with skills, tools, and your own loop: `agent-core`
 //! - Adding the built-in LLM loop: `llm-engine`
+//! - Adding typed structured input/output helpers: `structured-io`
 //! - Serving only a user-facing AG-UI experience: `agui-agent`
 //! - Serving and calling A2A agents: `a2a-agent`
 //! - Supporting both A2A and AG-UI in one runtime: `dual-agent`
@@ -63,6 +64,55 @@
 //!
 //!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
 //!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Structured Input / Output (`structured-io`)
+//!
+//! ```rust,ignore
+//! use agent_sdk::{AgentBuilder, CloudEventEnvelope, StructuredInput};
+//! use schemars::JsonSchema;
+//! use serde::{Deserialize, Serialize};
+//!
+//! #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+//! struct AlertSignal {
+//!     alert_id: String,
+//!     severity: String,
+//! }
+//!
+//! #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+//! struct AnalysisOutput {
+//!     alert_id: String,
+//!     disposition: String,
+//!     confidence: f32,
+//! }
+//!
+//! async fn run(mut agent: agent_sdk::Agent) -> agent_sdk::SdkResult<()> {
+//!     let incoming = CloudEventEnvelope::new_json(
+//!         "com.example.alert_signal",
+//!         "urn:promptfleet:alerts",
+//!         AlertSignal {
+//!             alert_id: "alert-1".to_string(),
+//!             severity: "critical".to_string(),
+//!         },
+//!     );
+//!
+//!     let result = agent
+//!         .run_structured::<_, AnalysisOutput>(StructuredInput::from_cloudevent(incoming)?)
+//!         .await?;
+//!     let outgoing = result.into_cloud_event(
+//!         "com.example.analysis_output",
+//!         "urn:promptfleet:analysis-agent",
+//!     );
+//!     assert!(
+//!         outgoing
+//!             .dataschema
+//!             .as_deref()
+//!             .unwrap_or_default()
+//!             .starts_with("urn:promptfleet:schema:")
+//!     );
+//!     let _ = outgoing;
 //!     Ok(())
 //! }
 //! ```
@@ -121,6 +171,7 @@
 // Protocol-agnostic agent domain types (no A2A dependency needed by consumers)
 pub use agent_core;
 mod conversions;
+pub mod events;
 
 // Re-export protocol-neutral runtime vocabulary by default.
 pub use agent_core::{AgentMessage, ContentPart, ConversationContext, Role, TaskPhase};
@@ -140,6 +191,7 @@ pub mod error;
 pub mod host;
 pub mod interaction;
 pub mod services;
+pub mod structured;
 
 // Optional features
 #[cfg(feature = "a2a-client")]
@@ -179,6 +231,8 @@ pub mod streaming;
 pub mod sub_agent;
 
 // Re-export key types
+#[cfg(feature = "llm-engine")]
+pub use agent::LlmRuntimeConfigurator;
 pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
@@ -189,6 +243,10 @@ pub use error::{SdkError, SdkResult};
 pub use host::{AgentHost, AgentHostBuilder};
 pub use interaction::{
     InteractionKind, InteractionOption, InteractionRequest, InteractionResponse,
+};
+pub use structured::{
+    CloudEventEnvelope, DataschemaConvention, StructuredInput, StructuredOutputContract,
+    StructuredRunResult, promptfleet_dataschema_uri,
 };
 pub use timeout_policy::TimeoutPolicy;
 
@@ -201,7 +259,9 @@ pub use agent::skill::SkillDefinition;
 pub use builder::AgentBuilder;
 
 #[cfg(feature = "agent-observability")]
-pub use observability_runtime::ObservabilityRuntime;
+pub use observability_runtime::{
+    ObservabilityRuntime, install_global_observability, shared_observability,
+};
 
 // Re-export A2A tool helpers (when enabled)
 #[cfg(feature = "a2a-tools")]
@@ -276,8 +336,10 @@ macro_rules! a2a_serve {
 /// Prelude module for common imports
 pub mod prelude {
     pub use crate::{
-        AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder, TaskPhase,
+        AgentMessage, AgentRuntime, CloudEventEnvelope, ContentPart, DataschemaConvention,
+        MessageType, Role, RuntimeConfig, SdkError, ServiceContainer, SkillCall, SkillDefinition,
+        SkillEntryBuilder, StructuredInput, StructuredOutputContract, StructuredRunResult,
+        TaskPhase, promptfleet_dataschema_uri,
     };
 
     pub use agent_core::ConversationContext;

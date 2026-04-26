@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_sdk::agent::skill::{SkillDefinition, SkillRegistry, build_wired_read_skill_tool};
-use agent_sdk::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+use agent_sdk::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use pf_test_harness::perf::{
     collect_a2a_sse, collect_agent_io_sse, default_a2a_context, default_io_context,
@@ -28,6 +28,7 @@ fn make_tool_registry() -> ToolRegistry {
         name: "echo".to_string(),
         description: Some("Echo test tool".to_string()),
         parameters: json!({"type":"object"}),
+        kind: ToolKind::Function,
         strict: false,
         parallel_ok: false,
         executor: ToolExecutor::Simple(Arc::new(|args| {
@@ -43,6 +44,7 @@ fn make_context_tool_registry() -> ToolRegistry {
         name: "ctx_echo".to_string(),
         description: Some("Context-aware echo tool".to_string()),
         parameters: json!({"type":"object"}),
+        kind: ToolKind::Function,
         strict: false,
         parallel_ok: false,
         executor: ToolExecutor::WithContext(Arc::new(|args, ctx| {

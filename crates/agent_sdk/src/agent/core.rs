@@ -32,6 +32,17 @@ use crate::{
     services::ServiceContainer,
 };
 
+#[cfg(feature = "llm-engine")]
+#[derive(Clone)]
+struct RequestRuntimeConfig {
+    llm: Arc<dyn super::llm_orchestrator::LlmInvoker>,
+    model: String,
+    tools: super::tools::ToolRegistry,
+    policy: super::llm_orchestrator::LlmPolicy,
+    system_message: Option<String>,
+    request_defaults: Option<super::llm_orchestrator::LlmRequestDefaults>,
+}
+
 #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
 #[derive(Clone)]
 struct StreamRuntimeConfig {
@@ -66,8 +77,49 @@ pub struct Agent {
 
     history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
 
+    #[cfg(feature = "llm-engine")]
+    request_runtime: Option<RequestRuntimeConfig>,
+
     #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
     stream_runtime: Option<StreamRuntimeConfig>,
+
+    #[cfg(feature = "llm-engine")]
+    structured_output_contract: Option<crate::structured::StructuredOutputContract>,
+}
+
+#[cfg(feature = "llm-engine")]
+pub struct LlmRuntimeConfigurator<'a> {
+    agent: &'a mut Agent,
+}
+
+#[cfg(feature = "llm-engine")]
+impl<'a> LlmRuntimeConfigurator<'a> {
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output_contract(
+        self,
+        contract: crate::structured::StructuredOutputContract,
+    ) -> SdkResult<Self> {
+        self.agent.configure_structured_output(contract)?;
+        Ok(self)
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output<T>(
+        self,
+        schema_name: impl Into<String>,
+        artifact_name: impl Into<String>,
+    ) -> SdkResult<Self>
+    where
+        T: schemars::JsonSchema,
+    {
+        self.with_structured_output_contract(
+            crate::structured::StructuredOutputContract::from_type::<T>(schema_name, artifact_name),
+        )
+    }
+
+    pub fn into_agent(self) -> &'a mut Agent {
+        self.agent
+    }
 }
 
 impl Agent {
@@ -139,8 +191,12 @@ impl Agent {
             message_handler_manager,
             task_manager,
             history_policy_runtime,
+            #[cfg(feature = "llm-engine")]
+            request_runtime: None,
             #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
             stream_runtime: None,
+            #[cfg(feature = "llm-engine")]
+            structured_output_contract: None,
         };
 
         info!("Agent '{}' successfully created", agent.config.name,);
@@ -237,7 +293,7 @@ impl Agent {
         system_message: Option<String>,
         policy: Option<super::llm_orchestrator::LlmPolicy>,
         request_defaults: Option<super::llm_orchestrator::LlmRequestDefaults>,
-    ) -> SdkResult<()>
+    ) -> SdkResult<LlmRuntimeConfigurator<'_>>
     where
         I: super::llm_orchestrator::IntoLlmInvoker
             + super::llm_orchestrator::IntoLlmStreamInvoker
@@ -246,11 +302,20 @@ impl Agent {
     {
         let inv = client.clone().into_invoker();
         let reg = tools.into_tools();
+        let resolved_policy = policy.clone().unwrap_or_default();
+        self.request_runtime = Some(RequestRuntimeConfig {
+            llm: inv.clone(),
+            model: model.to_string(),
+            tools: reg.clone(),
+            policy: resolved_policy.clone(),
+            system_message: system_message.clone(),
+            request_defaults: request_defaults.clone(),
+        });
         self.stream_runtime = Some(StreamRuntimeConfig {
             llm: client.into_stream_invoker(),
             model: model.to_string(),
             tools: reg.clone(),
-            policy: policy.clone().unwrap_or_default(),
+            policy: resolved_policy.clone(),
             system_message: system_message.clone(),
             request_defaults: request_defaults.clone(),
         });
@@ -259,11 +324,12 @@ impl Agent {
                 inv,
                 model,
                 reg,
-                policy,
+                Some(resolved_policy),
                 system_message,
                 request_defaults,
                 self.history_policy_runtime.clone(),
-            )
+            )?;
+        Ok(LlmRuntimeConfigurator { agent: self })
     }
 
     #[cfg(all(feature = "llm-engine", target_arch = "wasm32"))]
@@ -275,23 +341,33 @@ impl Agent {
         system_message: Option<String>,
         policy: Option<super::llm_orchestrator::LlmPolicy>,
         request_defaults: Option<super::llm_orchestrator::LlmRequestDefaults>,
-    ) -> SdkResult<()>
+    ) -> SdkResult<LlmRuntimeConfigurator<'_>>
     where
         I: super::llm_orchestrator::IntoLlmInvoker + Clone,
         T: super::tools::IntoTools,
     {
         let inv = client.into_invoker();
         let reg = tools.into_tools();
+        let resolved_policy = policy.clone().unwrap_or_default();
+        self.request_runtime = Some(RequestRuntimeConfig {
+            llm: inv.clone(),
+            model: model.to_string(),
+            tools: reg.clone(),
+            policy: resolved_policy.clone(),
+            system_message: system_message.clone(),
+            request_defaults: request_defaults.clone(),
+        });
         self.message_handler_manager
             .set_llm_tools_handler_configured(
                 inv,
                 model,
                 reg,
-                policy,
+                Some(resolved_policy),
                 system_message,
                 request_defaults,
                 self.history_policy_runtime.clone(),
-            )
+            )?;
+        Ok(LlmRuntimeConfigurator { agent: self })
     }
 
     // -- Message dispatch --
@@ -305,6 +381,111 @@ impl Agent {
         self.message_handler_manager
             .handle_message(msg_ctx, task_ctx)
             .await
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub fn configure_structured_output(
+        &mut self,
+        contract: crate::structured::StructuredOutputContract,
+    ) -> SdkResult<()> {
+        self.structured_output_contract = Some(contract);
+        Ok(())
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub async fn run_structured<I, O>(
+        &self,
+        input: crate::structured::StructuredInput<I>,
+    ) -> SdkResult<crate::structured::StructuredRunResult<O>>
+    where
+        I: serde::Serialize,
+        O: serde::de::DeserializeOwned + schemars::JsonSchema,
+    {
+        let contract = self
+            .structured_output_contract
+            .clone()
+            .unwrap_or_else(crate::structured::StructuredOutputContract::for_type::<O>);
+        self.run_structured_with_contract(input, contract).await
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub async fn run_structured_with_contract<I, O>(
+        &self,
+        input: crate::structured::StructuredInput<I>,
+        contract: crate::structured::StructuredOutputContract,
+    ) -> SdkResult<crate::structured::StructuredRunResult<O>>
+    where
+        I: serde::Serialize,
+        O: serde::de::DeserializeOwned,
+    {
+        let runtime = self.request_runtime.as_ref().ok_or_else(|| {
+            SdkError::method_execution(
+                "run_structured",
+                "LLM runtime is not configured; call configure_llm_runtime first",
+            )
+        })?;
+
+        let mut checkpoint_env = crate::runtime_vars::CheckpointEnv::load_optional();
+        if checkpoint_env.mode == crate::runtime_vars::CheckpointMode::StateOnly {
+            checkpoint_env.mode = crate::runtime_vars::CheckpointMode::TaskObservable;
+        }
+        checkpoint_env.allow_message_response = false;
+
+        let mut tools = runtime.tools.clone();
+        tools.register(super::checkpoint::checkpoint_tool_spec(
+            &checkpoint_env,
+            Some(&contract),
+        ));
+
+        let mut policy = runtime.policy.clone();
+        policy.checkpoint_mode = checkpoint_env.mode;
+        policy.checkpoint_allow_message_response = false;
+        policy.checkpoint_mirror_internal_state_to_task_meta =
+            checkpoint_env.mirror_internal_state_to_task_meta;
+
+        let msg_ctx = input.into_message_context(Some(self.runtime_skill_executor()), true)?;
+        let response = super::llm_orchestrator::execute_runtime(
+            runtime.llm.clone(),
+            &runtime.model,
+            &tools,
+            &policy,
+            &msg_ctx,
+            None,
+            runtime.system_message.as_deref(),
+            runtime.request_defaults.as_ref(),
+            None,
+            None,
+            self.history_policy_runtime.as_ref(),
+            Some(&contract),
+        )
+        .await?;
+        let final_text = response.text_content();
+        let output = match crate::structured::decode_optional_artifact(
+            &response,
+            &contract.artifact_name,
+        )? {
+            Some(output) => output,
+            None if !contract.required => {
+                serde_json::from_value(serde_json::Value::Null).map_err(|error| {
+                    SdkError::method_execution(
+                        "run_structured",
+                        format!(
+                            "structured output artifact '{}' was not produced; use Option<T>, serde_json::Value, or make the contract required: {}",
+                            contract.artifact_name, error
+                        ),
+                    )
+                })?
+            }
+            None => crate::structured::decode_artifact(&response, &contract.artifact_name)?,
+        };
+
+        Ok(crate::structured::StructuredRunResult {
+            output,
+            artifact_name: contract.artifact_name,
+            dataschema: contract.dataschema,
+            raw_response: response,
+            final_text,
+        })
     }
 
     #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
@@ -378,6 +559,244 @@ impl Agent {
             self.config.history_policy.as_ref(),
             summarizer,
             memory,
+        );
+    }
+}
+
+#[cfg(all(test, feature = "structured-io"))]
+mod structured_tests {
+    use super::*;
+    use crate::structured::{StructuredInput, StructuredOutputContract, StructuredRunResult};
+    use llm_client::LlmResponse;
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+    use serde_json::json;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRequestInvoker {
+        responses: Mutex<VecDeque<Result<LlmResponse, String>>>,
+    }
+
+    impl MockRequestInvoker {
+        fn new(responses: Vec<Result<LlmResponse, String>>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into()),
+            }
+        }
+    }
+
+    impl super::super::llm_invoker::LlmInvoker for MockRequestInvoker {
+        fn request(
+            &self,
+            _req: llm_client::LlmRequest,
+        ) -> std::pin::Pin<
+            Box<dyn core::future::Future<Output = Result<llm_client::LlmResponse, String>> + Send>,
+        > {
+            let next = self
+                .responses
+                .lock()
+                .expect("mock invoker lock poisoned")
+                .pop_front()
+                .unwrap_or_else(|| Err("no mock response queued".to_string()));
+            Box::pin(async move { next })
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+    struct AlertSignal {
+        alert_id: String,
+        severity: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+    struct AnalysisOutput {
+        alert_id: String,
+        disposition: String,
+        confidence: f32,
+    }
+
+    fn llm_response(value: serde_json::Value) -> LlmResponse {
+        serde_json::from_value(value).expect("llm response fixture")
+    }
+
+    fn checkpoint_tool_call(args: serde_json::Value) -> LlmResponse {
+        llm_response(json!({
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_ck",
+                        "name": "checkpoint_task",
+                        "arguments": args
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        }))
+    }
+
+    fn configured_agent(responses: Vec<Result<LlmResponse, String>>) -> Agent {
+        let mut agent = Agent::new_runtime("structured-agent").expect("agent");
+        agent.request_runtime = Some(RequestRuntimeConfig {
+            llm: Arc::new(MockRequestInvoker::new(responses)),
+            model: "gpt-test".to_string(),
+            tools: super::super::tools::ToolRegistry::new(),
+            policy: super::super::llm_invoker::LlmPolicy::default(),
+            system_message: Some("Return a typed structured output".to_string()),
+            request_defaults: None,
+        });
+        agent
+    }
+
+    #[tokio::test]
+    async fn run_structured_returns_typed_output_and_configured_artifact_name() {
+        let mut agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": { "state": "completed" },
+            "structured_output": {
+                "payload": {
+                    "alert_id": "a-1",
+                    "disposition": "escalate",
+                    "confidence": 0.98
+                },
+                "text": "Analysis complete"
+            },
+            "respond": { "kind": "task" }
+        })))]);
+        agent
+            .configure_structured_output(StructuredOutputContract::from_type::<AnalysisOutput>(
+                "analysis_output",
+                "analysis_output",
+            ))
+            .expect("configure contract");
+
+        let result: StructuredRunResult<AnalysisOutput> = agent
+            .run_structured(StructuredInput::from_payload(AlertSignal {
+                alert_id: "a-1".to_string(),
+                severity: "critical".to_string(),
+            }))
+            .await
+            .expect("structured run");
+
+        assert_eq!(
+            result.output,
+            AnalysisOutput {
+                alert_id: "a-1".to_string(),
+                disposition: "escalate".to_string(),
+                confidence: 0.98,
+            }
+        );
+        assert_eq!(result.artifact_name, "analysis_output");
+        assert_eq!(
+            result.dataschema.as_deref(),
+            Some("urn:promptfleet:schema:analysis_output")
+        );
+        assert_eq!(result.final_text.as_deref(), Some("Analysis complete"));
+    }
+
+    #[tokio::test]
+    async fn run_structured_rejects_payloads_that_fail_schema_validation() {
+        let agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": { "state": "completed" },
+            "structured_output": {
+                "payload": {
+                    "alert_id": "a-2",
+                    "disposition": "ignore"
+                }
+            },
+            "respond": { "kind": "task" }
+        })))]);
+
+        let error = agent
+            .run_structured::<_, AnalysisOutput>(StructuredInput::from_payload(AlertSignal {
+                alert_id: "a-2".to_string(),
+                severity: "low".to_string(),
+            }))
+            .await
+            .expect_err("schema validation should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Structured output validation failed"),
+            "unexpected error: {}",
+            error
+        );
+    }
+
+    #[tokio::test]
+    async fn run_structured_allows_missing_optional_payload_when_contract_is_not_required() {
+        let agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": { "state": "working", "status_text": "Need more evidence" },
+            "respond": { "kind": "task" }
+        })))]);
+
+        let result: StructuredRunResult<Option<AnalysisOutput>> = agent
+            .run_structured_with_contract(
+                StructuredInput::from_payload(AlertSignal {
+                    alert_id: "a-3".to_string(),
+                    severity: "medium".to_string(),
+                }),
+                StructuredOutputContract::from_type::<AnalysisOutput>(
+                    "analysis_output",
+                    "analysis_output",
+                )
+                .with_required(false),
+            )
+            .await
+            .expect("optional structured run");
+
+        assert_eq!(result.output, None);
+        assert_eq!(result.artifact_name, "analysis_output");
+        assert_eq!(
+            result.raw_response.text_content(),
+            Some("Need more evidence".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn run_structured_prefers_validated_artifact_when_names_collide() {
+        let agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": {
+                "state": "completed",
+                "artifacts": [{
+                    "name": "analysis_output",
+                    "json": { "alert_id": "bad", "disposition": 42 }
+                }]
+            },
+            "structured_output": {
+                "payload": {
+                    "alert_id": "a-4",
+                    "disposition": "escalate",
+                    "confidence": 0.87
+                }
+            },
+            "respond": { "kind": "task" }
+        })))]);
+
+        let result: StructuredRunResult<AnalysisOutput> = agent
+            .run_structured_with_contract(
+                StructuredInput::from_payload(AlertSignal {
+                    alert_id: "a-4".to_string(),
+                    severity: "high".to_string(),
+                }),
+                StructuredOutputContract::from_type::<AnalysisOutput>(
+                    "analysis_output",
+                    "analysis_output",
+                ),
+            )
+            .await
+            .expect("structured run should prefer validated artifact");
+
+        assert_eq!(
+            result.output,
+            AnalysisOutput {
+                alert_id: "a-4".to_string(),
+                disposition: "escalate".to_string(),
+                confidence: 0.87,
+            }
         );
     }
 }

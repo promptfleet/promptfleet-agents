@@ -216,7 +216,20 @@ where
     }
 }
 
-pub(crate) fn decode_artifact<O>(response: &RuntimeResponse, artifact_name: &str) -> SdkResult<O>
+fn missing_artifact_error(artifact_name: &str) -> SdkError {
+    SdkError::method_execution(
+        "structured_output",
+        format!(
+            "structured output artifact '{}' was not produced",
+            artifact_name
+        ),
+    )
+}
+
+pub(crate) fn decode_optional_artifact<O>(
+    response: &RuntimeResponse,
+    artifact_name: &str,
+) -> SdkResult<Option<O>>
 where
     O: DeserializeOwned,
 {
@@ -230,26 +243,32 @@ where
     let artifact = task
         .artifacts
         .iter()
-        .find(|artifact| artifact.name == artifact_name)
-        .ok_or_else(|| {
+        .rev()
+        .find(|artifact| artifact.name == artifact_name);
+
+    let Some(artifact) = artifact else {
+        return Ok(None);
+    };
+
+    serde_json::from_value(artifact.data.clone())
+        .map(Some)
+        .map_err(|error| {
             SdkError::method_execution(
                 "structured_output",
                 format!(
-                    "structured output artifact '{}' was not produced",
-                    artifact_name
+                    "failed to decode structured output artifact '{}': {}",
+                    artifact_name, error
                 ),
             )
-        })?;
+        })
+}
 
-    serde_json::from_value(artifact.data.clone()).map_err(|error| {
-        SdkError::method_execution(
-            "structured_output",
-            format!(
-                "failed to decode structured output artifact '{}': {}",
-                artifact_name, error
-            ),
-        )
-    })
+pub(crate) fn decode_artifact<O>(response: &RuntimeResponse, artifact_name: &str) -> SdkResult<O>
+where
+    O: DeserializeOwned,
+{
+    decode_optional_artifact(response, artifact_name)?
+        .ok_or_else(|| missing_artifact_error(artifact_name))
 }
 
 #[cfg(test)]
@@ -319,6 +338,40 @@ mod tests {
         assert_eq!(
             event.dataschema.as_deref(),
             Some("urn:promptfleet:schema:analysis_output")
+        );
+    }
+
+    #[test]
+    fn decode_optional_artifact_prefers_last_matching_artifact() {
+        let response = RuntimeResponse::Task(crate::agent::RuntimeTask {
+            task_id: "task-1".to_string(),
+            context_id: "ctx-1".to_string(),
+            history: Vec::new(),
+            artifacts: vec![
+                crate::agent::RuntimeArtifact {
+                    name: "analysis_output".to_string(),
+                    description: None,
+                    data: serde_json::json!({ "verdict": 42 }),
+                },
+                crate::agent::RuntimeArtifact {
+                    name: "analysis_output".to_string(),
+                    description: None,
+                    data: serde_json::json!({ "verdict": "ok" }),
+                },
+            ],
+            metadata: HashMap::new(),
+            phase: agent_core::TaskPhase::Completed,
+            status_text: None,
+            continuation_update: None,
+        });
+
+        let decoded: ExampleOutput =
+            decode_artifact(&response, "analysis_output").expect("decode last artifact");
+        assert_eq!(
+            decoded,
+            ExampleOutput {
+                verdict: "ok".to_string()
+            }
         );
     }
 }

@@ -460,7 +460,24 @@ impl Agent {
         )
         .await?;
         let final_text = response.text_content();
-        let output = crate::structured::decode_artifact(&response, &contract.artifact_name)?;
+        let output = match crate::structured::decode_optional_artifact(
+            &response,
+            &contract.artifact_name,
+        )? {
+            Some(output) => output,
+            None if !contract.required => {
+                serde_json::from_value(serde_json::Value::Null).map_err(|error| {
+                    SdkError::method_execution(
+                        "run_structured",
+                        format!(
+                            "structured output artifact '{}' was not produced; use Option<T>, serde_json::Value, or make the contract required: {}",
+                            contract.artifact_name, error
+                        ),
+                    )
+                })?
+            }
+            None => crate::structured::decode_artifact(&response, &contract.artifact_name)?,
+        };
 
         Ok(crate::structured::StructuredRunResult {
             output,
@@ -706,6 +723,80 @@ mod structured_tests {
                 .contains("Structured output validation failed"),
             "unexpected error: {}",
             error
+        );
+    }
+
+    #[tokio::test]
+    async fn run_structured_allows_missing_optional_payload_when_contract_is_not_required() {
+        let agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": { "state": "working", "status_text": "Need more evidence" },
+            "respond": { "kind": "task" }
+        })))]);
+
+        let result: StructuredRunResult<Option<AnalysisOutput>> = agent
+            .run_structured_with_contract(
+                StructuredInput::from_payload(AlertSignal {
+                    alert_id: "a-3".to_string(),
+                    severity: "medium".to_string(),
+                }),
+                StructuredOutputContract::from_type::<AnalysisOutput>(
+                    "analysis_output",
+                    "analysis_output",
+                )
+                .with_required(false),
+            )
+            .await
+            .expect("optional structured run");
+
+        assert_eq!(result.output, None);
+        assert_eq!(result.artifact_name, "analysis_output");
+        assert_eq!(
+            result.raw_response.text_content(),
+            Some("Need more evidence".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn run_structured_prefers_validated_artifact_when_names_collide() {
+        let agent = configured_agent(vec![Ok(checkpoint_tool_call(json!({
+            "task_patch": {
+                "state": "completed",
+                "artifacts": [{
+                    "name": "analysis_output",
+                    "json": { "alert_id": "bad", "disposition": 42 }
+                }]
+            },
+            "structured_output": {
+                "payload": {
+                    "alert_id": "a-4",
+                    "disposition": "escalate",
+                    "confidence": 0.87
+                }
+            },
+            "respond": { "kind": "task" }
+        })))]);
+
+        let result: StructuredRunResult<AnalysisOutput> = agent
+            .run_structured_with_contract(
+                StructuredInput::from_payload(AlertSignal {
+                    alert_id: "a-4".to_string(),
+                    severity: "high".to_string(),
+                }),
+                StructuredOutputContract::from_type::<AnalysisOutput>(
+                    "analysis_output",
+                    "analysis_output",
+                ),
+            )
+            .await
+            .expect("structured run should prefer validated artifact");
+
+        assert_eq!(
+            result.output,
+            AnalysisOutput {
+                alert_id: "a-4".to_string(),
+                disposition: "escalate".to_string(),
+                confidence: 0.87,
+            }
         );
     }
 }

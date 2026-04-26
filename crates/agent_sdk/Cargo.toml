@@ -80,9 +80,9 @@ tokio = { version = "1.0", features = ["macros", "rt", "time"] }
 tower = { version = "0.4", features = ["util"] }
 axum = { version = "0.7", features = ["json"] }
 rmcp = { version = "0.14", features = ["server", "transport-streamable-http-server", "schemars"] }
-mcp_protocol = { package = "pf_mcp_protocol", path = "../mcp_protocol", version = "0.1.0", features = ["client"] }
+mcp_protocol = { package = "pf_mcp_protocol", path = "../mcp_protocol", version = "0.1.1", features = ["client"] }
 pf_test_harness = { path = "../pf_test_harness", features = ["scenario", "agent-sdk", "a2a-http", "a2a-mock"] }
-a2a_http_client = { path = "../a2a_http_client", version = "0.1.0", features = ["streaming"] }
+a2a_http_client = { path = "../a2a_http_client", version = "0.1.1", features = ["streaming"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]

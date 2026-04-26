@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/promptfleet/promptfleet-agents/compare/pf_observability-v0.1.0...pf_observability-v0.1.1) - 2026-04-26
+
+### Added
+
+- struct output ([#17](https://github.com/promptfleet/promptfleet-agents/pull/17))
+
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/pf_observability-v0.1.0) - 2026-03-30
 
 Initial release.

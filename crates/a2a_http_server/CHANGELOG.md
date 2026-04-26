@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/promptfleet/promptfleet-agents/compare/a2a_http_server-v0.1.1...a2a_http_server-v0.1.2) - 2026-04-26
+
+### Other
+
+- updated the following local packages: pf_observability, a2a_http_client
+
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/a2a_http_server-v0.1.0) - 2026-03-30
 
 Initial release.

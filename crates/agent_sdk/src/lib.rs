@@ -24,6 +24,7 @@
 //!
 //! - Building a runtime with skills, tools, and your own loop: `agent-core`
 //! - Adding the built-in LLM loop: `llm-engine`
+//! - Adding typed structured input/output helpers: `structured-io`
 //! - Serving only a user-facing AG-UI experience: `agui-agent`
 //! - Serving and calling A2A agents: `a2a-agent`
 //! - Supporting both A2A and AG-UI in one runtime: `dual-agent`
@@ -63,6 +64,48 @@
 //!
 //!     // Metadata-only skill (no handler): use `add_skill("id").description("...").register()?`
 //!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Structured Input / Output (`structured-io`)
+//!
+//! ```rust,ignore
+//! use agent_sdk::{AgentBuilder, CloudEventEnvelope, StructuredInput};
+//! use schemars::JsonSchema;
+//! use serde::{Deserialize, Serialize};
+//!
+//! #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+//! struct AlertSignal {
+//!     alert_id: String,
+//!     severity: String,
+//! }
+//!
+//! #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+//! struct AnalysisOutput {
+//!     alert_id: String,
+//!     disposition: String,
+//!     confidence: f32,
+//! }
+//!
+//! async fn run(mut agent: agent_sdk::Agent) -> agent_sdk::SdkResult<()> {
+//!     let incoming = CloudEventEnvelope::new_json(
+//!         "com.example.alert_signal",
+//!         "urn:promptfleet:alerts",
+//!         AlertSignal {
+//!             alert_id: "alert-1".to_string(),
+//!             severity: "critical".to_string(),
+//!         },
+//!     );
+//!
+//!     let result = agent
+//!         .run_structured::<_, AnalysisOutput>(StructuredInput::from_cloudevent(incoming)?)
+//!         .await?;
+//!     let outgoing = result.into_cloud_event(
+//!         "com.example.analysis_output",
+//!         "urn:promptfleet:analysis-agent",
+//!     );
+//!     let _ = outgoing;
 //!     Ok(())
 //! }
 //! ```
@@ -140,6 +183,7 @@ pub mod error;
 pub mod host;
 pub mod interaction;
 pub mod services;
+pub mod structured;
 
 // Optional features
 #[cfg(feature = "a2a-client")]
@@ -189,6 +233,9 @@ pub use error::{SdkError, SdkResult};
 pub use host::{AgentHost, AgentHostBuilder};
 pub use interaction::{
     InteractionKind, InteractionOption, InteractionRequest, InteractionResponse,
+};
+pub use structured::{
+    CloudEventEnvelope, StructuredInput, StructuredOutputContract, StructuredRunResult,
 };
 pub use timeout_policy::TimeoutPolicy;
 
@@ -279,7 +326,8 @@ macro_rules! a2a_serve {
 pub mod prelude {
     pub use crate::{
         AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder, TaskPhase,
+        CloudEventEnvelope, ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder,
+        StructuredInput, StructuredOutputContract, StructuredRunResult, TaskPhase,
     };
 
     pub use agent_core::ConversationContext;

@@ -17,11 +17,12 @@ use crate::error::{SdkError, SdkResult};
 #[cfg(feature = "llm-engine")]
 use crate::agent::{
     history_policy::HistoryPolicyRuntime,
+    checkpoint::checkpoint_tool_spec,
     llm_orchestrator::{LlmInvoker, LlmPolicy, LlmRequestDefaults, execute_runtime},
-    tools::{ToolExecutor, ToolRegistry, ToolSpec},
+    tools::ToolRegistry,
 };
 #[cfg(feature = "llm-engine")]
-use crate::runtime_vars::{CheckpointEnv, CheckpointMode};
+use crate::runtime_vars::CheckpointEnv;
 
 // Unified handler future type (non-Send on wasm32)
 #[cfg(target_arch = "wasm32")]
@@ -135,140 +136,7 @@ impl MessageHandlerManager {
         history_policy_runtime: Arc<dyn HistoryPolicyRuntime>,
     ) -> SdkResult<()> {
         let checkpoint_env = CheckpointEnv::load_optional();
-
-        // -- checkpoint_task tool (internal sentinel) --
-        let mut properties = serde_json::Map::new();
-        properties.insert("emit".to_string(), serde_json::json!({
-            "type": "array",
-            "description": "Internal-only events for logging/diagnostics (not a user-visible message).",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "level": { "type": "string", "enum": ["debug","info","warn","error"], "default": "info" },
-                    "code": { "type": "string", "minLength": 1, "description": "Short stable identifier, e.g. delegate.start" },
-                    "message": { "type": "string", "minLength": 1 },
-                    "data": { "type": "object", "description": "Optional structured payload.", "additionalProperties": true }
-                },
-                "required": ["code","message"],
-                "additionalProperties": false
-            }
-        }));
-        properties.insert("internal_state".to_string(), serde_json::json!({
-            "type": "object",
-            "description": "Internal-only snapshot; may optionally be mirrored into task metadata for polling.",
-            "properties": {
-                "stage": { "type": "string", "minLength": 1, "description": "e.g. discovering|delegating|waiting_external|synthesizing|waiting_input|done|failed" },
-                "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
-                "note": { "type": "string" }
-            },
-            "additionalProperties": false
-        }));
-
-        if checkpoint_env.mode != CheckpointMode::StateOnly {
-            properties.insert("task_patch".to_string(), serde_json::json!({
-                "type": "object",
-                "description": "Patch to persist into durable task state so pollers can observe progress.",
-                "properties": {
-                    "state": { "type": "string", "enum": ["working","input_required","completed","failed","canceled","rejected"] },
-                    "status_text": { "type": "string", "description": "Human-readable status persisted with the task state." },
-                    "meta": { "type": "object", "description": "Task metadata for pollers (stage/progress/errors/etc).", "additionalProperties": true },
-                    "append_history_text": { "type": "string", "description": "Optional assistant message to append to task history." },
-                    "artifacts": {
-                        "type": "array",
-                        "description": "Optional durable outputs to attach as task artifacts.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": { "type": "string", "minLength": 1 },
-                                "description": { "type": "string" },
-                                "json": { "description": "JSON payload to store as a data artifact." }
-                            },
-                            "required": ["name","json"],
-                            "additionalProperties": false
-                        }
-                    }
-                },
-                "required": ["state"],
-                "additionalProperties": false
-            }));
-        }
-
-        if checkpoint_env.mode == CheckpointMode::ResponseControl {
-            let mut respond_enum = vec!["task"];
-            if checkpoint_env.allow_message_response {
-                respond_enum.push("message");
-            }
-            properties.insert("respond".to_string(), serde_json::json!({
-                "type": "object",
-                "description": "If provided, finalize immediately with a single synchronous response.",
-                "properties": {
-                    "kind": { "type": "string", "enum": respond_enum },
-                    "message_text": { "type": "string", "description": "Required if kind=message." },
-                    "final_text": { "type": "string", "description": "Optional final assistant text (prefer task_patch.append_history_text)." }
-                },
-                "required": ["kind"],
-                "additionalProperties": false
-            }));
-        }
-
-        let checkpoint_schema = serde_json::Value::Object(serde_json::Map::from_iter([
-            ("type".to_string(), serde_json::json!("object")),
-            (
-                "properties".to_string(),
-                serde_json::Value::Object(properties),
-            ),
-            ("required".to_string(), serde_json::json!([])),
-            ("additionalProperties".to_string(), serde_json::json!(false)),
-            (
-                "examples".to_string(),
-                serde_json::json!([
-                    {
-                        "task_patch": {
-                            "state": "working",
-                            "status_text": "Delegating CSV parsing to tabular-parser-agent",
-                            "meta": { "stage": "delegating", "progress": 30 }
-                        }
-                    },
-                    {
-                        "task_patch": {
-                            "state": "input_required",
-                            "status_text": "I need the CSV delimiter (comma/semicolon) and whether there is a header row.",
-                            "meta": { "stage": "waiting_input", "required": ["delimiter","has_header"] }
-                        },
-                        "respond": { "kind": "task" }
-                    },
-                    {
-                        "task_patch": {
-                            "state": "completed",
-                            "append_history_text": "Parsed 3 rows successfully.",
-                            "artifacts": [{ "name": "records", "json": { "records": [{"price":10,"qty":2}] } }]
-                        },
-                        "respond": { "kind": "task" }
-                    }
-                ]),
-            ),
-        ]));
-
-        let checkpoint_task = ToolSpec {
-            name: "checkpoint_task".to_string(),
-            description: Some(
-                "Checkpoint progress and/or finalize the current message/send response.\n\
-                 Use this to set an explicit task state (working, input_required, completed, failed, ...), attach artifacts, and provide a status message.\n\
-                 If you include respond.kind, the tools loop will return immediately with that response."
-                    .to_string(),
-            ),
-            parameters: checkpoint_schema,
-            kind: crate::agent::tools::ToolKind::Function,
-            strict: true,
-            parallel_ok: false,
-            executor: ToolExecutor::Simple(Arc::new(|args| Box::pin(async move {
-                Ok(serde_json::json!({
-                    "__engine_stop": true,
-                    "__checkpoint_args": args,
-                }))
-            }))),
-        };
-        tools.register(checkpoint_task);
+        tools.register(checkpoint_tool_spec(&checkpoint_env, None));
 
         // -- Wire read_skill tool from llm_callable skills --
         let skill_registry_arc = Arc::clone(&self.skill_registry);
@@ -321,6 +189,7 @@ impl MessageHandlerManager {
                         skill_ctx.as_ref(),
                         skill_summary.as_deref(),
                         history_policy_runtime.as_ref(),
+                        None,
                     )
                     .await
                 })

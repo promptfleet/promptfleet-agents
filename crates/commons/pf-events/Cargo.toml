@@ -1,0 +1,16 @@
+[package]
+name = "pf-events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Shared event envelope primitives and CloudEvents helpers for PromptFleet runtimes."
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, features = ["v4"] }
+thiserror = { workspace = true }

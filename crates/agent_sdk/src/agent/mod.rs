@@ -44,6 +44,8 @@ pub mod trace;
 
 // NEW (gated): Minimal orchestrator surface for tools-first LLM loop
 #[cfg(feature = "llm-engine")]
+pub(crate) mod checkpoint;
+#[cfg(feature = "llm-engine")]
 mod finalization;
 #[cfg(feature = "llm-engine")]
 pub(crate) mod llm_invoker;

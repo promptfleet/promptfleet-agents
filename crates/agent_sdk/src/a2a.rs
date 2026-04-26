@@ -564,6 +564,7 @@ pub async fn execute_a2a(
         skill_context,
         skill_summary,
         history_runtime.as_ref(),
+        None,
     )
     .await
     .map_err(A2AError::from)

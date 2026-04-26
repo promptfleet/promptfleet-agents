@@ -10,6 +10,7 @@ use crate::agent::{MessageContext, TaskContext};
 use crate::agent::{Response, RuntimeArtifact, RuntimeResponse, TaskOpts};
 use crate::error::{SdkError, SdkResult};
 use crate::runtime_vars::CheckpointMode;
+use crate::structured::StructuredOutputContract;
 use agent_core::{ContentPart, TaskPhase};
 use log::debug;
 use std::sync::Arc;
@@ -44,6 +45,7 @@ pub(super) fn build_response_from_finalization_args(
     msg_ctx: &MessageContext,
     task_ctx: Option<TaskContext>,
     policy: &LlmPolicy,
+    structured_output_contract: Option<&StructuredOutputContract>,
 ) -> SdkResult<RuntimeResponse> {
     let respond_kind = args
         .get("respond")
@@ -98,10 +100,24 @@ pub(super) fn build_response_from_finalization_args(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    let structured_output_value = args.get("structured_output");
+    let structured_payload = structured_output_value.and_then(|value| value.get("payload")).cloned();
+    let structured_text = structured_output_value
+        .and_then(|value| value.get("text"))
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+
+    if structured_output_value.is_some() && structured_payload.is_none() {
+        return Err(SdkError::invalid_input(
+            "structured_output.payload is required when structured_output is provided",
+        ));
+    }
+
     let append_history_text = task_patch
         .get("append_history_text")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
+        .or(structured_text)
         .or_else(|| {
             args.get("respond")
                 .and_then(|v| v.get("final_text"))
@@ -163,6 +179,29 @@ pub(super) fn build_response_from_finalization_args(
         Some(TaskPhase::Working)
     };
 
+    if let Some(contract) = structured_output_contract {
+        match structured_payload {
+            Some(payload) => {
+                contract.validate_payload(&payload)?;
+                artifacts.push(RuntimeArtifact {
+                    name: contract.artifact_name.clone(),
+                    description: Some(format!(
+                        "Structured output payload for schema '{}'",
+                        contract.schema_name
+                    )),
+                    data: payload,
+                });
+            }
+            None if contract.required && state == Some(TaskPhase::Completed) => {
+                return Err(SdkError::invalid_input(format!(
+                    "structured_output.payload is required for completed responses using schema '{}'",
+                    contract.schema_name
+                )));
+            }
+            None => {}
+        }
+    }
+
     let history_parts = append_history_text.and_then(|t| {
         if t.is_empty() {
             None
@@ -191,13 +230,23 @@ pub(super) async fn run_finalization_turn(
     tools: &ToolRegistry,
     mut messages: Vec<llm_client::ChatMessage>,
     post_mortem: &str,
+    structured_output_contract: Option<&StructuredOutputContract>,
 ) -> Result<serde_json::Value, String> {
+    let structured_instruction = structured_output_contract
+        .map(|contract| {
+            format!(
+                "\n- If you complete successfully, include structured_output.payload matching schema '{}'. You may also set structured_output.text with a concise human-readable summary.",
+                contract.schema_name
+            )
+        })
+        .unwrap_or_default();
     let instruction = format!(
         "You must now call checkpoint_task.\n\
         - If you are done, set task_patch.state='completed' and include append_history_text (and artifacts if any), and set respond.kind='task'.\n\
         - If you need more input, set task_patch.state='input_required' with status_text asking for the missing info, and set respond.kind='task'.\n\
-        - If you cannot proceed due to an error, set task_patch.state='failed' with status_text explaining the error and next steps, and set respond.kind='task'.\n\
+        - If you cannot proceed due to an error, set task_patch.state='failed' with status_text explaining the error and next steps, and set respond.kind='task'.{} \n\
         Context: {}",
+        structured_instruction,
         post_mortem
     );
     messages.push(llm_client::ChatMessage {

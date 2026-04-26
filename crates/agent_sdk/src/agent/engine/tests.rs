@@ -626,7 +626,7 @@ mod tool_engine_tests {
 mod core_loop_tests {
     use crate::agent::engine::core_loop;
     use crate::agent::engine::types::*;
-    use crate::agent::tools::{ToolExecutor, ToolRegistry, ToolSpec};
+    use crate::agent::tools::{ToolExecutor, ToolKind, ToolRegistry, ToolSpec};
     use crate::agent::trace::AgentTraceEvent;
     use llm_client::ChatMessage;
     use llm_client::LlmRequest;

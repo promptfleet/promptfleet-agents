@@ -82,12 +82,12 @@ async fn structured_example() -> Result<(), agent_sdk::SdkError> {
         confidence: f32,
     }
 
-    let mut agent = AgentBuilder::new("analysis-agent")?
-        .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")
-        .build()?;
+    let mut agent = AgentBuilder::new("analysis-agent")?.build()?;
 
     // Configure your real LLM runtime here.
-    // agent.configure_llm_runtime(client, model, tools, system_message, None, None)?;
+    // agent
+    //     .configure_llm_runtime(client, model, tools, system_message, None, None)?
+    //     .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")?;
 
     let incoming = CloudEventEnvelope::new_json(
         "com.example.alert_signal",
@@ -107,10 +107,18 @@ async fn structured_example() -> Result<(), agent_sdk::SdkError> {
         "urn:promptfleet:analysis-agent",
     );
 
+    assert_eq!(
+        outgoing.dataschema.as_deref(),
+        Some("urn:promptfleet:schema:analysis_output")
+    );
     let _ = outgoing;
     Ok(())
 }
 ```
+
+By default, structured output contracts stamp outbound CloudEvents with
+`dataschema = "urn:promptfleet:schema:<schema_name>"`. Override it with
+`StructuredOutputContract::with_dataschema(...)` when you need a different URI.
 
 ### Which features?
 

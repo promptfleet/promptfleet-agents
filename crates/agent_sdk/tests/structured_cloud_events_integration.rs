@@ -113,7 +113,6 @@ async fn structured_cloud_event_flow_uses_public_api() {
 
     let mut agent = AgentBuilder::new("integration-structured-agent")
         .expect("builder")
-        .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")
         .build()
         .expect("agent");
     agent
@@ -125,7 +124,9 @@ async fn structured_cloud_event_flow_uses_public_api() {
             None,
             None,
         )
-        .expect("configure llm runtime");
+        .expect("configure llm runtime")
+        .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")
+        .expect("configure structured output");
 
     let incoming = CloudEventEnvelope::new_json(
         "com.example.alert_signal",
@@ -165,5 +166,9 @@ async fn structured_cloud_event_flow_uses_public_api() {
     );
     assert_eq!(outgoing.event_type, "com.example.analysis_output");
     assert_eq!(outgoing.source, "urn:promptfleet:analysis-agent");
+    assert_eq!(
+        outgoing.dataschema.as_deref(),
+        Some("urn:promptfleet:schema:analysis_output")
+    );
     assert_eq!(outgoing.data.unwrap().alert_id, "alert-42");
 }

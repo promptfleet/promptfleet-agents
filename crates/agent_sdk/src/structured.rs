@@ -13,7 +13,8 @@ use crate::agent::{MessageContext, RuntimeResponse, SkillExecutor};
 use crate::{SdkError, SdkResult};
 
 pub use pf_events::{
-    CloudEventEnvelope, EventError as CloudEventError, envelope_schema, payload_schema,
+    CloudEventEnvelope, DataschemaConvention, EventError as CloudEventError, envelope_schema,
+    payload_schema, promptfleet_dataschema_uri,
 };
 
 /// Protocol-free typed input for structured agent execution.
@@ -88,6 +89,7 @@ pub struct StructuredOutputContract {
     pub schema_name: String,
     pub artifact_name: String,
     pub schema: Value,
+    pub dataschema: Option<String>,
     pub strict: bool,
     pub required: bool,
 }
@@ -98,8 +100,10 @@ impl StructuredOutputContract {
         artifact_name: impl Into<String>,
         schema: Value,
     ) -> Self {
+        let schema_name = schema_name.into();
         Self {
-            schema_name: schema_name.into(),
+            dataschema: Some(promptfleet_dataschema_uri(&schema_name)),
+            schema_name,
             artifact_name: artifact_name.into(),
             schema,
             strict: true,
@@ -127,6 +131,25 @@ impl StructuredOutputContract {
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
+    }
+
+    pub fn with_dataschema(mut self, dataschema: impl Into<String>) -> Self {
+        self.dataschema = Some(dataschema.into());
+        self
+    }
+
+    pub fn without_dataschema(mut self) -> Self {
+        self.dataschema = None;
+        self
+    }
+
+    pub fn with_dataschema_convention(mut self, convention: DataschemaConvention) -> Self {
+        self.dataschema = Some(convention.uri_for(&self.schema_name));
+        self
+    }
+
+    pub fn with_promptfleet_dataschema(self) -> Self {
+        self.with_dataschema_convention(DataschemaConvention::PromptfleetUrn)
     }
 
     pub fn with_required(mut self, required: bool) -> Self {
@@ -165,6 +188,7 @@ impl StructuredOutputContract {
 pub struct StructuredRunResult<O> {
     pub output: O,
     pub artifact_name: String,
+    pub dataschema: Option<String>,
     pub raw_response: RuntimeResponse,
     pub final_text: Option<String>,
 }
@@ -178,7 +202,11 @@ where
         event_type: impl Into<String>,
         source: impl Into<String>,
     ) -> CloudEventEnvelope<O> {
-        CloudEventEnvelope::new_json(event_type, source, self.output)
+        let event = CloudEventEnvelope::new_json(event_type, source, self.output);
+        match self.dataschema {
+            Some(dataschema) => event.with_dataschema(dataschema),
+            None => event,
+        }
     }
 }
 
@@ -233,6 +261,10 @@ mod tests {
         let contract = StructuredOutputContract::for_type::<ExampleOutput>();
         assert_eq!(contract.artifact_name, "structured_output");
         assert_eq!(contract.schema["type"], "object");
+        assert_eq!(
+            contract.dataschema.as_deref(),
+            Some(promptfleet_dataschema_uri(type_name::<ExampleOutput>()).as_str())
+        );
     }
 
     #[test]
@@ -260,6 +292,7 @@ mod tests {
                 verdict: "ok".to_string(),
             },
             artifact_name: "analysis_output".to_string(),
+            dataschema: Some(promptfleet_dataschema_uri("analysis_output")),
             raw_response: RuntimeResponse::Task(crate::agent::RuntimeTask {
                 task_id: "task-1".to_string(),
                 context_id: "ctx-1".to_string(),
@@ -277,5 +310,9 @@ mod tests {
         assert_eq!(event.event_type, "com.example.analysis");
         assert_eq!(event.source, "urn:test");
         assert_eq!(event.datacontenttype.as_deref(), Some("application/json"));
+        assert_eq!(
+            event.dataschema.as_deref(),
+            Some("urn:promptfleet:schema:analysis_output")
+        );
     }
 }

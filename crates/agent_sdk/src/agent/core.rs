@@ -87,6 +87,44 @@ pub struct Agent {
     structured_output_contract: Option<crate::structured::StructuredOutputContract>,
 }
 
+#[cfg(feature = "llm-engine")]
+pub struct LlmRuntimeConfigurator<'a> {
+    agent: &'a mut Agent,
+}
+
+#[cfg(feature = "llm-engine")]
+impl<'a> LlmRuntimeConfigurator<'a> {
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output_contract(
+        self,
+        contract: crate::structured::StructuredOutputContract,
+    ) -> SdkResult<Self> {
+        self.agent.configure_structured_output(contract)?;
+        Ok(self)
+    }
+
+    #[cfg(feature = "structured-io")]
+    pub fn with_structured_output<T>(
+        self,
+        schema_name: impl Into<String>,
+        artifact_name: impl Into<String>,
+    ) -> SdkResult<Self>
+    where
+        T: schemars::JsonSchema,
+    {
+        self.with_structured_output_contract(
+            crate::structured::StructuredOutputContract::from_type::<T>(
+                schema_name,
+                artifact_name,
+            ),
+        )
+    }
+
+    pub fn into_agent(self) -> &'a mut Agent {
+        self.agent
+    }
+}
+
 impl Agent {
     /// Create a new runtime-first agent.
     pub fn new_runtime(name: &str) -> SdkResult<Self> {
@@ -258,7 +296,7 @@ impl Agent {
         system_message: Option<String>,
         policy: Option<super::llm_orchestrator::LlmPolicy>,
         request_defaults: Option<super::llm_orchestrator::LlmRequestDefaults>,
-    ) -> SdkResult<()>
+    ) -> SdkResult<LlmRuntimeConfigurator<'_>>
     where
         I: super::llm_orchestrator::IntoLlmInvoker
             + super::llm_orchestrator::IntoLlmStreamInvoker
@@ -293,7 +331,8 @@ impl Agent {
                 system_message,
                 request_defaults,
                 self.history_policy_runtime.clone(),
-            )
+            )?;
+        Ok(LlmRuntimeConfigurator { agent: self })
     }
 
     #[cfg(all(feature = "llm-engine", target_arch = "wasm32"))]
@@ -305,7 +344,7 @@ impl Agent {
         system_message: Option<String>,
         policy: Option<super::llm_orchestrator::LlmPolicy>,
         request_defaults: Option<super::llm_orchestrator::LlmRequestDefaults>,
-    ) -> SdkResult<()>
+    ) -> SdkResult<LlmRuntimeConfigurator<'_>>
     where
         I: super::llm_orchestrator::IntoLlmInvoker + Clone,
         T: super::tools::IntoTools,
@@ -330,7 +369,8 @@ impl Agent {
                 system_message,
                 request_defaults,
                 self.history_policy_runtime.clone(),
-            )
+            )?;
+        Ok(LlmRuntimeConfigurator { agent: self })
     }
 
     // -- Message dispatch --
@@ -428,6 +468,7 @@ impl Agent {
         Ok(crate::structured::StructuredRunResult {
             output,
             artifact_name: contract.artifact_name,
+            dataschema: contract.dataschema,
             raw_response: response,
             final_text,
         })
@@ -636,6 +677,10 @@ mod structured_tests {
             }
         );
         assert_eq!(result.artifact_name, "analysis_output");
+        assert_eq!(
+            result.dataschema.as_deref(),
+            Some("urn:promptfleet:schema:analysis_output")
+        );
         assert_eq!(result.final_text.as_deref(), Some("Analysis complete"));
     }
 

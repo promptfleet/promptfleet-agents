@@ -62,6 +62,8 @@ mod tests;
 // Re-export public API for convenient access
 pub use config::{AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind};
 pub use core::Agent;
+#[cfg(feature = "llm-engine")]
+pub use core::LlmRuntimeConfigurator;
 pub use message::{MessageContext, MessageType, SkillCall, SkillExecutor, TaskContext};
 pub use skill::{
     NotificationHandler, SkillContext, SkillDefinition, SkillEntryBuilder, SkillHandler,

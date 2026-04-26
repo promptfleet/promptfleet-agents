@@ -105,6 +105,13 @@
 //!         "com.example.analysis_output",
 //!         "urn:promptfleet:analysis-agent",
 //!     );
+//!     assert!(
+//!         outgoing
+//!             .dataschema
+//!             .as_deref()
+//!             .unwrap_or_default()
+//!             .starts_with("urn:promptfleet:schema:")
+//!     );
 //!     let _ = outgoing;
 //!     Ok(())
 //! }
@@ -228,6 +235,8 @@ pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
     SkillCall, SkillEntryBuilder,
 };
+#[cfg(feature = "llm-engine")]
+pub use agent::LlmRuntimeConfigurator;
 pub use callable::CallableSkill;
 pub use error::{SdkError, SdkResult};
 pub use host::{AgentHost, AgentHostBuilder};
@@ -235,7 +244,8 @@ pub use interaction::{
     InteractionKind, InteractionOption, InteractionRequest, InteractionResponse,
 };
 pub use structured::{
-    CloudEventEnvelope, StructuredInput, StructuredOutputContract, StructuredRunResult,
+    CloudEventEnvelope, DataschemaConvention, StructuredInput, StructuredOutputContract,
+    StructuredRunResult, promptfleet_dataschema_uri,
 };
 pub use timeout_policy::TimeoutPolicy;
 
@@ -326,8 +336,9 @@ macro_rules! a2a_serve {
 pub mod prelude {
     pub use crate::{
         AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        CloudEventEnvelope, ServiceContainer, SkillCall, SkillDefinition, SkillEntryBuilder,
-        StructuredInput, StructuredOutputContract, StructuredRunResult, TaskPhase,
+        CloudEventEnvelope, DataschemaConvention, ServiceContainer, SkillCall, SkillDefinition,
+        SkillEntryBuilder, StructuredInput, StructuredOutputContract, StructuredRunResult,
+        TaskPhase, promptfleet_dataschema_uri,
     };
 
     pub use agent_core::ConversationContext;

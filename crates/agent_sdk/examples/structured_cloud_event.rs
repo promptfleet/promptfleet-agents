@@ -99,9 +99,7 @@ mod example {
 
     #[tokio::main]
     pub async fn main() -> SdkResult<()> {
-        let mut agent = AgentBuilder::new("alert-analysis-agent")?
-            .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")
-            .build()?;
+        let mut agent = AgentBuilder::new("alert-analysis-agent")?.build()?;
 
         let runtime = MockStructuredRuntime::new(vec![Ok(checkpoint_tool_call(json!({
             "task_patch": { "state": "completed" },
@@ -116,14 +114,16 @@ mod example {
             "respond": { "kind": "task" }
         })))]);
 
-        agent.configure_llm_runtime(
-            runtime,
-            "mock-structured-model",
-            ToolRegistry::new(),
-            Some("Return a typed analysis payload.".to_string()),
-            None,
-            None,
-        )?;
+        agent
+            .configure_llm_runtime(
+                runtime,
+                "mock-structured-model",
+                ToolRegistry::new(),
+                Some("Return a typed analysis payload.".to_string()),
+                None,
+                None,
+            )?
+            .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")?;
 
         let incoming = CloudEventEnvelope::new_json(
             "com.example.alert_signal",
@@ -143,6 +143,10 @@ mod example {
             "urn:promptfleet:analysis-agent",
         );
 
+        assert_eq!(
+            outgoing.dataschema.as_deref(),
+            Some("urn:promptfleet:schema:analysis_output")
+        );
         println!("{}", serde_json::to_string_pretty(&outgoing)?);
         Ok(())
     }

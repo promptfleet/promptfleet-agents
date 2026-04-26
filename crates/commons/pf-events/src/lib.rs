@@ -12,6 +12,44 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub const PROMPTFLEET_DATASCHEMA_URN_PREFIX: &str = "urn:promptfleet:schema:";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataschemaConvention {
+    PromptfleetUrn,
+}
+
+impl DataschemaConvention {
+    pub fn uri_for(self, schema_name: &str) -> String {
+        match self {
+            Self::PromptfleetUrn => promptfleet_dataschema_uri(schema_name),
+        }
+    }
+}
+
+pub fn promptfleet_dataschema_uri(schema_name: &str) -> String {
+    format!(
+        "{}{}",
+        PROMPTFLEET_DATASCHEMA_URN_PREFIX,
+        canonical_schema_segment(schema_name)
+    )
+}
+
+fn canonical_schema_segment(schema_name: &str) -> String {
+    let trimmed = schema_name.trim();
+    if trimmed.is_empty() {
+        return "structured_output".to_string();
+    }
+
+    trimmed
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | ':' | '/' => ch,
+            _ => '-',
+        })
+        .collect()
+}
+
 /// Errors for envelope helpers that expect a present payload.
 #[derive(Debug, thiserror::Error)]
 pub enum EventError {
@@ -69,6 +107,15 @@ impl<T> CloudEventEnvelope<T> {
 
     pub fn with_dataschema(mut self, dataschema: impl Into<String>) -> Self {
         self.dataschema = Some(dataschema.into());
+        self
+    }
+
+    pub fn with_dataschema_convention(
+        mut self,
+        convention: DataschemaConvention,
+        schema_name: impl AsRef<str>,
+    ) -> Self {
+        self.dataschema = Some(convention.uri_for(schema_name.as_ref()));
         self
     }
 
@@ -168,6 +215,27 @@ mod tests {
         assert_eq!(payload["type"], "object");
         assert_eq!(envelope["type"], "object");
         assert!(envelope.get("properties").is_some());
+    }
+
+    #[test]
+    fn promptfleet_dataschema_convention_is_stable() {
+        let uri = promptfleet_dataschema_uri("analysis_output");
+        assert_eq!(uri, "urn:promptfleet:schema:analysis_output");
+
+        let event = CloudEventEnvelope::new_json(
+            "com.example.alert",
+            "urn:promptfleet:test",
+            Payload {
+                id: "a1".to_string(),
+                severity: "high".to_string(),
+            },
+        )
+        .with_dataschema_convention(DataschemaConvention::PromptfleetUrn, "analysis_output");
+
+        assert_eq!(
+            event.dataschema.as_deref(),
+            Some("urn:promptfleet:schema:analysis_output")
+        );
     }
 
     #[test]

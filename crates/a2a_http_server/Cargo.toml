@@ -53,7 +53,7 @@ tower = { version = "0.4", features = ["util"] }
 tower-service = "0.3"
 futures-util = "0.3"
 # A2A HTTP client for E2E testing
-a2a_http_client = { path = "../a2a_http_client", version = "0.1.0" }
+a2a_http_client = { path = "../a2a_http_client", version = "0.1.1" }
 pf_test_harness = { path = "../pf_test_harness", features = ["sse", "a2a-http"] }
 
 [features]

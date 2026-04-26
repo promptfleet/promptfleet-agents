@@ -88,7 +88,6 @@ mcp_protocol = { package = "pf_mcp_protocol", path = "crates/mcp_protocol", vers
 pf_config = { path = "crates/config/pf_config", version = "0.1.0" }
 pf_macros = { path = "crates/pf_macros", version = "0.1.0" }
 pf-types = { path = "crates/commons/pf-types", version = "0.1.0" }
-pf_events = { package = "pf-events", path = "crates/commons/pf-events", version = "0.1.0" }
 pf_test_harness = { path = "crates/pf_test_harness", version = "0.1.0" }
 umao_core = { version = "0.1.0" }
 umao_executor = { version = "0.1.0" }

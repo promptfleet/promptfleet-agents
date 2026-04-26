@@ -171,6 +171,7 @@
 // Protocol-agnostic agent domain types (no A2A dependency needed by consumers)
 pub use agent_core;
 mod conversions;
+pub mod events;
 
 // Re-export protocol-neutral runtime vocabulary by default.
 pub use agent_core::{AgentMessage, ContentPart, ConversationContext, Role, TaskPhase};

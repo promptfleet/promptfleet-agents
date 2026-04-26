@@ -4,8 +4,9 @@
 //! underlying A2A protocol errors and adding SDK-specific error types.
 
 use a2a_protocol_core::error::A2AError;
-use pf_events::EventError;
 use thiserror::Error;
+
+use crate::events::EventError;
 
 /// SDK-specific error types
 ///

@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::agent::{MessageContext, RuntimeResponse, SkillExecutor};
 use crate::{SdkError, SdkResult};
 
-pub use pf_events::{
+pub use crate::events::{
     CloudEventEnvelope, DataschemaConvention, EventError as CloudEventError, envelope_schema,
     payload_schema, promptfleet_dataschema_uri,
 };

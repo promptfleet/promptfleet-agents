@@ -21,13 +21,13 @@ agent_core = { workspace = true }
 # Core A2A protocol - always included
 a2a_protocol_core = { workspace = true, features = ["core", "timestamps", "streaming"] }
 protocol_transport_core = { workspace = true }
-pf_events = { workspace = true }
 
 # Core utilities
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["v4"] }
 schemars = { workspace = true, features = ["derive"] }
 jsonschema = { workspace = true }

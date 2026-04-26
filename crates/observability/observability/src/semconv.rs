@@ -317,7 +317,10 @@ mod tests {
         assert_eq!(attr::GEN_AI_REQUEST_MODEL, "gen_ai.request.model");
         assert_eq!(attr::GEN_AI_OPERATION_NAME, "gen_ai.operation.name");
         assert_eq!(attr::GEN_AI_USAGE_INPUT_TOKENS, "gen_ai.usage.input_tokens");
-        assert_eq!(attr::GEN_AI_USAGE_OUTPUT_TOKENS, "gen_ai.usage.output_tokens");
+        assert_eq!(
+            attr::GEN_AI_USAGE_OUTPUT_TOKENS,
+            "gen_ai.usage.output_tokens"
+        );
         assert_eq!(
             attr::GEN_AI_RESPONSE_FINISH_REASONS,
             "gen_ai.response.finish_reasons"

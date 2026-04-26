@@ -113,10 +113,7 @@ impl<'a> LlmRuntimeConfigurator<'a> {
         T: schemars::JsonSchema,
     {
         self.with_structured_output_contract(
-            crate::structured::StructuredOutputContract::from_type::<T>(
-                schema_name,
-                artifact_name,
-            ),
+            crate::structured::StructuredOutputContract::from_type::<T>(schema_name, artifact_name),
         )
     }
 
@@ -624,9 +621,7 @@ mod structured_tests {
         }))
     }
 
-    fn configured_agent(
-        responses: Vec<Result<LlmResponse, String>>,
-    ) -> Agent {
+    fn configured_agent(responses: Vec<Result<LlmResponse, String>>) -> Agent {
         let mut agent = Agent::new_runtime("structured-agent").expect("agent");
         agent.request_runtime = Some(RequestRuntimeConfig {
             llm: Arc::new(MockRequestInvoker::new(responses)),
@@ -706,7 +701,9 @@ mod structured_tests {
             .expect_err("schema validation should fail");
 
         assert!(
-            error.to_string().contains("Structured output validation failed"),
+            error
+                .to_string()
+                .contains("Structured output validation failed"),
             "unexpected error: {}",
             error
         );

@@ -116,6 +116,9 @@ async fn structured_example() -> Result<(), agent_sdk::SdkError> {
 }
 ```
 
+The runtime configurator returned by `configure_llm_runtime(...)` lets you attach the structured
+output contract at the same call site where the LLM loop is configured.
+
 By default, structured output contracts stamp outbound CloudEvents with
 `dataschema = "urn:promptfleet:schema:<schema_name>"`. Override it with
 `StructuredOutputContract::with_dataschema(...)` when you need a different URI.

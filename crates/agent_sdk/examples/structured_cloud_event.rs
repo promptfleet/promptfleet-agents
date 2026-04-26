@@ -30,9 +30,8 @@ mod example {
         fn request(
             &self,
             _req: LlmRequest,
-        ) -> std::pin::Pin<
-            Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>,
-        > {
+        ) -> std::pin::Pin<Box<dyn core::future::Future<Output = Result<LlmResponse, String>> + Send>>
+        {
             let next = self
                 .responses
                 .lock()

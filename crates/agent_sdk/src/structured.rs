@@ -42,7 +42,10 @@ impl<T> StructuredInput<T> {
 
 impl<T: Clone> StructuredInput<T> {
     pub fn from_cloudevent(cloud_event: CloudEventEnvelope<T>) -> Result<Self, CloudEventError> {
-        let payload = cloud_event.data.clone().ok_or(CloudEventError::MissingData)?;
+        let payload = cloud_event
+            .data
+            .clone()
+            .ok_or(CloudEventError::MissingData)?;
         Ok(Self {
             payload,
             cloud_event: Some(cloud_event),
@@ -65,7 +68,10 @@ where
             user_metadata.insert("structured_input_metadata".to_string(), metadata);
         }
         if let Some(cloud_event) = self.cloud_event {
-            user_metadata.insert("cloud_event".to_string(), serde_json::to_value(cloud_event)?);
+            user_metadata.insert(
+                "cloud_event".to_string(),
+                serde_json::to_value(cloud_event)?,
+            );
         }
 
         let runtime_message = AgentMessage::new(
@@ -111,10 +117,7 @@ impl StructuredOutputContract {
         }
     }
 
-    pub fn from_type<T>(
-        schema_name: impl Into<String>,
-        artifact_name: impl Into<String>,
-    ) -> Self
+    pub fn from_type<T>(schema_name: impl Into<String>, artifact_name: impl Into<String>) -> Self
     where
         T: JsonSchema,
     {
@@ -177,7 +180,10 @@ impl StructuredOutputContract {
             Err(errors) => Err(SdkError::invalid_input(format!(
                 "Structured output validation failed for '{}': {}",
                 self.schema_name,
-                errors.map(|err| err.to_string()).collect::<Vec<_>>().join("; ")
+                errors
+                    .map(|err| err.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ))),
         }
     }
@@ -210,10 +216,7 @@ where
     }
 }
 
-pub(crate) fn decode_artifact<O>(
-    response: &RuntimeResponse,
-    artifact_name: &str,
-) -> SdkResult<O>
+pub(crate) fn decode_artifact<O>(response: &RuntimeResponse, artifact_name: &str) -> SdkResult<O>
 where
     O: DeserializeOwned,
 {
@@ -231,7 +234,10 @@ where
         .ok_or_else(|| {
             SdkError::method_execution(
                 "structured_output",
-                format!("structured output artifact '{}' was not produced", artifact_name),
+                format!(
+                    "structured output artifact '{}' was not produced",
+                    artifact_name
+                ),
             )
         })?;
 

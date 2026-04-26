@@ -937,10 +937,7 @@ mod tests {
     #[test]
     fn serde_roundtrip_full_config() {
         let mut resource_attributes = HashMap::new();
-        resource_attributes.insert(
-            "deployment.environment".to_string(),
-            "test".to_string(),
-        );
+        resource_attributes.insert("deployment.environment".to_string(), "test".to_string());
         let cfg = ObservabilityConfig {
             service_name: "test-agent".to_string(),
             service_version: "2.0.0".to_string(),

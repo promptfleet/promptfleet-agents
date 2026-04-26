@@ -231,7 +231,7 @@ fn obs_from_env_cached() -> Option<observability::Obs> {
     OBS.get_or_init(|| {
         crate::shared_observability().or_else(|| observability::Obs::init_from_env().ok())
     })
-        .clone()
+    .clone()
 }
 
 /// IntoTools: ergonomic adapter for passing tools in different forms

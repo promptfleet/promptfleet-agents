@@ -101,6 +101,36 @@ fn wire_llm() -> SdkResult<()> {
 }
 ```
 
+When using the `structured-io` feature, the runtime configurator can attach a typed output
+contract directly:
+
+```rust
+use agent_sdk::{AgentBuilder, SdkResult};
+use agent_sdk::agent::tools::ToolRegistry;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct AnalysisOutput {
+    verdict: String,
+}
+
+fn wire_structured_runtime(
+    client: impl agent_sdk::agent::llm_orchestrator::IntoLlmInvoker
+        + agent_sdk::agent::llm_orchestrator::IntoLlmStreamInvoker
+        + Clone,
+) -> SdkResult<()> {
+    let mut agent = AgentBuilder::new("my-agent")?.build()?;
+    agent
+        .configure_llm_runtime(client, "gpt-4o-mini", ToolRegistry::new(), None, None, None)?
+        .with_structured_output::<AnalysisOutput>("analysis_output", "analysis_output")?;
+    Ok(())
+}
+```
+
+Structured CloudEvent output uses `urn:promptfleet:schema:<schema_name>` as the default
+`dataschema` convention.
+
 ### Migration from older SDK snapshots
 
 - Use [`AgentBuilder::new`] or [`AgentBuilder::from_config`] instead of crate-root `new`/`new_runtime` helpers (removed).

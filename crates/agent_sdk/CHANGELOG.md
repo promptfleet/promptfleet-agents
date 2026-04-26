@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/promptfleet/promptfleet-agents/releases/tag/v0.1.1) - 2026-04-26
+
+### Added
+
+- Protocol-free structured input/output helpers under the `structured-io` feature, including typed `StructuredInput`, `StructuredOutputContract`, and `StructuredRunResult`
+- CloudEvents helpers for typed payload envelopes, schema derivation, and conventional `dataschema` URIs
+- Fluent runtime configuration via `configure_llm_runtime(...)? .with_structured_output::<T>(...)`
+
+### Changed
+
+- `StructuredRunResult::into_cloud_event(...)` now stamps `dataschema` automatically from the configured structured output contract
+- CloudEvents helper APIs are now owned by `agent_sdk`, so the SDK can be released without a separate `pf-events` crates.io dependency
+
 ## [0.1.0](https://github.com/promptfleet/promptfleet-agents/releases/tag/v0.1.0) - 2026-03-30
 
 Initial release.

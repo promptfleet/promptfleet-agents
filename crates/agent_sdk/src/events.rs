@@ -74,11 +74,7 @@ pub struct CloudEventEnvelope<T> {
 }
 
 impl<T> CloudEventEnvelope<T> {
-    pub fn new_json(
-        event_type: impl Into<String>,
-        source: impl Into<String>,
-        data: T,
-    ) -> Self {
+    pub fn new_json(event_type: impl Into<String>, source: impl Into<String>, data: T) -> Self {
         Self {
             specversion: "1.0".to_string(),
             id: Uuid::new_v4().to_string(),
@@ -191,7 +187,10 @@ mod tests {
 
         let parsed: CloudEventEnvelope<Payload> = serde_json::from_value(wire).expect("parse");
         assert_eq!(parsed.subject.as_deref(), Some("alert-1"));
-        assert_eq!(parsed.extensions.get("tenant"), Some(&serde_json::json!("acme")));
+        assert_eq!(
+            parsed.extensions.get("tenant"),
+            Some(&serde_json::json!("acme"))
+        );
         assert_eq!(
             parsed.data,
             Some(Payload {
@@ -246,6 +245,9 @@ mod tests {
             extensions: BTreeMap::new(),
         };
 
-        assert!(matches!(event.try_into_data(), Err(EventError::MissingData)));
+        assert!(matches!(
+            event.try_into_data(),
+            Err(EventError::MissingData)
+        ));
     }
 }

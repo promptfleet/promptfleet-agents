@@ -244,16 +244,13 @@ fn llm_happy_path_emits_span_and_token_metrics() {
     let st = obs.state();
 
     assert!(
-        st.spans_started
-            .iter()
-            .any(|(_, name, attrs)| {
-                name == span::LLM_REQUEST
-                    && attrs.get(attr::GEN_AI_SYSTEM).map(|s| s.as_str())
-                        == Some("openai-compatible")
-                    && attrs.get(attr::GEN_AI_REQUEST_MODEL).map(|s| s.as_str()) == Some("gpt-4o")
-                    && attrs.get(attr::GEN_AI_OPERATION_NAME).map(|s| s.as_str())
-                        == Some("chat_completions")
-            }),
+        st.spans_started.iter().any(|(_, name, attrs)| {
+            name == span::LLM_REQUEST
+                && attrs.get(attr::GEN_AI_SYSTEM).map(|s| s.as_str()) == Some("openai-compatible")
+                && attrs.get(attr::GEN_AI_REQUEST_MODEL).map(|s| s.as_str()) == Some("gpt-4o")
+                && attrs.get(attr::GEN_AI_OPERATION_NAME).map(|s| s.as_str())
+                    == Some("chat_completions")
+        }),
         "expected llm.request span"
     );
 

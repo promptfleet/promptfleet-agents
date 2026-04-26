@@ -231,13 +231,13 @@ pub mod streaming;
 pub mod sub_agent;
 
 // Re-export key types
+#[cfg(feature = "llm-engine")]
+pub use agent::LlmRuntimeConfigurator;
 pub use agent::{Agent as AgentRuntime, AgentConfig as RuntimeConfig};
 pub use agent::{
     Agent, AgentConfig, HistoryPolicyConfig, HistoryPolicyMode, HistoryStrategyKind, MessageType,
     SkillCall, SkillEntryBuilder,
 };
-#[cfg(feature = "llm-engine")]
-pub use agent::LlmRuntimeConfigurator;
 pub use callable::CallableSkill;
 pub use error::{SdkError, SdkResult};
 pub use host::{AgentHost, AgentHostBuilder};
@@ -336,8 +336,8 @@ macro_rules! a2a_serve {
 /// Prelude module for common imports
 pub mod prelude {
     pub use crate::{
-        AgentMessage, AgentRuntime, ContentPart, MessageType, Role, RuntimeConfig, SdkError,
-        CloudEventEnvelope, DataschemaConvention, ServiceContainer, SkillCall, SkillDefinition,
+        AgentMessage, AgentRuntime, CloudEventEnvelope, ContentPart, DataschemaConvention,
+        MessageType, Role, RuntimeConfig, SdkError, ServiceContainer, SkillCall, SkillDefinition,
         SkillEntryBuilder, StructuredInput, StructuredOutputContract, StructuredRunResult,
         TaskPhase, promptfleet_dataschema_uri,
     };

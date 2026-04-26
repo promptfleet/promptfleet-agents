@@ -66,7 +66,8 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
 
             #[cfg(feature = "agent-observability")]
             let span_guard = obs.as_ref().map(|o| {
-                let attrs = llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
+                let attrs =
+                    llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
                 o.span(span::LLM_REQUEST, &attrs)
             });
 
@@ -243,7 +244,8 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
 
             #[cfg(feature = "agent-observability")]
             let span_guard = obs.as_ref().map(|o| {
-                let attrs = llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
+                let attrs =
+                    llm_span_attributes(provider.as_str(), model.as_str(), operation.as_str());
                 o.span(span::LLM_REQUEST, &attrs)
             });
 
@@ -556,7 +558,7 @@ fn obs_from_env_cached() -> Option<observability::Obs> {
     OBS.get_or_init(|| {
         crate::shared_observability().or_else(|| observability::Obs::init_from_env().ok())
     })
-        .clone()
+    .clone()
 }
 
 #[cfg(feature = "agent-observability")]

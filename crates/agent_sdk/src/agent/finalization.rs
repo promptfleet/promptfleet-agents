@@ -101,7 +101,9 @@ pub(super) fn build_response_from_finalization_args(
         .map(|s| s.to_string());
 
     let structured_output_value = args.get("structured_output");
-    let structured_payload = structured_output_value.and_then(|value| value.get("payload")).cloned();
+    let structured_payload = structured_output_value
+        .and_then(|value| value.get("payload"))
+        .cloned();
     let structured_text = structured_output_value
         .and_then(|value| value.get("text"))
         .and_then(|value| value.as_str())
@@ -246,8 +248,7 @@ pub(super) async fn run_finalization_turn(
         - If you need more input, set task_patch.state='input_required' with status_text asking for the missing info, and set respond.kind='task'.\n\
         - If you cannot proceed due to an error, set task_patch.state='failed' with status_text explaining the error and next steps, and set respond.kind='task'.{} \n\
         Context: {}",
-        structured_instruction,
-        post_mortem
+        structured_instruction, post_mortem
     );
     messages.push(llm_client::ChatMessage {
         role: "user".into(),

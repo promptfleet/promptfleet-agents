@@ -135,10 +135,7 @@ impl AgentBuilder {
         T: schemars::JsonSchema,
     {
         self.with_structured_output_contract(
-            crate::structured::StructuredOutputContract::from_type::<T>(
-                schema_name,
-                artifact_name,
-            ),
+            crate::structured::StructuredOutputContract::from_type::<T>(schema_name, artifact_name),
         )
     }
 

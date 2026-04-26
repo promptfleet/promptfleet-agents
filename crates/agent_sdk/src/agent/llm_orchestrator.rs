@@ -602,16 +602,15 @@ pub(crate) async fn execute_runtime(
             } else if policy.finalize_required {
                 // Policy requires structured finalization — force a checkpoint turn
                 let post = "Model returned text without calling checkpoint_task; produce a structured checkpoint_task response.";
-                if let Ok(args) =
-                    run_finalization_turn(
-                        llm.clone(),
-                        model,
-                        tools,
-                        messages,
-                        post,
-                        structured_output_contract,
-                    )
-                    .await
+                if let Ok(args) = run_finalization_turn(
+                    llm.clone(),
+                    model,
+                    tools,
+                    messages,
+                    post,
+                    structured_output_contract,
+                )
+                .await
                 {
                     let response = build_response_from_finalization_args(
                         args,

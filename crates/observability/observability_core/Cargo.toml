@@ -38,7 +38,7 @@ log = { version = "0.4", features = ["kv_unstable"], optional = true }
 tracing = { version = "0.1", optional = true }
 
 # Tracing integration dependencies (feature-gated)
-rand = { version = "0.8", optional = true, default-features = false, features = ["std", "std_rng"] }
+rand = { version = "0.9", optional = true, default-features = false, features = ["std", "std_rng"] }
 
 # No direct dependency on extensions - use ports/adapters pattern
 

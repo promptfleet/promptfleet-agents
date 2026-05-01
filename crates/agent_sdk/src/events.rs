@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use chrono::Utc;
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 pub const PROMPTFLEET_DATASCHEMA_URN_PREFIX: &str = "urn:promptfleet:schema:";
@@ -145,7 +145,9 @@ where
     T: JsonSchema,
 {
     let schema = schema_for!(T);
-    serde_json::to_value(schema.schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}))
+    let mut value = serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
+    make_self_contained_schema(&mut value);
+    value
 }
 
 pub fn envelope_schema<T>() -> Value
@@ -153,7 +155,90 @@ where
     T: JsonSchema,
 {
     let schema = schema_for!(CloudEventEnvelope<T>);
-    serde_json::to_value(schema.schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}))
+    let mut value = serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
+    make_self_contained_schema(&mut value);
+    value
+}
+
+fn make_self_contained_schema(schema: &mut Value) {
+    let definitions = schema
+        .get("definitions")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let defs = schema
+        .get("$defs")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    inline_local_refs(schema, &definitions, &defs, 0);
+    if let Some(object) = schema.as_object_mut() {
+        object.remove("definitions");
+        object.remove("$defs");
+        object.remove("$schema");
+    }
+}
+
+fn inline_local_refs(
+    value: &mut Value,
+    definitions: &Map<String, Value>,
+    defs: &Map<String, Value>,
+    depth: usize,
+) {
+    if depth > 64 {
+        return;
+    }
+
+    match value {
+        Value::Object(object) => {
+            if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+                if let Some(mut replacement) = resolve_local_ref(reference, definitions, defs) {
+                    inline_local_refs(&mut replacement, definitions, defs, depth + 1);
+                    merge_ref_siblings(&mut replacement, object);
+                    *value = replacement;
+                    return;
+                }
+            }
+
+            for item in object.values_mut() {
+                inline_local_refs(item, definitions, defs, depth + 1);
+            }
+            object.remove("definitions");
+            object.remove("$defs");
+        }
+        Value::Array(items) => {
+            for item in items {
+                inline_local_refs(item, definitions, defs, depth + 1);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn resolve_local_ref(
+    reference: &str,
+    definitions: &Map<String, Value>,
+    defs: &Map<String, Value>,
+) -> Option<Value> {
+    reference
+        .strip_prefix("#/definitions/")
+        .and_then(|key| definitions.get(key).cloned())
+        .or_else(|| {
+            reference
+                .strip_prefix("#/$defs/")
+                .and_then(|key| defs.get(key).cloned())
+        })
+}
+
+fn merge_ref_siblings(replacement: &mut Value, original: &Map<String, Value>) {
+    let Some(replacement) = replacement.as_object_mut() else {
+        return;
+    };
+    for (key, value) in original {
+        if key != "$ref" && !replacement.contains_key(key) {
+            replacement.insert(key.clone(), value.clone());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -164,6 +249,16 @@ mod tests {
     struct Payload {
         id: String,
         severity: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+    struct NestedPayload {
+        evidence: Vec<Evidence>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+    struct Evidence {
+        id: String,
     }
 
     #[test]
@@ -207,6 +302,19 @@ mod tests {
         assert_eq!(payload["type"], "object");
         assert_eq!(envelope["type"], "object");
         assert!(envelope.get("properties").is_some());
+    }
+
+    #[test]
+    fn schema_helpers_return_self_contained_schemas() {
+        let payload = payload_schema::<NestedPayload>();
+        let envelope = envelope_schema::<NestedPayload>();
+
+        assert!(serde_json::to_string(&payload).unwrap().find("$ref").is_none());
+        assert!(serde_json::to_string(&envelope).unwrap().find("$ref").is_none());
+        assert!(payload.get("definitions").is_none());
+        assert!(envelope.get("definitions").is_none());
+        jsonschema::JSONSchema::compile(&payload).expect("payload schema compiles");
+        jsonschema::JSONSchema::compile(&envelope).expect("envelope schema compiles");
     }
 
     #[test]

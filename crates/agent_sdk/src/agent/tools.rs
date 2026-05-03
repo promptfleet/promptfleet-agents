@@ -10,6 +10,10 @@ use std::sync::OnceLock;
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>>;
 #[cfg(not(target_arch = "wasm32"))]
 type ToolFuture = dyn core::future::Future<Output = Result<serde_json::Value, String>> + Send;
+#[cfg(target_arch = "wasm32")]
+type ToolGateFuture = dyn core::future::Future<Output = Result<ToolGateOutcome, String>>;
+#[cfg(not(target_arch = "wasm32"))]
+type ToolGateFuture = dyn core::future::Future<Output = Result<ToolGateOutcome, String>> + Send;
 
 #[cfg(feature = "agent-observability")]
 use observability::{ObsHandle, SpanStatus, attr, span, value};
@@ -38,6 +42,34 @@ impl std::fmt::Debug for ToolExecutor {
 pub struct ToolExecutionResult {
     pub name: String,
     pub output: serde_json::Value,
+}
+
+#[cfg(feature = "llm-engine")]
+#[derive(Clone, Debug)]
+pub struct ToolGateRequest {
+    pub name: String,
+    pub kind: ToolKind,
+    pub arguments: serde_json::Value,
+    pub context: ToolContext,
+}
+
+#[cfg(feature = "llm-engine")]
+#[derive(Clone, Debug)]
+pub enum ToolGateDecision {
+    Allow,
+    Deny { reason: String },
+}
+
+#[cfg(feature = "llm-engine")]
+#[derive(Clone, Debug)]
+pub struct ToolGateOutcome {
+    pub decision: ToolGateDecision,
+    pub arguments: serde_json::Value,
+}
+
+#[cfg(feature = "llm-engine")]
+pub trait ToolExecutionGate: Send + Sync {
+    fn evaluate(&self, request: ToolGateRequest) -> std::pin::Pin<Box<ToolGateFuture>>;
 }
 
 /// Stable, low-cardinality tool execution surface classification.
@@ -99,16 +131,41 @@ impl std::fmt::Debug for ToolSpec {
 }
 
 /// Minimal registry for LLM tools
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct ToolRegistry {
     tools: HashMap<String, ToolSpec>,
+    #[cfg(feature = "llm-engine")]
+    gate: Option<Arc<dyn ToolExecutionGate>>,
+}
+
+impl std::fmt::Debug for ToolRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("ToolRegistry");
+        debug.field("tools", &self.tools);
+        #[cfg(feature = "llm-engine")]
+        debug.field("has_gate", &self.gate.is_some());
+        debug.finish()
+    }
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            #[cfg(feature = "llm-engine")]
+            gate: None,
         }
+    }
+
+    #[cfg(feature = "llm-engine")]
+    pub fn with_execution_gate(mut self, gate: Arc<dyn ToolExecutionGate>) -> Self {
+        self.gate = Some(gate);
+        self
+    }
+
+    #[cfg(feature = "llm-engine")]
+    pub fn set_execution_gate(&mut self, gate: Arc<dyn ToolExecutionGate>) {
+        self.gate = Some(gate);
     }
 
     pub fn register(&mut self, tool: ToolSpec) {
@@ -180,6 +237,35 @@ impl ToolRegistry {
             .tools
             .get(name)
             .ok_or_else(|| format!("Unknown tool: {}", name))?;
+        #[cfg(feature = "llm-engine")]
+        let (args, ctx) = {
+            let context = ctx.unwrap_or_default();
+            let mut gated_args = args;
+            if let Some(gate) = &self.gate {
+                let outcome = gate
+                    .evaluate(ToolGateRequest {
+                        name: name.to_string(),
+                        kind: tool.kind,
+                        arguments: gated_args,
+                        context: context.clone(),
+                    })
+                    .await?;
+                match outcome.decision {
+                    ToolGateDecision::Allow => {
+                        gated_args = outcome.arguments;
+                    }
+                    ToolGateDecision::Deny { reason } => {
+                        return Err(serde_json::json!({
+                            "error": "governance_denied",
+                            "reason": reason,
+                            "tool": name,
+                        })
+                        .to_string());
+                    }
+                }
+            }
+            (gated_args, Some(context))
+        };
         #[cfg(feature = "agent-observability")]
         let span_guard = obs.as_ref().map(|obs| {
             obs.span(

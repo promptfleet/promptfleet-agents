@@ -86,6 +86,24 @@ pub fn map_trace_to_agent_io(event: AgentTraceEvent, ctx: &IoEventContext) -> Ve
             });
             events
         }
+        AgentTraceEvent::GovernanceDecision {
+            name,
+            decision_id,
+            mode,
+            decision,
+            would_have,
+            reason,
+        } => vec![AgentIoEvent::Custom {
+            name: "governance_decision".to_string(),
+            value: json!({
+                "toolName": name,
+                "decisionId": decision_id,
+                "mode": mode,
+                "decision": decision,
+                "wouldHave": would_have,
+                "reason": reason,
+            }),
+        }],
         AgentTraceEvent::TurnCompleted { turn, .. } => vec![AgentIoEvent::StepFinished {
             step_name: format!("turn_{turn}"),
         }],

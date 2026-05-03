@@ -127,6 +127,22 @@ pub enum AgentTraceEvent {
         success: bool,
     },
 
+    /// Governance evaluated a tool call before execution.
+    GovernanceDecision {
+        /// Function/tool name.
+        name: String,
+        /// Persisted governance decision id when the control plane created one.
+        decision_id: Option<String>,
+        /// Effective governance mode: disabled, audit, or enforce.
+        mode: String,
+        /// Decision value returned by policy evaluation.
+        decision: String,
+        /// True when audit mode recorded a would-have decision.
+        would_have: bool,
+        /// Human-readable reason.
+        reason: String,
+    },
+
     /// An LLM turn completed.
     TurnCompleted {
         /// 1-based turn number

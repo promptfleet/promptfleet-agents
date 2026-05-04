@@ -123,6 +123,22 @@ impl LlmClient {
         LlmClientBuilder::new(wire_format)
     }
 
+    /// Build a client from a custom provider implementation.
+    ///
+    /// This is the extension point for provider-specific adapters that need
+    /// runtime credential resolution or a wire format not covered by
+    /// [`WireFormat`].
+    pub fn from_provider(provider: impl LlmProvider + 'static) -> Self {
+        Self {
+            inner: Arc::new(provider),
+        }
+    }
+
+    /// Build a client from an already shared provider implementation.
+    pub fn from_provider_arc(provider: Arc<dyn LlmProvider>) -> Self {
+        Self { inner: provider }
+    }
+
     /// Convenience for Azure OpenAI chat deployments.
     pub fn azure_openai_builder(
         resource_name: &str,
@@ -153,5 +169,69 @@ impl LlmClient {
 
     pub fn capabilities(&self) -> crate::model_client::ClientCapabilities {
         self.inner.capabilities()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model_client::ClientCapabilities;
+    use crate::provider::{ChatFuture, ChatStreamFuture};
+    use crate::{ChatMessage, LlmChoice};
+
+    struct EchoProvider;
+
+    impl LlmProvider for EchoProvider {
+        fn capabilities(&self) -> ClientCapabilities {
+            ClientCapabilities {
+                streaming: false,
+                tool_calling: false,
+                structured_output: false,
+            }
+        }
+
+        fn chat<'a>(&'a self, req: LlmRequest) -> ChatFuture<'a> {
+            Box::pin(async move {
+                Ok(LlmResponse {
+                    id: Some("echo".to_string()),
+                    created: None,
+                    model: Some(req.model),
+                    choices: vec![LlmChoice {
+                        index: 0,
+                        message: ChatMessage {
+                            role: "assistant".to_string(),
+                            content: Some("ok".to_string()),
+                            ..Default::default()
+                        },
+                        finish_reason: Some("stop".to_string()),
+                    }],
+                    usage: None,
+                    tool_calls: None,
+                })
+            })
+        }
+
+        fn chat_stream<'a>(&'a self, _req: LlmRequest) -> ChatStreamFuture<'a> {
+            Box::pin(async move { Err(LlmError::Config("streaming disabled".to_string())) })
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_provider_can_back_llm_client() {
+        let client = LlmClient::from_provider(EchoProvider);
+        let response = client
+            .chat(LlmRequest {
+                model: "custom-model".to_string(),
+                ..Default::default()
+            })
+            .await
+            .expect("custom provider response");
+
+        assert_eq!(response.model.as_deref(), Some("custom-model"));
+        assert_eq!(
+            response.choices[0].message.content.as_deref(),
+            Some("ok")
+        );
+        assert!(!client.capabilities().streaming);
     }
 }

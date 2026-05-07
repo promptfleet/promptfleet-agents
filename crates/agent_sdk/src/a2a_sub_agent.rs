@@ -191,10 +191,21 @@ async fn execute_subagent_tool(
         });
     }
 
-    let mut client = Client::external(agent_url.to_string());
-    if let Some(obs) = crate::shared_observability() {
-        client = client.with_observability(obs);
-    }
+    let mut client = {
+        let client = Client::external(agent_url.to_string());
+        #[cfg(feature = "agent-observability")]
+        {
+            if let Some(obs) = crate::shared_observability() {
+                client.with_observability(obs)
+            } else {
+                client
+            }
+        }
+        #[cfg(not(feature = "agent-observability"))]
+        {
+            client
+        }
+    };
     for (k, v) in headers {
         client = client.with_header(k, v);
     }

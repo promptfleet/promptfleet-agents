@@ -163,6 +163,10 @@ pub fn map_trace_to_agent_io(event: AgentTraceEvent, ctx: &IoEventContext) -> Ve
             name: "interaction_requested".to_string(),
             value: json!(request),
         }],
+        AgentTraceEvent::AppActionRequested { request } => vec![AgentIoEvent::Custom {
+            name: "app_action_requested".to_string(),
+            value: request,
+        }],
         AgentTraceEvent::InteractionResolved { response } => vec![AgentIoEvent::Custom {
             name: "interaction_resolved".to_string(),
             value: json!(response),
@@ -678,6 +682,33 @@ mod tests {
             AgentIoEvent::Custom { name, value } => {
                 assert_eq!(name, "interaction_resolved");
                 assert_eq!(value["interactionId"], "ix-1");
+            }
+            other => panic!("expected custom event, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn app_action_requested_maps_to_agent_io_custom() {
+        let ctx = IoEventContext {
+            thread_id: "thread-1".to_string(),
+            run_id: "run-1".to_string(),
+            message_id: "msg-1".to_string(),
+        };
+        let out = map_trace_to_agent_io(
+            AgentTraceEvent::AppActionRequested {
+                request: serde_json::json!({
+                    "actionId": "chatflow.navigate",
+                    "args": { "route": "/admin/agents/builder" }
+                }),
+            },
+            &ctx,
+        );
+        assert_eq!(out.len(), 1);
+        match &out[0] {
+            AgentIoEvent::Custom { name, value } => {
+                assert_eq!(name, "app_action_requested");
+                assert_eq!(value["actionId"], "chatflow.navigate");
+                assert_eq!(value["args"]["route"], "/admin/agents/builder");
             }
             other => panic!("expected custom event, got {:?}", other),
         }

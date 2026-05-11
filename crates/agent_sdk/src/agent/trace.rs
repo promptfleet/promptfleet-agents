@@ -200,6 +200,12 @@ pub enum AgentTraceEvent {
     /// The agent requested explicit user interaction (question/confirmation).
     InteractionRequested { request: InteractionRequest },
 
+    /// The agent requested an app/control-plane mediated action.
+    ///
+    /// The SDK treats the payload as an opaque app-action envelope. Trusted
+    /// handlers live outside the agent runtime.
+    AppActionRequested { request: serde_json::Value },
+
     /// A previously requested interaction was resolved.
     InteractionResolved { response: InteractionResponse },
 

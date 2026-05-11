@@ -88,6 +88,8 @@ pub enum ToolKind {
     A2aDelegate,
     /// Built-in interaction tool that pauses for user input/approval.
     Interaction,
+    /// App action tool whose execution is mediated by an external app/control plane.
+    AppAction,
     /// Tool that activates or reads a registered skill.
     Skill,
 }
@@ -101,6 +103,7 @@ impl ToolKind {
             Self::A2a => "a2a",
             Self::A2aDelegate => "a2a_delegate",
             Self::Interaction => "interaction",
+            Self::AppAction => "app_action",
             Self::Skill => "skill",
         }
     }

@@ -11,13 +11,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rmcp::{model::CallToolRequestParams, service::ServiceExt, transport::TokioChildProcess};
+use rmcp::{
+    model::{CallToolRequestParams, ListToolsRequest, Meta, PaginatedRequestParams},
+    service::ServiceExt,
+    transport::TokioChildProcess,
+};
 use tokio::process::Command;
 
-use crate::mcp_tools::config::{McpServersConfig, McpTransportType, resolve_env_vars};
+use crate::mcp_tools::config::{
+    McpServersConfig, McpTransportType, resolve_env_vars, resolve_env_vars_in_value,
+};
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{
     McpCallResult, McpContent, McpToolDescriptor, McpToolSource, build_forwarded_headers_meta,
+    merge_request_meta,
 };
 
 // ── Shared service wrapper ──────────────────────────────────────────────────
@@ -33,6 +40,7 @@ struct RmcpClientHandle {
     reconnect: RmcpReconnectConfig,
     forward_caller_auth: bool,
     has_static_service_auth: bool,
+    request_meta: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -123,8 +131,10 @@ impl McpPeerHandle for RmcpClientHandle {
         let forwarded_meta = build_forwarded_headers_meta(
             request_headers,
             self.forward_caller_auth && !self.has_static_service_auth,
-        )
-        .map(rmcp::model::Meta);
+        );
+        let forwarded_meta = merge_request_meta(&self.request_meta, forwarded_meta)
+            .and_then(|value| value.as_object().cloned())
+            .map(Meta);
 
         let params = CallToolRequestParams {
             name: name.to_string().into(),
@@ -187,7 +197,28 @@ impl RmcpClientHandle {
         &self,
     ) -> Result<rmcp::model::ListToolsResult, rmcp::service::ServiceError> {
         let service = self.service.lock().await;
-        service.list_tools(Default::default()).await
+        if self.request_meta.is_empty() {
+            return service.list_tools(Default::default()).await;
+        }
+
+        use rmcp::model::{ClientRequest, ServerResult};
+        use rmcp::service::PeerRequestOptions;
+
+        let request = ClientRequest::ListToolsRequest(ListToolsRequest::with_param(
+            PaginatedRequestParams {
+                meta: Some(Meta(self.request_meta.clone())),
+                cursor: None,
+            },
+        ));
+        let result = service
+            .send_request_with_option(request, PeerRequestOptions::no_options())
+            .await?
+            .await_response()
+            .await?;
+        match result {
+            ServerResult::ListToolsResult(result) => Ok(result),
+            _ => Err(rmcp::service::ServiceError::UnexpectedResponse),
+        }
     }
 
     async fn call_tool_once(
@@ -303,6 +334,7 @@ impl NativeMcpBackend {
                         url,
                         auth_token.as_deref(),
                         entry.forward_caller_auth,
+                        &entry.request_meta,
                     )
                     .await
                 }
@@ -370,6 +402,7 @@ impl NativeMcpBackend {
             },
             forward_caller_auth: false,
             has_static_service_auth: false,
+            request_meta: serde_json::Map::new(),
         })
     }
 
@@ -403,6 +436,7 @@ impl NativeMcpBackend {
         url: &str,
         auth_token: Option<&str>,
         forward_caller_auth: bool,
+        request_meta: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<RmcpClientHandle, McpToolError> {
         let service = Self::connect_http_service(server_id, url, auth_token).await?;
         log::debug!(
@@ -421,6 +455,11 @@ impl NativeMcpBackend {
             },
             forward_caller_auth,
             has_static_service_auth: auth_token.is_some(),
+            request_meta: request_meta
+                .clone()
+                .into_iter()
+                .map(|(key, value)| (key, resolve_env_vars_in_value(value)))
+                .collect(),
         })
     }
 

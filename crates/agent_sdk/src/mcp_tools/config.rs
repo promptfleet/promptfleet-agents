@@ -82,6 +82,13 @@ pub struct McpServerEntry {
     #[serde(default)]
     pub forward_caller_auth: bool,
 
+    /// Static request metadata sent with tools/list and tools/call.
+    ///
+    /// Supports `${ENV_VAR}` interpolation in string values. This is useful for
+    /// workload-scoped MCP gateways that authorize discovery as well as calls.
+    #[serde(default)]
+    pub request_meta: serde_json::Map<String, serde_json::Value>,
+
     // ── PromptFleet extensions (optional, absent from standard mcp.json) ──
     /// Tool exposure policy (which tools the LLM can see/call)
     #[serde(default)]
@@ -184,6 +191,23 @@ pub fn resolve_env_vars(value: &str) -> String {
     result
 }
 
+/// Resolve `${ENV_VAR}` patterns recursively in a JSON value.
+pub fn resolve_env_vars_in_value(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(value) => serde_json::Value::String(resolve_env_vars(&value)),
+        serde_json::Value::Array(values) => serde_json::Value::Array(
+            values.into_iter().map(resolve_env_vars_in_value).collect(),
+        ),
+        serde_json::Value::Object(values) => serde_json::Value::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| (key, resolve_env_vars_in_value(value)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -282,6 +306,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_remote_config_with_request_meta() {
+        let json = r#"{
+            "mcp_servers": {
+                "platform": {
+                    "url": "https://mcp.example.com/v1",
+                    "request_meta": {
+                        "promptfleetWorkloadAttestation": {
+                            "token": "${PF_WORKLOAD_TOKEN}"
+                        }
+                    }
+                }
+            }
+        }"#;
+        let config = McpServersConfig::from_json(json).unwrap();
+        let entry = &config.mcp_servers["platform"];
+        assert_eq!(
+            entry.request_meta["promptfleetWorkloadAttestation"]["token"],
+            "${PF_WORKLOAD_TOKEN}"
+        );
+    }
+
+    #[test]
     fn resolve_env_vars_basic() {
         // SAFETY: test runs single-threaded via cargo test default.
         unsafe { std::env::set_var("TEST_MCP_KEY", "resolved-value") };
@@ -301,5 +347,19 @@ mod tests {
     fn resolve_env_vars_no_pattern() {
         let result = resolve_env_vars("plain-string");
         assert_eq!(result, "plain-string");
+    }
+
+    #[test]
+    fn resolve_env_vars_in_value_recurses() {
+        // SAFETY: test mutates a dedicated env var and removes it before exit.
+        unsafe { std::env::set_var("TEST_MCP_META_TOKEN", "resolved-token") };
+        let resolved = resolve_env_vars_in_value(serde_json::json!({
+            "nested": {
+                "token": "${TEST_MCP_META_TOKEN}"
+            }
+        }));
+        assert_eq!(resolved["nested"]["token"], "resolved-token");
+        // SAFETY: test mutates a dedicated env var and removes it before exit.
+        unsafe { std::env::remove_var("TEST_MCP_META_TOKEN") };
     }
 }

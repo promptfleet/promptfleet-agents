@@ -35,6 +35,23 @@ pub fn build_forwarded_headers_meta(
     Some(meta)
 }
 
+pub fn merge_request_meta(
+    request_meta: &serde_json::Map<String, serde_json::Value>,
+    dynamic_meta: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Option<serde_json::Value> {
+    let mut merged = request_meta.clone();
+    if let Some(dynamic_meta) = dynamic_meta {
+        for (key, value) in dynamic_meta {
+            merged.insert(key, value);
+        }
+    }
+    if merged.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(merged))
+    }
+}
+
 /// Tool descriptor from an MCP server (backend-agnostic).
 #[derive(Debug, Clone)]
 pub struct McpToolDescriptor {
@@ -152,7 +169,7 @@ pub trait McpToolSource: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{MCP_FORWARDED_HEADERS_META_KEY, build_forwarded_headers_meta};
+    use super::{MCP_FORWARDED_HEADERS_META_KEY, build_forwarded_headers_meta, merge_request_meta};
     use std::collections::HashMap;
 
     #[test]
@@ -178,5 +195,18 @@ mod tests {
         assert!(!forwarded.contains_key("authorization"));
         assert!(!forwarded.contains_key("mcp-session-id"));
         assert!(!forwarded.contains_key("content-length"));
+    }
+
+    #[test]
+    fn merge_request_meta_keeps_static_and_dynamic_values() {
+        let mut request_meta = serde_json::Map::new();
+        request_meta.insert("static".to_string(), serde_json::json!("value"));
+        let mut dynamic_meta = serde_json::Map::new();
+        dynamic_meta.insert("dynamic".to_string(), serde_json::json!(true));
+
+        let merged = merge_request_meta(&request_meta, Some(dynamic_meta)).unwrap();
+
+        assert_eq!(merged["static"], "value");
+        assert_eq!(merged["dynamic"], true);
     }
 }

@@ -155,7 +155,20 @@ impl HttpModelClient {
                 Ok(json)
             }
             Err(e) => {
-                log::warn!("HttpModelClient::post_json transport error: {}", e);
+                if let TransportError::Http {
+                    status,
+                    body: Some(body),
+                    ..
+                } = &e
+                {
+                    log::warn!(
+                        "HttpModelClient::post_json transport error status={} body={}",
+                        status,
+                        String::from_utf8_lossy(body)
+                    );
+                } else {
+                    log::warn!("HttpModelClient::post_json transport error: {}", e);
+                }
                 Err(LlmError::Transport(e))
             }
         }

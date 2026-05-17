@@ -24,10 +24,13 @@ use std::collections::HashMap;
 
 use mcp_protocol::McpClient;
 
-use crate::mcp_tools::config::{McpServersConfig, McpTransportType, resolve_env_vars};
+use crate::mcp_tools::config::{
+    McpServersConfig, McpTransportType, resolve_env_vars, resolve_env_vars_in_value,
+};
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{
     McpCallResult, McpContent, McpToolDescriptor, McpToolSource, build_forwarded_headers_meta,
+    merge_request_meta,
 };
 
 /// Handle wrapping a single `McpClient` connection.
@@ -36,6 +39,7 @@ struct WasmClientHandle {
     url: String,
     auth_token: Option<String>,
     forward_caller_auth: bool,
+    request_meta: serde_json::Map<String, serde_json::Value>,
     client: McpClient,
 }
 
@@ -44,7 +48,7 @@ impl WasmClientHandle {
     async fn list_tools(&self) -> Result<Vec<McpToolDescriptor>, McpToolError> {
         let tools = self
             .client
-            .list_tools_async()
+            .list_tools_with_meta_async(merge_request_meta(&self.request_meta, None))
             .await
             .map_err(|e| McpToolError::ListToolsFailed(format!("{}: {}", self.server_id, e)))?;
 
@@ -78,8 +82,8 @@ impl WasmClientHandle {
         let meta = build_forwarded_headers_meta(
             request_headers,
             self.forward_caller_auth && self.auth_token.is_none(),
-        )
-        .map(serde_json::Value::Object);
+        );
+        let meta = merge_request_meta(&self.request_meta, meta);
         let result = client
             .call_tool_with_meta_async(name, Some(args), meta)
             .await
@@ -183,6 +187,7 @@ impl WasmMcpBackend {
                         url,
                         entry.auth_token.as_deref(),
                         entry.forward_caller_auth,
+                        &entry.request_meta,
                     )
                     .await
                     {
@@ -226,9 +231,15 @@ impl WasmMcpBackend {
         url: &str,
         auth_token: Option<&str>,
         forward_caller_auth: bool,
+        request_meta: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<WasmClientHandle, McpToolError> {
         let resolved_url = resolve_env_vars(url);
         let resolved_auth_token = auth_token.map(resolve_env_vars);
+        let resolved_request_meta = request_meta
+            .clone()
+            .into_iter()
+            .map(|(key, value)| (key, resolve_env_vars_in_value(value)))
+            .collect();
 
         let client = match &resolved_auth_token {
             Some(token) => McpClient::new().with_streamable_http_server_auth(&resolved_url, token),
@@ -247,6 +258,7 @@ impl WasmMcpBackend {
             url: resolved_url,
             auth_token: resolved_auth_token,
             forward_caller_auth,
+            request_meta: resolved_request_meta,
             client,
         })
     }

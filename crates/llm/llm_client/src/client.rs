@@ -4,7 +4,7 @@ use crate::auth::AuthProvider;
 use crate::error::LlmError;
 use crate::model_client::ApiMode;
 use crate::provider::LlmProvider;
-use crate::providers::{AnthropicClient, OpenAIClient};
+use crate::providers::{AnthropicClient, GoogleGenerateContentClient, OpenAIClient};
 use crate::stream::LlmEventStream;
 use crate::types::{LlmRequest, LlmResponse};
 use protocol_transport_core::StreamingPolicy;
@@ -18,6 +18,8 @@ pub enum WireFormat {
     OpenAiCompat,
     /// Anthropic Messages API shape (incl. Bedrock / Vertex Claude when routed that way).
     AnthropicMessages,
+    /// Google Gemini GenerateContent shape (incl. Vertex AI Gemini publisher models).
+    GoogleGenerateContent,
 }
 
 /// Configures an [`LlmClient`].
@@ -101,6 +103,12 @@ impl LlmClientBuilder {
                 self.openai_responses_path,
             )),
             WireFormat::AnthropicMessages => Arc::new(AnthropicClient::new(
+                self.base_url,
+                self.default_headers,
+                self.streaming,
+                auth,
+            )),
+            WireFormat::GoogleGenerateContent => Arc::new(GoogleGenerateContentClient::new(
                 self.base_url,
                 self.default_headers,
                 self.streaming,

@@ -129,9 +129,16 @@ impl StreamableHttpClientTransport {
         Ok(())
     }
 
-    async fn list_tools(&self) -> Result<Vec<Tool>, ProtocolError> {
+    async fn list_tools_with_meta(
+        &self,
+        meta: Option<serde_json::Value>,
+    ) -> Result<Vec<Tool>, ProtocolError> {
+        let params = match meta {
+            Some(meta) => json!({ "_meta": meta }),
+            None => json!({}),
+        };
         let result = self
-            .send_jsonrpc("tools/list", Some(json!({})), true)
+            .send_jsonrpc("tools/list", Some(params), true)
             .await?;
         let list_result: ListToolsResult = serde_json::from_value(result)
             .map_err(|e| ProtocolError::Parsing(format!("invalid tools list format: {e}")))?;
@@ -524,16 +531,30 @@ impl McpClient {
 
     /// List tools from server.
     pub async fn list_tools_async(&self) -> Result<Vec<Tool>, ProtocolError> {
+        self.list_tools_with_meta_async(None).await
+    }
+
+    /// List tools from server with request metadata.
+    pub async fn list_tools_with_meta_async(
+        &self,
+        meta: Option<serde_json::Value>,
+    ) -> Result<Vec<Tool>, ProtocolError> {
         match self
             .transport
             .as_ref()
             .ok_or_else(|| ProtocolError::internal_error("no MCP transport configured"))?
         {
-            ClientTransport::StreamableHttp(transport) => transport.list_tools().await,
+            ClientTransport::StreamableHttp(transport) => {
+                transport.list_tools_with_meta(meta).await
+            }
 
             #[cfg(feature = "sse-client")]
             ClientTransport::Sse { transport } => {
-                let result = send_sse_request(transport, "tools/list", json!({})).await?;
+                let params = match meta {
+                    Some(meta) => json!({ "_meta": meta }),
+                    None => json!({}),
+                };
+                let result = send_sse_request(transport, "tools/list", params).await?;
                 let list_result: ListToolsResult = serde_json::from_value(result).map_err(|e| {
                     ProtocolError::Parsing(format!("invalid tools list format: {e}"))
                 })?;

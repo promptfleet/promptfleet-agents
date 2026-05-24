@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::{A2AError, A2AResult, AgentCard};
 
-/// Params for `GetExtendedAgentCard` (was `agent/card/getAuthenticatedExtended`).
+/// Params for `GetExtendedAgentCard`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticatedExtendedCardParams {

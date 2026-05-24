@@ -8,7 +8,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// `GetTask` handler (was `tasks/get`).
+/// `GetTask` handler.
 pub fn handle_tasks_get(
     request: JsonRpcRequest,
     storage: Arc<dyn TaskStorage>,

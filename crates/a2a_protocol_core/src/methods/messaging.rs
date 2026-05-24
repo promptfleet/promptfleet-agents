@@ -9,7 +9,7 @@ use protocol_transport_core::{JsonRpcRequest, JsonRpcResponse};
 use std::sync::Arc;
 use uuid;
 
-/// `SendMessage` handler (was `message/send`).
+/// `SendMessage` handler.
 pub fn handle_message_send(
     request: JsonRpcRequest,
     storage: Arc<dyn TaskStorage>,
@@ -148,7 +148,7 @@ fn apply_history_length(task: &mut Task, history_length: Option<u32>) {
     }
 }
 
-/// `SendStreamingMessage` handler (was `tasks/sendSubscribe`).
+/// `SendStreamingMessage` handler.
 #[cfg(feature = "event-stream")]
 pub fn handle_tasks_send_subscribe(
     request: JsonRpcRequest,

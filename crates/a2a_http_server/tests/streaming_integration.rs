@@ -148,6 +148,7 @@ async fn streaming_endpoint_returns_sse_with_correct_wire_format() {
         last_data["result"]["statusUpdate"]["status"]["state"],
         "TASK_STATE_COMPLETED"
     );
+    assert_eq!(last_data["final_event"], true);
 }
 
 #[tokio::test]

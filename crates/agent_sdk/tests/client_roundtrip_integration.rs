@@ -94,9 +94,9 @@ async fn test_agent_client_message_and_task_lifecycle_roundtrip() {
     let send_result = client
         .send_message("roundtrip hello", Some("ctx-roundtrip".to_string()))
         .await
-        .expect("message/send should succeed");
+        .expect("SendMessage should succeed");
     let task_id = extract_task_id(&send_result)
-        .expect("message/send should return task id")
+        .expect("SendMessage should return task id")
         .to_string();
     assert_eq!(extract_task_state(&send_result), Some("TASK_STATE_WORKING"));
     assert!(
@@ -111,7 +111,7 @@ async fn test_agent_client_message_and_task_lifecycle_roundtrip() {
     let task = client
         .get_task(&task_id)
         .await
-        .expect("tasks/get should succeed");
+        .expect("GetTask should succeed");
     assert_eq!(task.id, task_id);
     assert_eq!(task.status.state, agent_sdk::a2a::TaskState::Working);
     assert!(
@@ -122,7 +122,7 @@ async fn test_agent_client_message_and_task_lifecycle_roundtrip() {
     let bounded = client
         .get_task_with_history(&task_id, Some(1))
         .await
-        .expect("bounded tasks/get should succeed");
+        .expect("bounded GetTask should succeed");
     assert_eq!(
         bounded.history.as_ref().map(|history| history.len()),
         Some(1),
@@ -164,7 +164,7 @@ async fn test_agent_client_get_task_missing_maps_to_method_execution_error() {
 
     match err {
         SdkError::MethodExecution { method, details } => {
-            assert_eq!(method, "tasks/get");
+                assert_eq!(method, "GetTask");
             assert!(
                 details.contains("Task not found") || details.contains("RPC error"),
                 "unexpected details: {details}"

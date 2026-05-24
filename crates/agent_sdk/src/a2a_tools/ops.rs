@@ -31,7 +31,7 @@ fn obs_from_env_cached() -> Option<observability::Obs> {
     .clone()
 }
 
-/// JSON-RPC call: agent/card/get returning raw AgentCard JSON (via official client)
+/// JSON-RPC call: `GetAgentCard` returning raw AgentCard JSON through the official client.
 pub async fn agent_card_get(jsonrpc_url: &str) -> SdkResult<Value> {
     use a2a_http_client::Client;
     let client = {
@@ -74,10 +74,10 @@ pub async fn agent_card_get(jsonrpc_url: &str) -> SdkResult<Value> {
     Ok(card_json)
 }
 
-/// JSON-RPC call: message/send using official client; args should contain keys: message, context_id?, metadata?
+/// JSON-RPC call: `SendMessage` using the official client; args should contain keys: message, context_id?, metadata?
 pub async fn a2a_message_send(jsonrpc_url: &str, args: Value) -> SdkResult<Value> {
     use a2a_http_client::Client;
-    use a2a_protocol_core::data::message::{Message, Part};
+    use a2a_protocol_core::data::message::Message;
 
     let mut msg_val = args
         .get("message")
@@ -176,7 +176,7 @@ pub async fn a2a_message_send(jsonrpc_url: &str, args: Value) -> SdkResult<Value
         )
         .await
         .map_err(|e| {
-            SdkError::method_execution("a2a.message_send", format!("message/send failed: {}", e))
+            SdkError::method_execution("a2a.message_send", format!("SendMessage failed: {}", e))
         })?;
 
     #[cfg(feature = "agent-observability")]

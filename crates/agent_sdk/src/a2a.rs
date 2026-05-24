@@ -593,7 +593,7 @@ pub(crate) fn skill_def_to_agent_skill(def: &crate::agent::skill::SkillDefinitio
     }
 }
 
-/// Adapter entrypoint for `message/send`.
+/// Adapter entrypoint for `SendMessage`.
 #[cfg(feature = "a2a-server")]
 pub async fn handle_message_send(
     agent: &Agent,
@@ -622,7 +622,7 @@ pub async fn handle_message_send(
     };
 
     info!(
-        "Processing A2A message/send: type={:?}, message_id={}, context_id={:?}",
+        "Processing A2A SendMessage: type={:?}, message_id={}, context_id={:?}",
         msg_ctx.message_type, params.message.message_id, params.message.context_id
     );
 

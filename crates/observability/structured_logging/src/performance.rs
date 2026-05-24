@@ -690,11 +690,11 @@ mod tests {
         let config = PerformanceConfig::default();
         let logger = FastPathLogger::new(&config).unwrap();
 
-        let result = logger.log_a2a_message_fast("message/send", "agent-a", "agent-b", Some(100));
+        let result = logger.log_a2a_message_fast("SendMessage", "agent-a", "agent-b", Some(100));
         assert!(result.is_ok());
 
         let json_str = String::from_utf8(result.unwrap()).unwrap();
-        assert!(json_str.contains("message/send"));
+        assert!(json_str.contains("SendMessage"));
         assert!(json_str.contains("agent-a"));
         assert!(json_str.contains("agent-b"));
         assert!(json_str.contains("100"));
@@ -705,7 +705,7 @@ mod tests {
         let config = PerformanceConfig::default();
         let logger = FastPathLogger::new(&config).unwrap();
 
-        let result = logger.log_a2a_message_fast("message/send", "a", "b", None);
+        let result = logger.log_a2a_message_fast("SendMessage", "a", "b", None);
         assert!(result.is_ok());
 
         let json_str = String::from_utf8(result.unwrap()).unwrap();

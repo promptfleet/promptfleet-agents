@@ -280,7 +280,7 @@ impl A2aClient {
         Err(SdkError::feature_not_enabled("client"))
     }
 
-    /// Send a message to the remote agent using A2A message/send method
+    /// Send a message to the remote agent using A2A `SendMessage`.
     ///
     /// # Arguments
     ///
@@ -312,7 +312,7 @@ impl A2aClient {
         Err(SdkError::feature_not_enabled("client"))
     }
 
-    /// Send a message using A2A protocol message/send method directly
+    /// Send a message using the A2A `SendMessage` method directly.
     ///
     /// # Arguments
     ///
@@ -374,7 +374,7 @@ impl A2aClient {
         Err(SdkError::feature_not_enabled("client"))
     }
 
-    /// Get task using A2A protocol tasks/get method directly
+    /// Get task using the A2A `GetTask` method directly.
     ///
     /// # Arguments
     ///
@@ -437,13 +437,13 @@ impl A2aClient {
                 "SendMessage",
                 serde_json::to_value(params).map_err(|e| {
                     SdkError::method_execution(
-                        "message/send",
+                        "SendMessage",
                         format!("serialize send params failed: {}", e),
                     )
                 })?,
             )
             .await
-            .map_err(|e| self.convert_rpc_error("message/send", e))
+            .map_err(|e| self.convert_rpc_error("SendMessage", e))
     }
 
     #[cfg(not(feature = "a2a-client"))]
@@ -473,15 +473,15 @@ impl A2aClient {
                 "GetTask",
                 serde_json::to_value(params).map_err(|e| {
                     SdkError::method_execution(
-                        "tasks/get",
+                        "GetTask",
                         format!("serialize get params failed: {}", e),
                     )
                 })?,
             )
             .await
-            .map_err(|e| self.convert_rpc_error("tasks/get", e))?;
+            .map_err(|e| self.convert_rpc_error("GetTask", e))?;
         serde_json::from_value(value).map_err(|e| {
-            SdkError::method_execution("tasks/get", format!("deserialize task failed: {}", e))
+            SdkError::method_execution("GetTask", format!("deserialize task failed: {}", e))
         })
     }
 
@@ -758,7 +758,7 @@ impl A2aClient {
             ))
         })?;
 
-        // 2. Convert to A2A message/send with data Part
+        // 2. Convert to A2A SendMessage with data Part
         self.execute_skill_call_with_context(agent_id, skill_id, params, None, None)
             .await
     }
@@ -906,7 +906,7 @@ impl A2aClient {
 
     /// **Execute Skill Call (Internal Implementation)**
     ///
-    /// Converts function call to A2A message/send and handles response.
+    /// Converts function call to A2A SendMessage and handles response.
     async fn execute_skill_call(
         &self,
         agent_id: &str,
@@ -951,7 +951,7 @@ impl A2aClient {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: Value::String(Uuid::new_v4().to_string()),
-            method: "message/send".to_string(),
+            method: "SendMessage".to_string(),
             params: serde_json::to_value(SendMessageRequest {
                 message,
                 configuration: None,
@@ -1043,7 +1043,7 @@ impl A2aClient {
 
     /// **Direct Message Send (Native A2A for LLMs)**
     ///
-    /// Exposes A2A `message/send` directly to LLMs without abstraction layers.
+    /// Exposes A2A `SendMessage` directly to LLMs without abstraction layers.
     /// This allows LLMs to work natively with the A2A protocol using any Part types.
     ///
     /// # Arguments
@@ -1082,7 +1082,7 @@ impl A2aClient {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::Value::String(Uuid::new_v4().to_string()),
-            method: "message/send".to_string(),
+            method: "SendMessage".to_string(),
             params: serde_json::to_value(SendMessageRequest {
                 message,
                 configuration: None,
@@ -1104,7 +1104,7 @@ impl A2aClient {
             })
         } else if let Some(error) = response.error {
             Err(A2AError::method_execution_failed(
-                "message/send",
+                "SendMessage",
                 format!("Message send failed: {}", error.message),
             ))
         } else {
@@ -1116,7 +1116,7 @@ impl A2aClient {
 
     /// **Generate OpenAI Function Schema for Direct A2A**
     ///
-    /// Creates a function calling schema that exposes A2A `message/send`
+    /// Creates a function calling schema that exposes A2A `SendMessage`
     /// directly to LLMs like GPT-4, Claude, etc.
     ///
     /// # Arguments

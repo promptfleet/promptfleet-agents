@@ -47,7 +47,7 @@ impl Client {
     /// Non-retriable errors (4xx, 500) are returned immediately without retry.
     ///
     /// An idempotency key is generated per attempt using `request_id` for safe
-    /// retries on state-mutating methods like `message/send`. The key is
+    /// retries on state-mutating methods like `SendMessage`. The key is
     /// available for future HTTP header injection (`X-Idempotency-Key`).
     pub async fn call_with_activation(
         &self,

@@ -14,7 +14,7 @@ use axum::{
 };
 use log::{debug, error, info, trace, warn};
 use protocol_transport_core::{JSONRPC_VERSION, JsonRpcIncoming, JsonRpcResponse};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -26,6 +26,24 @@ use {
     futures_util::Stream,
     protocol_transport_core::JsonRpcRequest,
 };
+
+fn agent_card_json_with_method_extensions(agent_card: &AgentCard) -> Value {
+    let mut value = serde_json::to_value(agent_card).expect("AgentCard should serialize");
+    if let Some(object) = value.as_object_mut() {
+        object.insert(
+            "methods".to_string(),
+            json!([
+                crate::method::SEND_MESSAGE,
+                crate::method::SEND_STREAMING_MESSAGE,
+                crate::method::GET_AGENT_CARD,
+                crate::method::GET_TASK,
+                crate::method::CANCEL_TASK,
+                crate::method::LIST_TASKS,
+            ]),
+        );
+    }
+    value
+}
 
 #[cfg(feature = "observability")]
 use {
@@ -886,7 +904,8 @@ impl A2AHttpServer {
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(
                             id,
-                            serde_json::to_value(card).map_err(|e| {
+                            serde_json::to_value(agent_card_json_with_method_extensions(&card))
+                                .map_err(|e| {
                                 error!("GetAgentCard (async): failed to serialize card: {}", e);
                                 StatusCode::INTERNAL_SERVER_ERROR
                             })?,
@@ -967,7 +986,8 @@ impl A2AHttpServer {
                         let id = root.get("id").cloned().unwrap_or(serde_json::Value::Null);
                         JsonRpcResponse::success(
                             id,
-                            serde_json::to_value(card).map_err(|e| {
+                            serde_json::to_value(agent_card_json_with_method_extensions(&card))
+                                .map_err(|e| {
                                 error!("GetAgentCard (sync): failed to serialize card: {}", e);
                                 StatusCode::INTERNAL_SERVER_ERROR
                             })?,
@@ -1173,7 +1193,7 @@ impl A2AHttpServer {
         debug!("Handling Axum agent card request for agent: {}", agent_id);
 
         let agent_card = self.protocol.agent_card();
-        let card_value = serde_json::to_value(agent_card).unwrap();
+        let card_value = agent_card_json_with_method_extensions(agent_card);
 
         info!("Agent card served via Axum for agent: {}", agent_id);
         Ok(Json(card_value))
@@ -1227,7 +1247,13 @@ fn a2a_sse_stream(
     let stream = stream! {
         let mut events = Box::pin(events);
         while let Some(event) = events.next().await {
-            let data = serde_json::to_string(&event.to_jsonrpc_data()).unwrap_or_else(|_| "{}".to_string());
+            let mut payload = event.to_jsonrpc_data();
+            if event.is_terminal() {
+                if let Some(object) = payload.as_object_mut() {
+                    object.insert("final_event".to_string(), Value::Bool(true));
+                }
+            }
+            let data = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
             yield Ok::<Event, std::convert::Infallible>(Event::default().event(event.event_name()).data(data));
         }
     };
@@ -1257,6 +1283,17 @@ mod tests {
         let storage: Arc<dyn TaskStorage> = Arc::new(InMemoryTaskStorage::new());
         let server = A2AHttpServer::new_with_storage(agent_card, storage);
         assert_eq!(server.agent_id(), "test-agent");
+    }
+
+    #[test]
+    fn test_agent_card_json_includes_method_extensions_for_cli_preflight() {
+        let card = AgentCard::new("test-agent".to_string());
+        let value = agent_card_json_with_method_extensions(&card);
+        let methods = value["methods"].as_array().expect("methods array");
+
+        assert!(methods
+            .iter()
+            .any(|m| m.as_str() == Some(crate::method::SEND_STREAMING_MESSAGE)));
     }
 
     #[tokio::test]

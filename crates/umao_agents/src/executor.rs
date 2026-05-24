@@ -259,7 +259,7 @@ mod tests {
                             let id = rpc.get("id").cloned().unwrap_or(serde_json::json!(null));
                             let method = rpc.get("method").and_then(|v| v.as_str()).unwrap_or("");
 
-                            let result = if method == "SendMessage" || method == "message/send" {
+                            let result = if method == "SendMessage" {
                                 let text = rpc
                                     .pointer("/params/message/parts/0/text")
                                     .and_then(|t| t.as_str())

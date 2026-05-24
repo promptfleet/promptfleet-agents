@@ -84,7 +84,7 @@ pub fn make_tools_from_config(cfg: A2AToolConfig) -> SdkResult<ToolRegistry> {
     if allow.iter().any(|n| n == "agent.card.get") {
         reg.register(ToolSpec {
             name: "agent_card_get".to_string(),
-            description: Some("Fetch an AgentCard via JSON-RPC agent/card/get.".to_string()),
+            description: Some("Fetch an AgentCard via JSON-RPC GetAgentCard.".to_string()),
             parameters: schema_agent_card_get(),
             kind: crate::agent::tools::ToolKind::A2a,
             strict: true,

@@ -34,13 +34,22 @@ pub struct A2AHttpServer {
     obs: Option<observability::Obs>,
 }
 
+fn disable_streaming_capability(agent_card: &mut AgentCard) {
+    if let Some(capabilities) = agent_card.capabilities.as_mut() {
+        capabilities.streaming = false;
+    }
+}
+
 impl A2AHttpServer {
     /// Create new HTTP server with protocol instance
-    pub fn new(protocol: A2AProtocol) -> Self {
+    pub fn new(mut protocol: A2AProtocol) -> Self {
         debug!(
             "Creating A2A HTTP server with agent_id: {}",
             protocol.agent_card().name
         );
+        let mut agent_card = protocol.agent_card().clone();
+        disable_streaming_capability(&mut agent_card);
+        protocol.update_agent_card(agent_card);
         Self {
             protocol,
             app: None,
@@ -52,7 +61,8 @@ impl A2AHttpServer {
     }
 
     /// **Recommended Constructor**: Create HTTP server with full A2A standard methods
-    pub fn new_with_a2a_methods(agent_card: AgentCard) -> Self {
+    pub fn new_with_a2a_methods(mut agent_card: AgentCard) -> Self {
+        disable_streaming_capability(&mut agent_card);
         let agent_id = agent_card.name.clone();
         debug!(
             "Creating A2A HTTP server with standard methods for agent: {}",
@@ -113,7 +123,8 @@ impl A2AHttpServer {
     }
 
     /// Create HTTP server with custom task storage
-    pub fn new_with_storage(agent_card: AgentCard, storage: Arc<dyn TaskStorage>) -> Self {
+    pub fn new_with_storage(mut agent_card: AgentCard, storage: Arc<dyn TaskStorage>) -> Self {
+        disable_streaming_capability(&mut agent_card);
         let agent_id = agent_card.name.clone();
         debug!(
             "Creating A2A HTTP server with custom storage for agent: {} storage_ptr={:p}",
@@ -983,6 +994,29 @@ mod tests {
         let storage: Arc<dyn TaskStorage> = Arc::new(InMemoryTaskStorage::new());
         let server = A2AHttpServer::new_with_storage(agent_card, storage);
         assert_eq!(server.agent_id(), "test-agent");
+    }
+
+    #[test]
+    fn test_wasm_server_does_not_advertise_streaming() {
+        let mut agent_card = AgentCard::new("test-agent".to_string());
+        agent_card.capabilities = Some(a2a_protocol_core::AgentCapabilities {
+            streaming: true,
+            push_notifications: false,
+            extensions: None,
+            extended_agent_card: false,
+        });
+
+        let server = A2AHttpServer::new_with_a2a_methods(agent_card);
+
+        assert_eq!(
+            server
+                .protocol
+                .agent_card()
+                .capabilities
+                .as_ref()
+                .map(|capabilities| capabilities.streaming),
+            Some(false)
+        );
     }
 
     #[cfg(feature = "observability")]

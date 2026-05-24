@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 // ── SendMessage ─────────────────────────────────────────────────────
 
-/// Request params for `SendMessage` (was `message/send`).
+/// Request params for `SendMessage`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendMessageRequest {
@@ -54,7 +54,7 @@ pub enum SendMessageResponse {
 
 // ── GetTask ─────────────────────────────────────────────────────────
 
-/// Request params for `GetTask` (was `tasks/get`).
+/// Request params for `GetTask`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTaskRequest {
@@ -69,7 +69,7 @@ pub struct GetTaskRequest {
 
 // ── CancelTask ──────────────────────────────────────────────────────
 
-/// Request params for `CancelTask` (was `tasks/cancel`).
+/// Request params for `CancelTask`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelTaskRequest {

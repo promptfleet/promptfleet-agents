@@ -5,15 +5,15 @@
 //!
 //! # Why this is interface-only
 //!
-//! All inbound MCP use cases resolve to the same A2A `message/send` call,
+//! All inbound MCP use cases resolve to the same A2A `SendMessage` call,
 //! but the translation logic varies by use case:
 //!
 //! | Use case | MCP tools/call | Under the hood |
 //! |---|---|---|
-//! | Skill exposure | `tools/call { name: "analyze_data" }` | A2A `message/send` with skill hint |
+//! | Skill exposure | `tools/call { name: "analyze_data" }` | A2A `SendMessage` with skill hint |
 //! | LLM tool exposure | `tools/call { name: "get_weather" }` | A2A → LLM tools loop → tool exec |
-//! | Free-form chat | `tools/call { name: "ask", args: { prompt } }` | A2A `message/send` with text |
-//! | Delegation | `tools/call { name: "plan" }` | A2A `message/send` → full agent run |
+//! | Free-form chat | `tools/call { name: "ask", args: { prompt } }` | A2A `SendMessage` with text |
+//! | Delegation | `tools/call { name: "plan" }` | A2A `SendMessage` → full agent run |
 //! | Extension exposure | `tools/call { name: "openai.chat" }` | Internal JSON-RPC |
 //!
 //! Each case has different response semantics (streaming vs sync, artifacts vs
@@ -37,11 +37,11 @@ use crate::mcp_tools::error::McpToolError;
 /// - **SkillExposer**: Registered A2A skills → MCP tools
 /// - **ToolExposer**: ToolRegistry entries → MCP tools
 /// - **ExtensionExposer**: Distributed-mode extension methods → MCP tools
-/// - **ChatExposer**: Single "ask" tool → free-form A2A message/send
+/// - **ChatExposer**: Single "ask" tool → free-form A2A SendMessage
 ///
 /// All implementations share:
 /// - `list_mcp_tools()` → enumerate exposed capabilities
-/// - `handle_mcp_call()` → route to A2A `message/send` (or internal JSON-RPC)
+/// - `handle_mcp_call()` → route to A2A `SendMessage` (or internal JSON-RPC)
 /// - Response mapping → MCP `CallToolResult`
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
@@ -53,7 +53,7 @@ pub trait McpServerAdapter: Send + Sync {
 
     /// Handle an incoming MCP `tools/call`.
     ///
-    /// Routes to the appropriate A2A message/send handler or internal executor.
+    /// Routes to the appropriate A2A SendMessage handler or internal executor.
     /// The response is mapped back to an MCP-compatible result.
     async fn handle_mcp_call(
         &self,

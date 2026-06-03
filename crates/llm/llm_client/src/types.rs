@@ -72,7 +72,60 @@ fn parse_tool_choice_value(v: &serde_json::Value) -> Result<ToolChoice, String> 
     Err(format!("unsupported tool_choice value: {v}"))
 }
 
-/// Provider-neutral chat message supporting text, tool calls, and tool results.
+/// Provider-neutral multimodal message content.
+///
+/// Text-only callers can keep using [`ChatMessage::content`]. Multimodal
+/// callers should use [`ChatMessage::content_parts`] so each provider can map
+/// text and image inputs to its own wire format.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ChatContentPart {
+    Text {
+        text: String,
+    },
+    ImageUrl {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
+    ImageBase64 {
+        media_type: String,
+        data: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
+}
+
+impl ChatContentPart {
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::Text { text: text.into() }
+    }
+
+    pub fn image_url(url: impl Into<String>, detail: Option<String>) -> Self {
+        Self::ImageUrl {
+            url: url.into(),
+            detail,
+        }
+    }
+
+    pub fn image_base64(
+        media_type: impl Into<String>,
+        data: impl Into<String>,
+        detail: Option<String>,
+    ) -> Self {
+        Self::ImageBase64 {
+            media_type: media_type.into(),
+            data: data.into(),
+            detail,
+        }
+    }
+
+    pub fn is_empty_text(&self) -> bool {
+        matches!(self, Self::Text { text } if text.trim().is_empty())
+    }
+}
+
+/// Provider-neutral chat message supporting text, image inputs, tool calls, and tool results.
 ///
 /// Each provider maps this internal representation to its own wire format:
 /// - OpenAI: `tool_calls` in assistant messages, `role: "tool"` for results
@@ -82,6 +135,8 @@ pub struct ChatMessage {
     pub role: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_parts: Option<Vec<ChatContentPart>>,
     /// Tool calls requested by the assistant (present in assistant messages).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCallRequest>>,

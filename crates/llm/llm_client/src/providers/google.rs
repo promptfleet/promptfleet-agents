@@ -5,8 +5,8 @@ use crate::{
     provider::LlmProvider,
     stream::{LlmEventStream, StreamEvent},
     types::{
-        ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall, ToolCallRequest, ToolChoice,
-        Usage,
+        ChatContentPart, ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall,
+        ToolCallRequest, ToolChoice, Usage,
     },
 };
 use protocol_transport_core::StreamingPolicy;
@@ -317,6 +317,28 @@ fn map_tool_result_message(msg: &ChatMessage, name_map: &ToolNameMap) -> Value {
 }
 
 fn text_parts(msg: &ChatMessage) -> Vec<Value> {
+    if let Some(parts) = &msg.content_parts {
+        return parts
+            .iter()
+            .filter_map(|part| match part {
+                ChatContentPart::Text { text } if text.trim().is_empty() => None,
+                ChatContentPart::Text { text } => Some(json!({ "text": text })),
+                ChatContentPart::ImageBase64 {
+                    media_type, data, ..
+                } => Some(json!({
+                    "inlineData": {
+                        "mimeType": media_type,
+                        "data": data,
+                    }
+                })),
+                ChatContentPart::ImageUrl { url, .. } => Some(json!({
+                    "fileData": {
+                        "fileUri": url,
+                    }
+                })),
+            })
+            .collect();
+    }
     vec![json!({ "text": msg.content.clone().unwrap_or_default() })]
 }
 
@@ -555,7 +577,7 @@ impl LlmProvider for GoogleGenerateContentClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ToolSchema, ToolChoice};
+    use crate::types::{ChatContentPart, ToolChoice, ToolSchema};
 
     #[test]
     fn generate_content_payload_maps_system_tools_and_tool_results() {
@@ -624,6 +646,27 @@ mod tests {
         );
         assert_eq!(payload["toolConfig"]["functionCallingConfig"]["mode"], "AUTO");
         assert_eq!(payload["generationConfig"]["maxOutputTokens"], 64);
+    }
+
+    #[test]
+    fn generate_content_payload_maps_multimodal_content_parts() {
+        let payload = GoogleGenerateContentClient::to_generate_content_payload(&LlmRequest {
+            model: "gemini-2.5-flash".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![
+                    ChatContentPart::text("what is visible?"),
+                    ChatContentPart::image_base64("image/png", "abc123", None),
+                ]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+
+        let parts = payload["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts[0]["text"], "what is visible?");
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
+        assert_eq!(parts[1]["inlineData"]["data"], "abc123");
     }
 
     #[test]

@@ -3,7 +3,10 @@ use crate::{
     error::LlmError,
     model_client::{ClientCapabilities, HttpModelClient},
     provider::LlmProvider,
-    types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall, ToolCallRequest, Usage},
+    types::{
+        ChatContentPart, ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall,
+        ToolCallRequest, Usage,
+    },
 };
 use protocol_transport_core::StreamingPolicy;
 use std::collections::HashMap;
@@ -33,6 +36,42 @@ impl AnthropicClient {
 // ---------------------------------------------------------------------------
 
 impl AnthropicClient {
+    fn content_blocks(msg: &ChatMessage) -> Option<serde_json::Value> {
+        if let Some(parts) = &msg.content_parts {
+            let blocks = parts
+                .iter()
+                .filter(|part| !part.is_empty_text())
+                .map(|part| match part {
+                    ChatContentPart::Text { text } => serde_json::json!({
+                        "type": "text",
+                        "text": text,
+                    }),
+                    ChatContentPart::ImageUrl { url, .. } => serde_json::json!({
+                        "type": "image",
+                        "source": {
+                            "type": "url",
+                            "url": url,
+                        },
+                    }),
+                    ChatContentPart::ImageBase64 {
+                        media_type, data, ..
+                    } => serde_json::json!({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": data,
+                        },
+                    }),
+                })
+                .collect::<Vec<_>>();
+            return Some(serde_json::Value::Array(blocks));
+        }
+        msg.content
+            .as_ref()
+            .map(|content| serde_json::Value::String(content.clone()))
+    }
+
     /// Convert an [`LlmRequest`] into the Anthropic Messages API wire format.
     ///
     /// Key differences from OpenAI:
@@ -136,11 +175,8 @@ impl AnthropicClient {
                     "role".to_string(),
                     serde_json::Value::String(msg.role.clone()),
                 );
-                if let Some(content) = &msg.content {
-                    msg_obj.insert(
-                        "content".to_string(),
-                        serde_json::Value::String(content.clone()),
-                    );
+                if let Some(content) = Self::content_blocks(msg) {
+                    msg_obj.insert("content".to_string(), content);
                 }
                 mapped.push(serde_json::Value::Object(msg_obj));
             }
@@ -653,7 +689,7 @@ impl LlmProvider for AnthropicClient {
 mod tests {
     use super::*;
     use crate::stream::{SseParser, StreamEvent};
-    use crate::types::{ChatMessage, LlmRequest, ToolCallRequest, ToolSchema};
+    use crate::types::{ChatContentPart, ChatMessage, LlmRequest, ToolCallRequest, ToolSchema};
 
     // ── to_messages_payload ──────────────────────────────────────────────
 
@@ -682,6 +718,30 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0]["role"], "user");
         assert_eq!(messages[0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_to_messages_payload_maps_multimodal_content_parts() {
+        let req = LlmRequest {
+            model: "claude-sonnet-4-20250514".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![
+                    ChatContentPart::text("what is visible?"),
+                    ChatContentPart::image_base64("image/png", "abc123", None),
+                ]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let payload = AnthropicClient::to_messages_payload(&req);
+        let content = payload["messages"][0]["content"].as_array().unwrap();
+
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "base64");
+        assert_eq!(content[1]["source"]["media_type"], "image/png");
+        assert_eq!(content[1]["source"]["data"], "abc123");
     }
 
     #[test]

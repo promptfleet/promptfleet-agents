@@ -12,7 +12,7 @@ use crate::agent::llm_invoker::LlmRequestDefaults;
 use crate::agent::tool_context::ToolContext;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::trace::AgentTraceEvent;
-use llm_client::{ChatMessage, LlmRequest, ToolChoice, ToolSchema};
+use llm_client::{ChatContentPart, ChatMessage, LlmRequest, ToolChoice, ToolSchema};
 use log::debug;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -215,14 +215,16 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             });
                         }
 
-                        let out_str = serde_json::to_string(&out.output)
+                        let injected_parts = multimodal_parts_from_tool_output(&out.output);
+                        let out_for_tool_result = strip_llm_content_markers(out.output.clone());
+                        let out_str = serde_json::to_string(&out_for_tool_result)
                             .unwrap_or_else(|_| out.output.to_string());
 
                         on_event(AgentTraceEvent::ToolCallCompleted {
                             index: tc.index,
                             id: tc.id.clone(),
                             name: tc.name.clone(),
-                            result: out.output.clone(),
+                            result: out_for_tool_result,
                             duration_ms,
                             success: true,
                         });
@@ -234,6 +236,15 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                             ..Default::default()
                         };
                         messages.push(tool_result_msg);
+
+                        if let Some((content, content_parts)) = injected_parts {
+                            messages.push(ChatMessage {
+                                role: "user".to_string(),
+                                content,
+                                content_parts: Some(content_parts),
+                                ..Default::default()
+                            });
+                        }
 
                         total_tool_calls += 1;
                     }
@@ -414,6 +425,30 @@ fn estimate_tools_tokens_schemas(tools: &[ToolSchema]) -> u32 {
         tokens += (s.len() as f64 / 4.0).ceil() as u32;
     }
     tokens
+}
+
+fn multimodal_parts_from_tool_output(
+    output: &serde_json::Value,
+) -> Option<(Option<String>, Vec<ChatContentPart>)> {
+    let object = output.as_object()?;
+    let parts_value = object.get("__llm_content_parts")?;
+    let parts = serde_json::from_value::<Vec<ChatContentPart>>(parts_value.clone()).ok()?;
+    if parts.is_empty() {
+        return None;
+    }
+    let content = object
+        .get("__llm_content_text")
+        .and_then(|value| value.as_str())
+        .map(ToOwned::to_owned);
+    Some((content, parts))
+}
+
+fn strip_llm_content_markers(mut output: serde_json::Value) -> serde_json::Value {
+    if let Some(object) = output.as_object_mut() {
+        object.remove("__llm_content_parts");
+        object.remove("__llm_content_text");
+    }
+    output
 }
 
 // ── Request defaults ────────────────────────────────────────────────────

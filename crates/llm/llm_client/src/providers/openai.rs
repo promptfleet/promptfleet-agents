@@ -3,7 +3,7 @@ use crate::{
     error::LlmError,
     model_client::{ApiMode, ClientCapabilities, HttpModelClient},
     provider::LlmProvider,
-    types::{ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
+    types::{ChatContentPart, ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
 };
 use protocol_transport_core::StreamingPolicy;
 use std::collections::HashMap;
@@ -34,6 +34,116 @@ impl OpenAIClient {
             chat_path,
             responses_path,
         }
+    }
+
+    fn text_or_parts_content_chat(m: &ChatMessage) -> Option<serde_json::Value> {
+        if let Some(parts) = &m.content_parts {
+            let mapped: Vec<serde_json::Value> = parts
+                .iter()
+                .filter(|part| !part.is_empty_text())
+                .map(|part| match part {
+                    ChatContentPart::Text { text } => serde_json::json!({
+                        "type": "text",
+                        "text": text,
+                    }),
+                    ChatContentPart::ImageUrl { url, detail } => {
+                        let mut image_url = serde_json::Map::new();
+                        image_url.insert("url".to_string(), serde_json::Value::String(url.clone()));
+                        if let Some(detail) = detail {
+                            image_url.insert(
+                                "detail".to_string(),
+                                serde_json::Value::String(detail.clone()),
+                            );
+                        }
+                        serde_json::json!({
+                            "type": "image_url",
+                            "image_url": serde_json::Value::Object(image_url),
+                        })
+                    }
+                    ChatContentPart::ImageBase64 {
+                        media_type,
+                        data,
+                        detail,
+                    } => {
+                        let mut image_url = serde_json::Map::new();
+                        image_url.insert(
+                            "url".to_string(),
+                            serde_json::Value::String(format!("data:{media_type};base64,{data}")),
+                        );
+                        if let Some(detail) = detail {
+                            image_url.insert(
+                                "detail".to_string(),
+                                serde_json::Value::String(detail.clone()),
+                            );
+                        }
+                        serde_json::json!({
+                            "type": "image_url",
+                            "image_url": serde_json::Value::Object(image_url),
+                        })
+                    }
+                })
+                .collect();
+            return Some(serde_json::Value::Array(mapped));
+        }
+        m.content
+            .as_ref()
+            .map(|content| serde_json::Value::String(content.clone()))
+    }
+
+    fn text_or_parts_content_responses(m: &ChatMessage) -> Option<serde_json::Value> {
+        if let Some(parts) = &m.content_parts {
+            let mapped: Vec<serde_json::Value> = parts
+                .iter()
+                .filter(|part| !part.is_empty_text())
+                .map(|part| match part {
+                    ChatContentPart::Text { text } => serde_json::json!({
+                        "type": "input_text",
+                        "text": text,
+                    }),
+                    ChatContentPart::ImageUrl { url, detail } => {
+                        let mut image = serde_json::Map::new();
+                        image.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("input_image".to_string()),
+                        );
+                        image.insert("image_url".to_string(), serde_json::Value::String(url.clone()));
+                        if let Some(detail) = detail {
+                            image.insert(
+                                "detail".to_string(),
+                                serde_json::Value::String(detail.clone()),
+                            );
+                        }
+                        serde_json::Value::Object(image)
+                    }
+                    ChatContentPart::ImageBase64 {
+                        media_type,
+                        data,
+                        detail,
+                    } => {
+                        let mut image = serde_json::Map::new();
+                        image.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("input_image".to_string()),
+                        );
+                        image.insert(
+                            "image_url".to_string(),
+                            serde_json::Value::String(format!("data:{media_type};base64,{data}")),
+                        );
+                        if let Some(detail) = detail {
+                            image.insert(
+                                "detail".to_string(),
+                                serde_json::Value::String(detail.clone()),
+                            );
+                        }
+                        serde_json::Value::Object(image)
+                    }
+                })
+                .collect();
+            return Some(serde_json::Value::Array(mapped));
+        }
+        m.content
+            .as_ref()
+            .map(|content| serde_json::Value::String(content.clone()))
     }
 
     fn map_openai_chat_message(m: &ChatMessage) -> serde_json::Value {
@@ -75,9 +185,9 @@ impl OpenAIClient {
                 "role".to_string(),
                 serde_json::Value::String("assistant".into()),
             );
-            if let Some(c) = &m.content {
-                if !c.is_empty() {
-                    obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+            if let Some(content) = Self::text_or_parts_content_chat(m) {
+                if !content.as_str().is_some_and(str::is_empty) {
+                    obj.insert("content".to_string(), content);
                 }
             }
             obj.insert(
@@ -91,8 +201,8 @@ impl OpenAIClient {
             "role".to_string(),
             serde_json::Value::String(m.role.clone()),
         );
-        if let Some(c) = &m.content {
-            obj.insert("content".to_string(), serde_json::Value::String(c.clone()));
+        if let Some(content) = Self::text_or_parts_content_chat(m) {
+            obj.insert("content".to_string(), content);
         }
         serde_json::Value::Object(obj)
     }
@@ -100,13 +210,32 @@ impl OpenAIClient {
     fn map_messages_openai_chat(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
         messages.iter().map(Self::map_openai_chat_message).collect()
     }
+
+    fn map_openai_responses_message(m: &ChatMessage) -> serde_json::Value {
+        let mut mapped = Self::map_openai_chat_message(m);
+        if m.role != "tool" {
+            if let Some(obj) = mapped.as_object_mut() {
+                if let Some(content) = Self::text_or_parts_content_responses(m) {
+                    obj.insert("content".to_string(), content);
+                }
+            }
+        }
+        mapped
+    }
+
+    fn map_messages_openai_responses(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
+        messages
+            .iter()
+            .map(Self::map_openai_responses_message)
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::auth::ApiKeyAuth;
-    use crate::types::{LlmRequest, ToolSchema};
+    use crate::types::{ChatContentPart, LlmRequest, ToolSchema};
 
     fn mk_client(api_mode: ApiMode) -> OpenAIClient {
         OpenAIClient::new(
@@ -177,6 +306,58 @@ mod tests {
         let temp = payload["temperature"].as_f64().expect("temperature");
         assert!((temp - 0.7_f64).abs() < 1e-5);
         assert_eq!(payload["max_tokens"], 100);
+    }
+
+    #[test]
+    fn test_to_chat_payload_maps_multimodal_content_parts() {
+        let request = LlmRequest {
+            model: "gpt-4.1-mini".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![
+                    ChatContentPart::text("what is visible?"),
+                    ChatContentPart::image_base64(
+                        "image/png",
+                        "abc123",
+                        Some("low".to_string()),
+                    ),
+                ]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_chat_payload(&request);
+        let content = payload["messages"][0]["content"].as_array().unwrap();
+
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[1]["type"], "image_url");
+        assert_eq!(
+            content[1]["image_url"]["url"],
+            "data:image/png;base64,abc123"
+        );
+        assert_eq!(content[1]["image_url"]["detail"], "low");
+    }
+
+    #[test]
+    fn test_to_responses_payload_maps_multimodal_content_parts() {
+        let request = LlmRequest {
+            model: "gpt-5-mini".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![
+                    ChatContentPart::text("what is visible?"),
+                    ChatContentPart::image_url("https://example.test/screen.png", None),
+                ]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let content = payload["input"][0]["content"].as_array().unwrap();
+
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(content[1]["image_url"], "https://example.test/screen.png");
     }
 
     #[test]
@@ -656,7 +837,7 @@ impl OpenAIClient {
         }
         obj.insert(
             "input".to_string(),
-            serde_json::Value::Array(Self::map_messages_openai_chat(&inputs)),
+            serde_json::Value::Array(Self::map_messages_openai_responses(&inputs)),
         );
         if let Some(t) = tools {
             obj.insert("tools".to_string(), t);

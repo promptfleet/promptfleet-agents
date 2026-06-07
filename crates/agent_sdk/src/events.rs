@@ -145,7 +145,8 @@ where
     T: JsonSchema,
 {
     let schema = schema_for!(T);
-    let mut value = serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
+    let mut value =
+        serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
     make_self_contained_schema(&mut value);
     value
 }
@@ -155,7 +156,8 @@ where
     T: JsonSchema,
 {
     let schema = schema_for!(CloudEventEnvelope<T>);
-    let mut value = serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
+    let mut value =
+        serde_json::to_value(schema).unwrap_or_else(|_| serde_json::json!({"type":"object"}));
     make_self_contained_schema(&mut value);
     value
 }
@@ -309,8 +311,18 @@ mod tests {
         let payload = payload_schema::<NestedPayload>();
         let envelope = envelope_schema::<NestedPayload>();
 
-        assert!(serde_json::to_string(&payload).unwrap().find("$ref").is_none());
-        assert!(serde_json::to_string(&envelope).unwrap().find("$ref").is_none());
+        assert!(
+            serde_json::to_string(&payload)
+                .unwrap()
+                .find("$ref")
+                .is_none()
+        );
+        assert!(
+            serde_json::to_string(&envelope)
+                .unwrap()
+                .find("$ref")
+                .is_none()
+        );
         assert!(payload.get("definitions").is_none());
         assert!(envelope.get("definitions").is_none());
         jsonschema::JSONSchema::compile(&payload).expect("payload schema compiles");

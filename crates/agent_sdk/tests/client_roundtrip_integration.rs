@@ -164,7 +164,7 @@ async fn test_agent_client_get_task_missing_maps_to_method_execution_error() {
 
     match err {
         SdkError::MethodExecution { method, details } => {
-                assert_eq!(method, "GetTask");
+            assert_eq!(method, "GetTask");
             assert!(
                 details.contains("Task not found") || details.contains("RPC error"),
                 "unexpected details: {details}"

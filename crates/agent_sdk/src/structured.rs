@@ -226,6 +226,30 @@ fn missing_artifact_error(artifact_name: &str) -> SdkError {
     )
 }
 
+fn missing_artifact_error_for_response(
+    response: &RuntimeResponse,
+    artifact_name: &str,
+) -> SdkError {
+    let RuntimeResponse::Task(task) = response else {
+        return missing_artifact_error(artifact_name);
+    };
+
+    let mut message = format!(
+        "structured output artifact '{}' was not produced; task phase: {:?}",
+        artifact_name, task.phase
+    );
+    if let Some(status_text) = task
+        .status_text
+        .as_deref()
+        .filter(|status_text| !status_text.trim().is_empty())
+    {
+        message.push_str("; task status: ");
+        message.push_str(status_text);
+    }
+
+    SdkError::method_execution("structured_output", message)
+}
+
 pub(crate) fn decode_optional_artifact<O>(
     response: &RuntimeResponse,
     artifact_name: &str,
@@ -268,7 +292,7 @@ where
     O: DeserializeOwned,
 {
     decode_optional_artifact(response, artifact_name)?
-        .ok_or_else(|| missing_artifact_error(artifact_name))
+        .ok_or_else(|| missing_artifact_error_for_response(response, artifact_name))
 }
 
 #[cfg(test)]
@@ -373,5 +397,28 @@ mod tests {
                 verdict: "ok".to_string()
             }
         );
+    }
+
+    #[test]
+    fn decode_artifact_reports_failed_task_status_when_required_artifact_missing() {
+        let response = RuntimeResponse::Task(crate::agent::RuntimeTask {
+            task_id: "task-1".to_string(),
+            context_id: "ctx-1".to_string(),
+            history: Vec::new(),
+            artifacts: Vec::new(),
+            metadata: HashMap::new(),
+            phase: agent_core::TaskPhase::Failed,
+            status_text: Some(
+                "Network error: Reqwest error: error sending request for url".to_string(),
+            ),
+            continuation_update: None,
+        });
+
+        let error = decode_artifact::<ExampleOutput>(&response, "analysis_output")
+            .expect_err("missing required artifact should fail");
+        let message = error.to_string();
+        assert!(message.contains("structured output artifact 'analysis_output' was not produced"));
+        assert!(message.contains("task phase: Failed"));
+        assert!(message.contains("Network error: Reqwest error"));
     }
 }

@@ -195,9 +195,9 @@ pub fn resolve_env_vars(value: &str) -> String {
 pub fn resolve_env_vars_in_value(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::String(value) => serde_json::Value::String(resolve_env_vars(&value)),
-        serde_json::Value::Array(values) => serde_json::Value::Array(
-            values.into_iter().map(resolve_env_vars_in_value).collect(),
-        ),
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(resolve_env_vars_in_value).collect())
+        }
         serde_json::Value::Object(values) => serde_json::Value::Object(
             values
                 .into_iter()

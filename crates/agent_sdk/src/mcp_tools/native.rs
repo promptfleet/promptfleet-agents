@@ -204,12 +204,11 @@ impl RmcpClientHandle {
         use rmcp::model::{ClientRequest, ServerResult};
         use rmcp::service::PeerRequestOptions;
 
-        let request = ClientRequest::ListToolsRequest(ListToolsRequest::with_param(
-            PaginatedRequestParams {
+        let request =
+            ClientRequest::ListToolsRequest(ListToolsRequest::with_param(PaginatedRequestParams {
                 meta: Some(Meta(self.request_meta.clone())),
                 cursor: None,
-            },
-        ));
+            }));
         let result = service
             .send_request_with_option(request, PeerRequestOptions::no_options())
             .await?

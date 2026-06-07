@@ -3,7 +3,9 @@
 //! Converts MCP tool definitions from external servers into [`ToolSpec`] entries
 //! that can be registered in a [`ToolRegistry`] and used by the LLM orchestrator.
 //!
-//! Tool naming convention: `mcp_<server_id>_<tool_name>`
+//! Tool naming convention: `mcp_<server_id>_<tool_name>`.
+//! PromptFleet capability gateway tools are already globally scoped by the
+//! gateway, so they keep their server-provided names.
 //!
 //! Underscores are used as separators (not dots) because LLM providers
 //! like OpenAI restrict tool names to `^[a-zA-Z0-9_-]+$`.
@@ -18,6 +20,8 @@ use crate::mcp_tools::types::{McpToolDescriptor, McpToolSource};
 
 /// Adapter that converts MCP tools into ToolSpec entries for ToolRegistry.
 pub struct McpToolAdapter;
+
+const PROMPTFLEET_CAPABILITY_GATEWAY_SERVER_ID: &str = "promptfleet.capability_gateway";
 
 impl McpToolAdapter {
     /// Connect to all configured MCP servers, list their tools, and register
@@ -77,7 +81,7 @@ impl McpToolAdapter {
         let tool_name = tool.name.clone();
         // OpenAI requires tool names to match ^[a-zA-Z0-9_-]+$, so use
         // underscores instead of dots as separators.
-        let canonical_name = format!("mcp_{}_{}", server_id, tool_name);
+        let canonical_name = canonical_tool_name(&server_id, &tool_name);
 
         let source_for_exec = source.clone();
         let sid_for_exec = server_id.clone();
@@ -104,6 +108,13 @@ impl McpToolAdapter {
             })),
         })
     }
+}
+
+fn canonical_tool_name(server_id: &str, tool_name: &str) -> String {
+    if server_id == PROMPTFLEET_CAPABILITY_GATEWAY_SERVER_ID {
+        return tool_name.to_string();
+    }
+    format!("mcp_{}_{}", server_id, tool_name)
 }
 
 #[cfg(test)]
@@ -260,5 +271,16 @@ mod tests {
         assert_eq!(result.name, "mcp_mock_echo");
         // The mock returns {"echo": args}
         assert_eq!(result.output["echo"]["hello"], "world");
+    }
+
+    #[test]
+    fn capability_gateway_tools_keep_gateway_names() {
+        assert_eq!(
+            canonical_tool_name(
+                PROMPTFLEET_CAPABILITY_GATEWAY_SERVER_ID,
+                "toolconn_01ksh73kkw204at2rtvw7bv2s4__tavily_search"
+            ),
+            "toolconn_01ksh73kkw204at2rtvw7bv2s4__tavily_search"
+        );
     }
 }

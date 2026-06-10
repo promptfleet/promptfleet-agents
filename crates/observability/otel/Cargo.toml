@@ -31,7 +31,7 @@ observability_core = { workspace = true }
 # Core dependencies only - extension system removed
 log = "0.4"
 base64 = "0.22"
-opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic-messages", "traces"], optional = true }
+opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic-messages", "traces", "metrics", "logs"], optional = true }
 prost = { version = "0.11", optional = true }
 
 # OpenTelemetry dependencies (feature-gated)

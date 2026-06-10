@@ -595,7 +595,7 @@ impl ObservabilityPlugin for Otel {
         let should_flush = {
             let mut buffer = self.metric_buffer.lock().unwrap();
             buffer.push(metric);
-            log::info!("otel:metric_buffered size={}", buffer.len());
+            debug!("otel:metric_buffered size={}", buffer.len());
             buffer.len() >= self.config.batch_size
         };
 

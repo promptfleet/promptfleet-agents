@@ -12,10 +12,12 @@
 
 mod mesh_identity;
 mod semconv;
+mod service_standard;
 mod types;
 
 pub use mesh_identity::*;
 pub use semconv::*;
+pub use service_standard::*;
 pub use types::{
     Obs, ObsHandle, ObsHealth, ObsResult, ObservabilityConfig, OtelConfig, OtelSampling,
     PrometheusConfig, SharedObs,

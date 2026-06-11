@@ -118,6 +118,26 @@ pub mod attr {
 
     /// RPC method name (bounded by API surface).
     pub const RPC_METHOD: &str = "rpc.method";
+
+    // ---------------------------------------------------------------------
+    // OTEL service resource attributes used by PromptFleet services
+    // ---------------------------------------------------------------------
+
+    pub const SERVICE_NAME: &str = "service.name";
+    pub const SERVICE_NAMESPACE: &str = "service.namespace";
+    pub const SERVICE_VERSION: &str = "service.version";
+    pub const SERVICE_INSTANCE_ID: &str = "service.instance.id";
+    pub const DEPLOYMENT_ENVIRONMENT_NAME: &str = "deployment.environment.name";
+
+    // ---------------------------------------------------------------------
+    // PromptFleet service profile resource attributes
+    // ---------------------------------------------------------------------
+
+    pub const PF_SERVICE_OWNER: &str = "pf.service.owner";
+    pub const PF_SERVICE_TIER: &str = "pf.service.tier";
+    pub const PF_SERVICE_CRITICALITY: &str = "pf.service.criticality";
+    pub const PF_SERVICE_KIND: &str = "pf.service.kind";
+    pub const PF_SYSTEM: &str = "pf.system";
 }
 
 /// Common metric names (low-cardinality labels only).
@@ -143,6 +163,41 @@ pub mod metric {
     ///
     /// Labels: `{provider, model, direction}` where `direction ∈ {"input","output"}`.
     pub const LLM_TOKENS_TOTAL: &str = "llm_tokens_total";
+
+    /// Counter: service requests handled by APIs, RPC servers, or worker entrypoints.
+    ///
+    /// Labels: `{component, operation, status, protocol}`.
+    pub const PF_SERVICE_REQUESTS_TOTAL: &str = "pf_service_requests_total";
+    /// Histogram: service request duration in milliseconds.
+    ///
+    /// Labels: `{component, operation, status, protocol}`.
+    pub const PF_SERVICE_REQUEST_DURATION_MS: &str = "pf_service_request_duration_ms";
+    /// Counter: outbound dependency calls.
+    ///
+    /// Labels: `{component, operation, status, dependency_kind, dependency}`.
+    pub const PF_SERVICE_DEPENDENCY_REQUESTS_TOTAL: &str =
+        "pf_service_dependency_requests_total";
+    /// Histogram: outbound dependency call duration in milliseconds.
+    ///
+    /// Labels: `{component, operation, status, dependency_kind, dependency}`.
+    pub const PF_SERVICE_DEPENDENCY_DURATION_MS: &str = "pf_service_dependency_duration_ms";
+    /// Counter: background job executions.
+    ///
+    /// Labels: `{component, operation, status}`.
+    pub const PF_SERVICE_BACKGROUND_JOBS_TOTAL: &str = "pf_service_background_jobs_total";
+    /// Histogram: background job duration in milliseconds.
+    ///
+    /// Labels: `{component, operation, status}`.
+    pub const PF_SERVICE_BACKGROUND_JOB_DURATION_MS: &str =
+        "pf_service_background_job_duration_ms";
+    /// Gauge: coarse service health state.
+    ///
+    /// Values: `1` healthy, `0` degraded/unhealthy. Labels: `{component, status}`.
+    pub const PF_SERVICE_HEALTH_STATE: &str = "pf_service_health_state";
+    /// Gauge: build metadata marker. Value is always `1`.
+    ///
+    /// Labels: `{version}`.
+    pub const PF_SERVICE_BUILD_INFO: &str = "pf_service_build_info";
 }
 
 /// Fixed allowlist of metric label keys to keep cardinality bounded.
@@ -157,6 +212,9 @@ pub const METRIC_LABEL_ALLOWLIST: &[&str] = &[
     attr::COMPONENT,
     attr::OPERATION,
     attr::STATUS,
+    "protocol",
+    "dependency_kind",
+    "dependency",
     // LLM.
     "provider",
     "model",
@@ -176,6 +234,14 @@ pub fn filter_metric_labels<'a>(labels: &[(&'a str, &'a str)]) -> Vec<(&'a str, 
 pub mod value {
     pub const STATUS_OK: &str = "ok";
     pub const STATUS_ERROR: &str = "error";
+    pub const STATUS_TIMEOUT: &str = "timeout";
+    pub const STATUS_CANCELLED: &str = "cancelled";
+
+    pub const PROTOCOL_HTTP: &str = "http";
+    pub const PROTOCOL_GRAPHQL: &str = "graphql";
+    pub const PROTOCOL_GRPC: &str = "grpc";
+    pub const PROTOCOL_JSONRPC: &str = "jsonrpc";
+    pub const PROTOCOL_WORKER: &str = "worker";
 
     pub const DIRECTION_INPUT: &str = "input";
     pub const DIRECTION_OUTPUT: &str = "output";

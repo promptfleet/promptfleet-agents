@@ -28,6 +28,7 @@ config = ["serde"]
 otel = ["dep:otel"]
 prometheus = ["dep:obs_prometheus", "obs_prometheus/prometheus-federation", "obs_prometheus/structured-logging"]
 prometheus-pushgateway = ["prometheus", "obs_prometheus/pushgateway-client"]
+axum = ["dep:axum", "dep:tokio"]
 
 # Convenience feature for "turn everything on".
 full = ["otel", "prometheus"]
@@ -42,3 +43,5 @@ web-time = { workspace = true }
 # Optional backend crates (renamed to avoid name collisions in dependents).
 otel = { path = "../otel", package = "pf_otel", version = "0.1.0", optional = true }
 obs_prometheus = { path = "../prometheus", package = "pf_prometheus", version = "0.1.0", optional = true }
+axum = { version = "0.8.4", optional = true }
+tokio = { workspace = true, features = ["time", "rt"], optional = true }

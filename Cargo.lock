@@ -2502,12 +2502,14 @@ dependencies = [
 name = "pf_observability"
 version = "0.1.1"
 dependencies = [
+ "axum 0.8.8",
  "log",
  "pf_observability_core",
  "pf_otel",
  "pf_prometheus",
  "serde",
  "serde_json",
+ "tokio",
  "web-time",
 ]
 

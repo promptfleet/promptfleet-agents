@@ -14,7 +14,11 @@ mod mesh_identity;
 mod semconv;
 mod service_standard;
 mod types;
+#[cfg(feature = "axum")]
+mod axum_service;
 
+#[cfg(feature = "axum")]
+pub use axum_service::*;
 pub use mesh_identity::*;
 pub use semconv::*;
 pub use service_standard::*;

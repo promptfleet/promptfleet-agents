@@ -133,6 +133,15 @@ pub mod attr {
     // PromptFleet service profile resource attributes
     // ---------------------------------------------------------------------
 
+    /// Canonical PromptFleet component identity.
+    ///
+    /// This is the AI-SRE join key across inventory, metrics, logs, traces, and
+    /// Kubernetes metadata. It is intentionally separate from `service.name`
+    /// because not every observable platform component is a first-class service
+    /// in Kubernetes or third-party telemetry sources.
+    pub const PF_COMPONENT_ID: &str = "pf.component_id";
+    /// Prometheus/log-friendly form of [`PF_COMPONENT_ID`].
+    pub const PF_COMPONENT_ID_LABEL: &str = "pf_component_id";
     pub const PF_SERVICE_OWNER: &str = "pf.service.owner";
     pub const PF_SERVICE_TIER: &str = "pf.service.tier";
     pub const PF_SERVICE_CRITICALITY: &str = "pf.service.criticality";
@@ -166,33 +175,33 @@ pub mod metric {
 
     /// Counter: service requests handled by APIs, RPC servers, or worker entrypoints.
     ///
-    /// Labels: `{component, operation, status, protocol}`.
+    /// Labels: `{pf_component_id, component, operation, status, protocol}`.
     pub const PF_SERVICE_REQUESTS_TOTAL: &str = "pf_service_requests_total";
     /// Histogram: service request duration in milliseconds.
     ///
-    /// Labels: `{component, operation, status, protocol}`.
+    /// Labels: `{pf_component_id, component, operation, status, protocol}`.
     pub const PF_SERVICE_REQUEST_DURATION_MS: &str = "pf_service_request_duration_ms";
     /// Counter: outbound dependency calls.
     ///
-    /// Labels: `{component, operation, status, dependency_kind, dependency}`.
+    /// Labels: `{pf_component_id, component, operation, status, dependency_kind, dependency}`.
     pub const PF_SERVICE_DEPENDENCY_REQUESTS_TOTAL: &str =
         "pf_service_dependency_requests_total";
     /// Histogram: outbound dependency call duration in milliseconds.
     ///
-    /// Labels: `{component, operation, status, dependency_kind, dependency}`.
+    /// Labels: `{pf_component_id, component, operation, status, dependency_kind, dependency}`.
     pub const PF_SERVICE_DEPENDENCY_DURATION_MS: &str = "pf_service_dependency_duration_ms";
     /// Counter: background job executions.
     ///
-    /// Labels: `{component, operation, status}`.
+    /// Labels: `{pf_component_id, component, operation, status}`.
     pub const PF_SERVICE_BACKGROUND_JOBS_TOTAL: &str = "pf_service_background_jobs_total";
     /// Histogram: background job duration in milliseconds.
     ///
-    /// Labels: `{component, operation, status}`.
+    /// Labels: `{pf_component_id, component, operation, status}`.
     pub const PF_SERVICE_BACKGROUND_JOB_DURATION_MS: &str =
         "pf_service_background_job_duration_ms";
     /// Gauge: coarse service health state.
     ///
-    /// Values: `1` healthy, `0` degraded/unhealthy. Labels: `{component, status}`.
+    /// Values: `1` healthy, `0` degraded/unhealthy. Labels: `{pf_component_id, component, status}`.
     pub const PF_SERVICE_HEALTH_STATE: &str = "pf_service_health_state";
     /// Gauge: build metadata marker. Value is always `1`.
     ///
@@ -208,6 +217,7 @@ pub const METRIC_LABEL_ALLOWLIST: &[&str] = &[
     "app",
     "version",
     "namespace",
+    attr::PF_COMPONENT_ID_LABEL,
     // A2A / SDK.
     attr::COMPONENT,
     attr::OPERATION,
@@ -330,6 +340,7 @@ mod tests {
             "app",
             "version",
             "namespace",
+            "pf_component_id",
             "component",
             "operation",
             "status",
@@ -398,6 +409,8 @@ mod tests {
         assert_eq!(attr::PF_KIND, "pf.kind");
         assert_eq!(attr::RPC_SYSTEM, "rpc.system");
         assert_eq!(attr::RPC_METHOD, "rpc.method");
+        assert_eq!(attr::PF_COMPONENT_ID, "pf.component_id");
+        assert_eq!(attr::PF_COMPONENT_ID_LABEL, "pf_component_id");
     }
 
     #[test]

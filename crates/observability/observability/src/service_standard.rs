@@ -5,6 +5,7 @@
 //! dependency metrics, background jobs, health, and build metadata.
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use observability_core::traits::LogLevel;
 
@@ -15,6 +16,7 @@ pub struct ServiceIdentity {
     pub name: String,
     pub namespace: String,
     pub version: String,
+    pub component_id: String,
     pub instance_id: Option<String>,
     pub deployment_environment: Option<String>,
 }
@@ -25,8 +27,10 @@ impl ServiceIdentity {
         namespace: impl Into<String>,
         version: impl Into<String>,
     ) -> Self {
+        let name = non_empty_or(name.into(), "unknown");
         Self {
-            name: non_empty_or(name.into(), "unknown"),
+            component_id: name.clone(),
+            name,
             namespace: non_empty_or(namespace.into(), "default"),
             version: non_empty_or(version.into(), "unknown"),
             instance_id: env_non_empty("HOSTNAME")
@@ -50,6 +54,11 @@ impl ServiceIdentity {
 
     pub fn with_instance_id(mut self, instance_id: impl Into<String>) -> Self {
         self.instance_id = Some(non_empty_or(instance_id.into(), "unknown"));
+        self
+    }
+
+    pub fn with_component_id(mut self, component_id: impl Into<String>) -> Self {
+        self.component_id = non_empty_or(component_id.into(), &self.name);
         self
     }
 
@@ -161,6 +170,10 @@ impl ServiceProfile {
             attr::SERVICE_VERSION.to_string(),
             self.identity.version.clone(),
         );
+        attrs.insert(
+            attr::PF_COMPONENT_ID.to_string(),
+            self.identity.component_id.clone(),
+        );
         if let Some(instance_id) = &self.identity.instance_id {
             attrs.insert(attr::SERVICE_INSTANCE_ID.to_string(), instance_id.clone());
         }
@@ -261,7 +274,9 @@ pub trait ServiceInstrumentationExt: ObsHandle {
         protocol: ServiceProtocol,
         attrs: &[(&str, &str)],
     ) -> SpanGuard {
+        let pf_component_id = current_component_id();
         let mut span_attrs = vec![
+            (attr::PF_COMPONENT_ID, pf_component_id),
             (attr::COMPONENT, component),
             (attr::OPERATION, operation),
             ("protocol", protocol.as_str()),
@@ -279,7 +294,9 @@ pub trait ServiceInstrumentationExt: ObsHandle {
         status: ServiceStatus,
         duration_ms: f64,
     ) {
+        let pf_component_id = current_component_id();
         let labels = [
+            (attr::PF_COMPONENT_ID_LABEL, pf_component_id),
             (attr::COMPONENT, component),
             (attr::OPERATION, operation),
             (attr::STATUS, status.as_str()),
@@ -302,7 +319,9 @@ pub trait ServiceInstrumentationExt: ObsHandle {
         status: ServiceStatus,
         duration_ms: f64,
     ) {
+        let pf_component_id = current_component_id();
         let labels = [
+            (attr::PF_COMPONENT_ID_LABEL, pf_component_id),
             (attr::COMPONENT, component),
             (attr::OPERATION, operation),
             (attr::STATUS, status.as_str()),
@@ -324,7 +343,9 @@ pub trait ServiceInstrumentationExt: ObsHandle {
         status: ServiceStatus,
         duration_ms: f64,
     ) {
+        let pf_component_id = current_component_id();
         let labels = [
+            (attr::PF_COMPONENT_ID_LABEL, pf_component_id),
             (attr::COMPONENT, component),
             (attr::OPERATION, operation),
             (attr::STATUS, status.as_str()),
@@ -346,7 +367,11 @@ pub trait ServiceInstrumentationExt: ObsHandle {
         self.metric(
             metric::PF_SERVICE_HEALTH_STATE,
             if healthy { 1.0 } else { 0.0 },
-            &[(attr::COMPONENT, component), (attr::STATUS, status.as_str())],
+            &[
+                (attr::PF_COMPONENT_ID_LABEL, current_component_id()),
+                (attr::COMPONENT, component),
+                (attr::STATUS, status.as_str()),
+            ],
         );
     }
 
@@ -366,6 +391,7 @@ pub trait ServiceInstrumentationExt: ObsHandle {
             level,
             message,
             &[
+                (attr::PF_COMPONENT_ID_LABEL, current_component_id()),
                 (attr::COMPONENT, component),
                 (attr::OPERATION, operation),
                 (attr::STATUS, status.as_str()),
@@ -401,6 +427,34 @@ fn env_non_empty(key: &str) -> Option<String> {
     })
 }
 
+fn current_component_id() -> &'static str {
+    static COMPONENT_ID: OnceLock<String> = OnceLock::new();
+    COMPONENT_ID
+        .get_or_init(|| {
+            env_non_empty("PF_COMPONENT_ID")
+                .or_else(|| otel_resource_attribute(attr::PF_COMPONENT_ID))
+                .or_else(|| otel_resource_attribute(attr::PF_COMPONENT_ID_LABEL))
+                .or_else(|| env_non_empty("OTEL_SERVICE_NAME"))
+                .unwrap_or_else(|| "unknown".to_string())
+        })
+        .as_str()
+}
+
+fn otel_resource_attribute(key: &str) -> Option<String> {
+    let attrs = std::env::var("OTEL_RESOURCE_ATTRIBUTES").ok()?;
+    for attr in attrs.split(',') {
+        if let Some((candidate_key, value)) = attr.split_once('=') {
+            if candidate_key.trim() == key {
+                let value = value.trim();
+                if !value.is_empty() {
+                    return Some(value.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn non_empty_or(value: String, fallback: &str) -> String {
     let value = value.trim().to_string();
     if value.is_empty() {
@@ -434,6 +488,7 @@ mod tests {
         assert_eq!(attrs[attr::SERVICE_NAME], "console-control-plane");
         assert_eq!(attrs[attr::SERVICE_NAMESPACE], "promptfleet-system");
         assert_eq!(attrs[attr::SERVICE_VERSION], "dev");
+        assert_eq!(attrs[attr::PF_COMPONENT_ID], "console-control-plane");
         assert_eq!(attrs[attr::SERVICE_INSTANCE_ID], "pod-1");
         assert_eq!(attrs[attr::DEPLOYMENT_ENVIRONMENT_NAME], "development");
         assert_eq!(attrs[attr::PF_SERVICE_OWNER], "platform");
@@ -455,6 +510,7 @@ mod tests {
     #[test]
     fn standard_metric_labels_are_allowed_and_unknown_labels_drop() {
         let labels = [
+            (attr::PF_COMPONENT_ID_LABEL, "console-control-plane"),
             (attr::COMPONENT, "api"),
             (attr::OPERATION, "list"),
             (attr::STATUS, "ok"),
@@ -470,6 +526,7 @@ mod tests {
         assert_eq!(
             keys,
             vec![
+                attr::PF_COMPONENT_ID_LABEL,
                 attr::COMPONENT,
                 attr::OPERATION,
                 attr::STATUS,

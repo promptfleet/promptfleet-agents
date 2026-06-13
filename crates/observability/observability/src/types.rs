@@ -13,6 +13,8 @@ use serde_json::Value as JsonValue;
 
 use std::collections::HashMap;
 
+use crate::attr;
+
 #[cfg(feature = "config")]
 use serde_json::Value as ConfigValue;
 
@@ -308,6 +310,12 @@ impl Obs {
     /// Call this **once** during agent startup and pass the returned handle into
     /// all subcomponents (A2A client/server, LLM client, etc.).
     pub fn init(mut cfg: ObservabilityConfig) -> ObsResult<Self> {
+        let pf_component_id = resolve_component_id(&cfg);
+        cfg.otel
+            .resource_attributes
+            .entry(attr::PF_COMPONENT_ID.to_string())
+            .or_insert_with(|| pf_component_id.clone());
+
         // Ensure service identity is present in default structured fields.
         #[cfg(feature = "logging")]
         {
@@ -322,6 +330,14 @@ impl Obs {
             cfg.logging.default_context.insert(
                 "service.namespace".to_string(),
                 serde_json::Value::String(cfg.service_namespace.clone()),
+            );
+            cfg.logging.default_context.insert(
+                attr::PF_COMPONENT_ID_LABEL.to_string(),
+                serde_json::Value::String(pf_component_id.clone()),
+            );
+            cfg.logging.default_context.insert(
+                attr::PF_COMPONENT_ID.to_string(),
+                serde_json::Value::String(pf_component_id.clone()),
             );
         }
 
@@ -450,6 +466,25 @@ impl Obs {
     pub fn prometheus_plugin(&self) -> Option<&obs_prometheus::Prometheus> {
         self.inner.prometheus.as_ref().and_then(|m| m.plugin())
     }
+}
+
+fn resolve_component_id(cfg: &ObservabilityConfig) -> String {
+    env_non_empty("PF_COMPONENT_ID")
+        .or_else(|| cfg.otel.resource_attributes.get(attr::PF_COMPONENT_ID).cloned())
+        .or_else(|| {
+            cfg.otel
+                .resource_attributes
+                .get(attr::PF_COMPONENT_ID_LABEL)
+                .cloned()
+        })
+        .unwrap_or_else(|| cfg.service_name.clone())
+}
+
+fn env_non_empty(key: &str) -> Option<String> {
+    std::env::var(key).ok().and_then(|value| {
+        let value = value.trim().to_string();
+        if value.is_empty() { None } else { Some(value) }
+    })
 }
 
 fn flush_interval_from_env() -> Duration {

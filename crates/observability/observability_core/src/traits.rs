@@ -287,6 +287,7 @@ pub const METRIC_LABEL_ALLOWLIST: &[&str] = &[
     "app",       // Application name
     "version",   // Application version
     "namespace", // Kubernetes namespace
+    "pf_component_id", // Canonical PromptFleet component ID
     // A2A / SDK (bounded)
     "component", // a2a_server | a2a_client | llm_client | sdk
     "operation", // rpc method / operation name (bounded set)

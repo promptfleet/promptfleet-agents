@@ -14,6 +14,7 @@ use axum::response::Response;
 
 use crate::{
     LogLevel, Obs, ObsHandle, ServiceInstrumentationExt, ServiceProtocol, ServiceStatus,
+    finish_service_span,
 };
 
 pub type OperationNormalizer = fn(method: &str, path: &str) -> String;
@@ -55,10 +56,17 @@ pub async fn axum_http_service_telemetry(
     let path = request.uri().path().to_string();
     let operation = (telemetry.operation_normalizer)(&method, &path);
     let started = Instant::now();
+    let span = telemetry.obs.service_request_span(
+        telemetry.component.as_ref(),
+        &operation,
+        ServiceProtocol::Http,
+        &[],
+    );
     let response = next.run(request).await;
     let status = response.status();
     let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
     let status_label = service_status_from_http(status);
+    finish_service_span(&span, status_label);
     telemetry.obs.record_service_request(
         telemetry.component.as_ref(),
         &operation,

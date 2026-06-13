@@ -14,12 +14,16 @@ mod mesh_identity;
 mod semconv;
 mod service_standard;
 mod types;
+#[cfg(feature = "runtime")]
+mod runtime;
 #[cfg(feature = "axum")]
 mod axum_service;
 
 #[cfg(feature = "axum")]
 pub use axum_service::*;
 pub use mesh_identity::*;
+#[cfg(feature = "runtime")]
+pub use runtime::*;
 pub use semconv::*;
 pub use service_standard::*;
 pub use types::{

@@ -376,7 +376,14 @@ pub trait ServiceInstrumentationExt: ObsHandle {
     }
 
     fn record_build_info(&self, version: &str) {
-        self.metric(metric::PF_SERVICE_BUILD_INFO, 1.0, &[("version", version)]);
+        self.metric(
+            metric::PF_SERVICE_BUILD_INFO,
+            1.0,
+            &[
+                (attr::PF_COMPONENT_ID_LABEL, current_component_id()),
+                ("version", version),
+            ],
+        );
     }
 
     fn log_service_event(

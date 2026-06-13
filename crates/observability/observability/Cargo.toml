@@ -28,7 +28,8 @@ config = ["serde"]
 otel = ["dep:otel"]
 prometheus = ["dep:obs_prometheus", "obs_prometheus/prometheus-federation", "obs_prometheus/structured-logging"]
 prometheus-pushgateway = ["prometheus", "obs_prometheus/pushgateway-client"]
-axum = ["dep:axum", "dep:tokio"]
+runtime = ["dep:tokio"]
+axum = ["dep:axum", "runtime"]
 
 # Convenience feature for "turn everything on".
 full = ["otel", "prometheus"]

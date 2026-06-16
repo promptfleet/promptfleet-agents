@@ -471,7 +471,7 @@ pub(crate) fn policy_to_engine_config(
     request_defaults: Option<&LlmRequestDefaults>,
 ) -> crate::agent::engine::EngineConfig {
     crate::agent::engine::EngineConfig {
-        max_turns: policy.max_turns.unwrap_or(10),
+        max_turns: Some(policy.max_turns.unwrap_or(10)),
         max_tool_calls: policy.max_tool_calls,
         wall_clock_timeout_ms: policy.wall_clock_timeout_ms,
         max_context_tokens: policy.max_context_tokens,

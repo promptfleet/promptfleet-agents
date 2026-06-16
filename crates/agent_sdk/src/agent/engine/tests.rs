@@ -190,7 +190,7 @@ mod tool_engine_tests {
         ]);
 
         let config = EngineConfig {
-            max_turns: 1,
+            max_turns: Some(1),
             ..Default::default()
         };
         let engine = ToolEngine::new(invoker, "test-model", echo_tools(), config);
@@ -806,7 +806,7 @@ mod core_loop_tests {
         ]);
 
         let config = EngineConfig {
-            max_turns: 1,
+            max_turns: Some(1),
             ..Default::default()
         };
 
@@ -829,6 +829,68 @@ mod core_loop_tests {
         .await;
 
         assert!(matches!(result, Err(EngineError::TurnLimit { .. })));
+    }
+
+    #[tokio::test]
+    async fn core_loop_none_turn_limit_allows_more_turns() {
+        let invoker = MockTurnInvoker::new(vec![
+            TurnResult {
+                content: String::new(),
+                tool_calls: vec![ToolCallInfo {
+                    index: 0,
+                    id: "c1".into(),
+                    name: "echo".into(),
+                    arguments_raw: "{}".into(),
+                }],
+                finish_reason: Some("tool_calls".into()),
+                usage: None,
+            },
+            TurnResult {
+                content: String::new(),
+                tool_calls: vec![ToolCallInfo {
+                    index: 0,
+                    id: "c2".into(),
+                    name: "echo".into(),
+                    arguments_raw: "{}".into(),
+                }],
+                finish_reason: Some("tool_calls".into()),
+                usage: None,
+            },
+            TurnResult {
+                content: "done".into(),
+                tool_calls: vec![],
+                finish_reason: Some("stop".into()),
+                usage: None,
+            },
+        ]);
+
+        let config = EngineConfig {
+            max_turns: None,
+            ..Default::default()
+        };
+
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("test".into()),
+            ..Default::default()
+        }];
+        let result = core_loop::execute(
+            &invoker,
+            "test",
+            &echo_tools(),
+            &config,
+            &mut messages,
+            &|_| {},
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("unlimited turn limit should allow completion");
+
+        assert_eq!(result.text.as_deref(), Some("done"));
+        assert_eq!(result.turns_used, 3);
+        assert_eq!(result.tool_calls_made, 2);
     }
 
     #[tokio::test]
@@ -908,7 +970,7 @@ mod core_loop_tests {
         }]);
 
         let config = EngineConfig {
-            max_turns: 1,
+            max_turns: Some(1),
             ..Default::default()
         };
 

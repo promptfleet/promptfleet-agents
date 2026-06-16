@@ -78,8 +78,8 @@ pub trait LlmTurnInvoker: Send + Sync {
 /// [`LlmPolicy`](crate::agent::llm_invoker::LlmPolicy).
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// Maximum LLM turns before the loop stops. Default: 10.
-    pub max_turns: usize,
+    /// Maximum LLM turns before the loop stops. `None` = unlimited. Default: 10.
+    pub max_turns: Option<usize>,
     /// Maximum total tool calls across all turns. `None` = unlimited.
     pub max_tool_calls: Option<usize>,
     /// Wall-clock timeout in milliseconds. `None` = no timeout.
@@ -95,7 +95,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            max_turns: 10,
+            max_turns: Some(10),
             max_tool_calls: None,
             wall_clock_timeout_ms: Some(120_000),
             max_context_tokens: None,
@@ -396,7 +396,7 @@ impl ToolEngineBuilder {
         let model = self.model.ok_or("ToolEngineBuilder: `model` is required")?;
 
         let config = EngineConfig {
-            max_turns: self.max_turns.unwrap_or(10),
+            max_turns: self.max_turns.or(Some(10)),
             max_tool_calls: self.max_tool_calls,
             wall_clock_timeout_ms: self.wall_clock_timeout_ms.or(Some(120_000)),
             max_context_tokens: self.max_context_tokens,

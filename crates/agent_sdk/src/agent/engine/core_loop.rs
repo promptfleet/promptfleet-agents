@@ -63,11 +63,13 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
         turns += 1;
 
         // ── Safety gates (checked before each LLM call) ─────────────
-        if turns as usize > config.max_turns {
-            on_event(AgentTraceEvent::Failed {
-                message: format!("Turn limit reached ({})", config.max_turns),
-            });
-            return Err(EngineError::TurnLimit { turns });
+        if let Some(max_turns) = config.max_turns {
+            if turns as usize > max_turns {
+                on_event(AgentTraceEvent::Failed {
+                    message: format!("Turn limit reached ({})", max_turns),
+                });
+                return Err(EngineError::TurnLimit { turns });
+            }
         }
         if let Some(timeout_ms) = config.wall_clock_timeout_ms {
             let elapsed = start_time.elapsed().as_millis() as u64;

@@ -95,6 +95,12 @@ pub enum StreamEvent {
 pub type LlmEventStream =
     std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, LlmError>> + Send>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamWireFormat {
+    ChatCompletions,
+    Responses,
+}
+
 // ---------------------------------------------------------------------------
 // SSE parser
 // ---------------------------------------------------------------------------
@@ -310,6 +316,124 @@ pub(crate) fn parse_chat_chunk(data: &str) -> Result<Vec<StreamEvent>, LlmError>
     Ok(events)
 }
 
+/// Parse one OpenAI Responses API streaming event into internal stream events.
+///
+/// Responses streams are semantic events (`response.output_text.delta`,
+/// `response.function_call_arguments.delta`, `response.completed`, ...), not
+/// Chat Completions `choices[].delta` chunks.
+pub(crate) fn parse_responses_chunk(data: &str) -> Result<Vec<StreamEvent>, LlmError> {
+    let json: serde_json::Value = serde_json::from_str(data)?;
+    let event_type = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let mut events = Vec::new();
+
+    match event_type {
+        "response.created" => {
+            let response = json.get("response");
+            let id = response
+                .and_then(|r| r.get("id"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let model = response
+                .and_then(|r| r.get("model"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            events.push(StreamEvent::StreamStart { id, model });
+        }
+        "response.output_text.delta" | "response.refusal.delta" => {
+            if let Some(delta) = json.get("delta").and_then(|v| v.as_str()) {
+                if !delta.is_empty() {
+                    events.push(StreamEvent::ContentDelta {
+                        delta: delta.to_string(),
+                    });
+                }
+            }
+        }
+        "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
+            if let Some(delta) = json.get("delta").and_then(|v| v.as_str()) {
+                if !delta.is_empty() {
+                    events.push(StreamEvent::ReasoningDelta {
+                        delta: delta.to_string(),
+                    });
+                }
+            }
+        }
+        "response.output_item.added" => {
+            if let Some(item) = json.get("item") {
+                if item.get("type").and_then(|v| v.as_str()) == Some("function_call") {
+                    let index = json.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0)
+                        as u32;
+                    let id = item
+                        .get("call_id")
+                        .or_else(|| item.get("id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = item
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !id.is_empty() && !name.is_empty() {
+                        events.push(StreamEvent::ToolCallStart { index, id, name });
+                    }
+                }
+            }
+        }
+        "response.function_call_arguments.delta" => {
+            let index = json.get("output_index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            if let Some(delta) = json.get("delta").and_then(|v| v.as_str()) {
+                if !delta.is_empty() {
+                    events.push(StreamEvent::ToolCallDelta {
+                        index,
+                        arguments_delta: delta.to_string(),
+                    });
+                }
+            }
+        }
+        "response.completed" => {
+            let response = json.get("response");
+            let usage = response
+                .and_then(|r| r.get("usage"))
+                .and_then(|u| serde_json::from_value::<Usage>(u.clone()).ok());
+            events.push(StreamEvent::Done {
+                finish_reason: Some("stop".to_string()),
+                usage,
+            });
+        }
+        "response.incomplete" => {
+            events.push(StreamEvent::Done {
+                finish_reason: Some("incomplete".to_string()),
+                usage: None,
+            });
+        }
+        "response.failed" | "error" => {
+            let message = json
+                .get("response")
+                .and_then(|r| r.get("error"))
+                .and_then(|e| e.get("message"))
+                .or_else(|| json.get("error").and_then(|e| e.get("message")))
+                .or_else(|| json.get("message"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Responses stream error")
+                .to_string();
+            events.push(StreamEvent::Error { message });
+        }
+        _ => {}
+    }
+
+    Ok(events)
+}
+
+fn parse_stream_chunk(
+    wire_format: StreamWireFormat,
+    data: &str,
+) -> Result<Vec<StreamEvent>, LlmError> {
+    match wire_format {
+        StreamWireFormat::ChatCompletions => parse_chat_chunk(data),
+        StreamWireFormat::Responses => parse_responses_chunk(data),
+    }
+}
+
 /// Some OpenAI-compatible gateways repeat `delta.role` on every SSE chunk. We emit at most one
 /// [`StreamEvent::StreamStart`] per HTTP response so the sequence matches the documented
 /// `StreamStart → … → Done` shape.
@@ -348,6 +472,14 @@ fn dedupe_stream_starts(
 /// the connection closes, or an error occurs.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
+    sse_event_stream_with_format(response, StreamWireFormat::ChatCompletions)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn sse_event_stream_with_format(
+    response: reqwest::Response,
+    wire_format: StreamWireFormat,
+) -> LlmEventStream {
     use futures::StreamExt;
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<StreamEvent, LlmError>>(64);
@@ -368,7 +500,7 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
                             return;
                         }
 
-                        match parse_chat_chunk(&data) {
+                        match parse_stream_chunk(wire_format, &data) {
                             Ok(events) => {
                                 for event in dedupe_stream_starts(events, &mut stream_start_sent) {
                                     if tx.send(Ok(event)).await.is_err() {
@@ -420,6 +552,13 @@ pub fn sse_event_stream(response: reqwest::Response) -> LlmEventStream {
 ///
 /// Like [`sse_event_stream`], repeated [`StreamEvent::StreamStart`] is deduped per response.
 pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
+    sse_event_stream_from_buffer_with_format(body, StreamWireFormat::ChatCompletions)
+}
+
+pub fn sse_event_stream_from_buffer_with_format(
+    body: Vec<u8>,
+    wire_format: StreamWireFormat,
+) -> LlmEventStream {
     let mut parser = SseParser::new();
     parser.feed(&body);
 
@@ -429,7 +568,7 @@ pub fn sse_event_stream_from_buffer(body: Vec<u8>) -> LlmEventStream {
         if data == "[DONE]" {
             break;
         }
-        match parse_chat_chunk(&data) {
+        match parse_stream_chunk(wire_format, &data) {
             Ok(events) => {
                 for event in dedupe_stream_starts(events, &mut stream_start_sent) {
                     all_events.push(Ok(event));
@@ -620,6 +759,117 @@ mod tests {
         assert_eq!(d2, "done1");
 
         assert!(p.next_typed_event().is_none());
+    }
+
+    // ── parse_responses_chunk ─────────────────────────────────────────
+
+    #[test]
+    fn parse_responses_chunk_maps_text_delta() {
+        let events =
+            parse_responses_chunk(r#"{"type":"response.output_text.delta","delta":"Hello"}"#)
+                .expect("responses text delta parses");
+
+        assert_eq!(
+            events,
+            vec![StreamEvent::ContentDelta {
+                delta: "Hello".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn parse_responses_chunk_maps_tool_call_start_and_arguments() {
+        let start_events = parse_responses_chunk(
+            r#"{"type":"response.output_item.added","output_index":2,"item":{"type":"function_call","id":"fc_123","call_id":"call_123","name":"lookup"}}"#,
+        )
+        .expect("responses tool start parses");
+        let delta_events = parse_responses_chunk(
+            r#"{"type":"response.function_call_arguments.delta","output_index":2,"delta":"{\"q\":\"hi\"}"}"#,
+        )
+        .expect("responses tool args parse");
+
+        assert_eq!(
+            start_events,
+            vec![StreamEvent::ToolCallStart {
+                index: 2,
+                id: "call_123".to_string(),
+                name: "lookup".to_string()
+            }]
+        );
+        assert_eq!(
+            delta_events,
+            vec![StreamEvent::ToolCallDelta {
+                index: 2,
+                arguments_delta: "{\"q\":\"hi\"}".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn parse_responses_chunk_maps_completed_usage() {
+        let events = parse_responses_chunk(
+            r#"{"type":"response.completed","response":{"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}}"#,
+        )
+        .expect("responses completed parses");
+
+        assert_eq!(
+            events,
+            vec![StreamEvent::Done {
+                finish_reason: Some("stop".to_string()),
+                usage: Some(Usage {
+                    prompt_tokens: Some(3),
+                    completion_tokens: Some(4),
+                    total_tokens: Some(7)
+                })
+            }]
+        );
+    }
+
+    #[test]
+    fn buffer_stream_uses_responses_wire_format() {
+        let transcript = concat!(
+            "event: response.created\n",
+            "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\",\"model\":\"gpt-5\"}}\n\n",
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\"}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}}\n\n",
+        );
+
+        let events = futures::executor::block_on(async {
+            use futures::StreamExt;
+
+            let mut stream = sse_event_stream_from_buffer_with_format(
+                transcript.as_bytes().to_vec(),
+                StreamWireFormat::Responses,
+            );
+            let mut events = Vec::new();
+            while let Some(item) = stream.next().await {
+                events.push(item.expect("stream item"));
+            }
+            events
+        });
+
+        assert_eq!(
+            events,
+            vec![
+                StreamEvent::StreamStart {
+                    id: Some("resp_123".to_string()),
+                    model: Some("gpt-5".to_string())
+                },
+                StreamEvent::ContentDelta {
+                    delta: "Hi".to_string()
+                },
+                StreamEvent::Done {
+                    finish_reason: Some("stop".to_string()),
+                    usage: Some(Usage {
+                        prompt_tokens: Some(1),
+                        completion_tokens: Some(1),
+                        total_tokens: Some(2)
+                    })
+                }
+            ]
+        );
     }
 
     // ── parse_chat_chunk: content ──────────────────────────────────────

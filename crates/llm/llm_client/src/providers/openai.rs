@@ -1222,8 +1222,15 @@ impl OpenAIClient {
         log::info!("OpenAIClient::llm_stream mode={:?} endpoint={}", mode, path);
 
         let response = self.inner.post_sse(path, payload).await?;
+        let wire_format = match mode {
+            ApiMode::Chat => crate::stream::StreamWireFormat::ChatCompletions,
+            ApiMode::Responses | ApiMode::Auto => crate::stream::StreamWireFormat::Responses,
+        };
 
-        Ok(crate::stream::sse_event_stream(response))
+        Ok(crate::stream::sse_event_stream_with_format(
+            response,
+            wire_format,
+        ))
     }
 }
 
@@ -1261,7 +1268,14 @@ impl OpenAIClient {
         );
 
         let body = self.inner.post_sse_buffered(path, payload).await?;
-        Ok(crate::stream::sse_event_stream_from_buffer(body))
+        let wire_format = match mode {
+            ApiMode::Chat => crate::stream::StreamWireFormat::ChatCompletions,
+            ApiMode::Responses | ApiMode::Auto => crate::stream::StreamWireFormat::Responses,
+        };
+        Ok(crate::stream::sse_event_stream_from_buffer_with_format(
+            body,
+            wire_format,
+        ))
     }
 }
 

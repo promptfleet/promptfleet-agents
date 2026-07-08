@@ -405,6 +405,29 @@ pub trait ServiceInstrumentationExt: ObsHandle {
             ],
         );
     }
+
+    fn log_service_http_event(
+        &self,
+        level: LogLevel,
+        message: &str,
+        component: &str,
+        operation: &str,
+        status: ServiceStatus,
+        http_status_code: u16,
+    ) {
+        let http_status_code = http_status_code.to_string();
+        self.log_kv(
+            level,
+            message,
+            &[
+                (attr::PF_COMPONENT_ID_LABEL, current_component_id()),
+                (attr::COMPONENT, component),
+                (attr::OPERATION, operation),
+                (attr::STATUS, status.as_str()),
+                ("http.status_code", http_status_code.as_str()),
+            ],
+        );
+    }
 }
 
 impl<T: ObsHandle + ?Sized> ServiceInstrumentationExt for T {}

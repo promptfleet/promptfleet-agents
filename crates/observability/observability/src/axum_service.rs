@@ -66,6 +66,7 @@ pub async fn axum_http_service_telemetry(
     let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
     let status_label = service_status_from_http(status);
     finish_service_span(&span, status_label);
+    span.add_attribute("http.status_code", status.as_u16().to_string().as_str());
     telemetry.obs.record_service_request(
         telemetry.component.as_ref(),
         &operation,
@@ -73,7 +74,7 @@ pub async fn axum_http_service_telemetry(
         status_label,
         latency_ms,
     );
-    telemetry.obs.log_service_event(
+    telemetry.obs.log_service_http_event(
         if status.is_server_error() {
             LogLevel::Warn
         } else {
@@ -83,12 +84,13 @@ pub async fn axum_http_service_telemetry(
         telemetry.component.as_ref(),
         &operation,
         status_label,
+        status.as_u16(),
     );
     response
 }
 
 pub fn service_status_from_http(status: StatusCode) -> ServiceStatus {
-    if status.is_client_error() || status.is_server_error() {
+    if status.is_server_error() {
         ServiceStatus::Error
     } else {
         ServiceStatus::Ok
@@ -104,4 +106,29 @@ pub fn default_route_operation(method: &str, path: &str) -> String {
             .replace('/', "_")
     };
     format!("{}_{}", method.to_ascii_lowercase(), route)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_status_from_http_treats_client_errors_as_handled() {
+        assert_eq!(
+            service_status_from_http(StatusCode::UNAUTHORIZED),
+            ServiceStatus::Ok
+        );
+        assert_eq!(
+            service_status_from_http(StatusCode::NOT_FOUND),
+            ServiceStatus::Ok
+        );
+    }
+
+    #[test]
+    fn service_status_from_http_keeps_server_errors_as_errors() {
+        assert_eq!(
+            service_status_from_http(StatusCode::INTERNAL_SERVER_ERROR),
+            ServiceStatus::Error
+        );
+    }
 }

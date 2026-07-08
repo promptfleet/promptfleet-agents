@@ -19,7 +19,7 @@ pub fn agent_io_sse_stream(
         let mut events = Box::pin(events);
         while let Some(event) = events.next().await {
             let data = to_string(&event).unwrap_or_else(|_| "{}".to_string());
-            yield Ok::<Event, Infallible>(Event::default().event("run_event").data(data));
+            yield Ok::<Event, Infallible>(Event::default().data(data));
         }
     };
 

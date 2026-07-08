@@ -35,7 +35,9 @@ use axum::{Json, Router};
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use futures_util::StreamExt;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+use serde_json::Value;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use uuid::Uuid;
 
@@ -236,40 +238,115 @@ impl ResumeValidationError {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AgUiRunRequest {
-    message: String,
+pub struct RunAgentInput {
     #[serde(default)]
-    history: Vec<HistoryItem>,
+    pub thread_id: String,
     #[serde(default)]
-    thread_id: Option<String>,
+    pub run_id: String,
     #[serde(default)]
-    interaction_response: Option<serde_json::Value>,
+    pub parent_run_id: Option<String>,
+    #[serde(default)]
+    pub state: Value,
+    #[serde(default)]
+    pub messages: Vec<RunAgentMessage>,
+    #[serde(default)]
+    pub tools: Vec<Value>,
+    #[serde(default)]
+    pub context: Vec<Value>,
+    #[serde(default)]
+    pub forwarded_props: Value,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HistoryItem {
-    role: String,
-    content: String,
+pub struct RunAgentMessage {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub role: String,
+    #[serde(default)]
+    pub content: Option<Value>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Option<Value>,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+impl RunAgentInput {
+    pub fn normalized_thread_id(&self) -> String {
+        (!self.thread_id.trim().is_empty())
+            .then(|| self.thread_id.clone())
+            .unwrap_or_else(|| format!("thread-{}", Uuid::new_v4()))
+    }
+
+    pub fn normalized_run_id(&self) -> String {
+        (!self.run_id.trim().is_empty())
+            .then(|| self.run_id.clone())
+            .unwrap_or_else(|| format!("run-{}", Uuid::new_v4()))
+    }
+
+    pub fn forwarded_prop(&self, camel_case_key: &str, snake_case_key: &str) -> Option<Value> {
+        self.forwarded_props
+            .get(camel_case_key)
+            .or_else(|| self.forwarded_props.get(snake_case_key))
+            .cloned()
+    }
+
+    pub fn interaction_response(&self) -> Option<Value> {
+        self.forwarded_prop("interactionResponse", "interaction_response")
+    }
+
+    pub fn app_context(&self) -> Option<Value> {
+        self.forwarded_prop("appContext", "app_context")
+    }
+
+    pub fn split_prompt_and_history(&self) -> (AgentMessage, Vec<AgentMessage>) {
+        let interaction_response = self.interaction_response();
+        let mut messages: Vec<AgentMessage> = self
+            .messages
+            .iter()
+            .map(run_agent_message_to_agent_message)
+            .collect();
+        let prompt_index = messages
+            .iter()
+            .rposition(|message| message.role == Role::User)
+            .or_else(|| (!messages.is_empty()).then_some(messages.len() - 1));
+        let mut user_message = prompt_index
+            .map(|index| messages.remove(index))
+            .unwrap_or_else(|| AgentMessage::user_text(""));
+        if let Some(response) = interaction_response {
+            user_message
+                .parts
+                .push(ContentPart::Data(serde_json::json!({
+                    "interaction_response": response
+                })));
+        }
+        if let Some(context) = self.app_context() {
+            user_message
+                .parts
+                .push(ContentPart::Data(serde_json::json!({
+                    "app_context": context
+                })));
+        }
+        (user_message, messages)
+    }
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 async fn agui_run(
     State(state): State<Arc<AgUiState>>,
     headers: HeaderMap,
-    Json(payload): Json<AgUiRunRequest>,
+    Json(payload): Json<RunAgentInput>,
 ) -> Response {
-    let run_id = format!("run-{}", Uuid::new_v4());
-    let thread_id = payload
-        .thread_id
-        .clone()
-        .unwrap_or_else(|| format!("thread-{}", Uuid::new_v4()));
+    let run_id = payload.normalized_run_id();
+    let thread_id = payload.normalized_thread_id();
     let message_id = format!("msg-{}", Uuid::new_v4());
 
-    if let Some(response) = payload.interaction_response.as_ref() {
+    let interaction_response = payload.interaction_response();
+    if let Some(response) = interaction_response.as_ref() {
         if let Err(err) = state
             .validate_and_consume_interaction_response(&thread_id, extract_interaction_id(response))
         {
@@ -277,12 +354,7 @@ async fn agui_run(
         }
     }
 
-    let user_message = build_user_message(payload.message, payload.interaction_response);
-    let request_history = payload
-        .history
-        .into_iter()
-        .map(history_item_to_agent_message)
-        .collect();
+    let (user_message, request_history) = payload.split_prompt_and_history();
     let history = state.history_for_thread(&thread_id, request_history);
     let request_headers =
         Arc::new(protocol_transport_core::sanitize_header_map(&headers).into_map());
@@ -365,25 +437,44 @@ async fn agui_run(
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-fn history_item_to_agent_message(item: HistoryItem) -> AgentMessage {
-    let role = if item.role == "assistant" {
-        Role::Agent
-    } else {
-        Role::User
+fn run_agent_message_to_agent_message(message: &RunAgentMessage) -> AgentMessage {
+    let role = match message.role.as_str() {
+        "assistant" => Role::Agent,
+        "system" | "developer" => Role::System,
+        _ => Role::User,
     };
-    AgentMessage::new(role, vec![ContentPart::Text(item.content)])
+    let mut parts = content_value_to_parts(message.content.as_ref());
+    if let Some(tool_calls) = &message.tool_calls {
+        parts.push(ContentPart::Data(
+            serde_json::json!({ "toolCalls": tool_calls }),
+        ));
+    }
+    if parts.is_empty() {
+        parts.push(ContentPart::Text(String::new()));
+    }
+    AgentMessage::new(role, parts)
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-fn build_user_message(
-    message: String,
-    interaction_response: Option<serde_json::Value>,
-) -> AgentMessage {
-    let mut parts = vec![ContentPart::Text(message)];
-    if let Some(response) = interaction_response {
-        parts.push(ContentPart::Data(response));
+fn content_value_to_parts(content: Option<&Value>) -> Vec<ContentPart> {
+    match content {
+        Some(Value::String(text)) => vec![ContentPart::Text(text.clone())],
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.get("text")
+                    .and_then(Value::as_str)
+                    .map(|text| ContentPart::Text(text.to_string()))
+                    .unwrap_or_else(|| ContentPart::Data(item.clone()))
+            })
+            .collect(),
+        Some(Value::Null) | None => Vec::new(),
+        Some(value) => value
+            .get("text")
+            .and_then(Value::as_str)
+            .map(|text| vec![ContentPart::Text(text.to_string())])
+            .unwrap_or_else(|| vec![ContentPart::Data(value.clone())]),
     }
-    AgentMessage::new(Role::User, parts)
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]

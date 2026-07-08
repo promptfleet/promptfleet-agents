@@ -55,16 +55,16 @@ async fn test_tool_call_produces_expected_ag_ui_sequence() {
     assert_eq!(
         types,
         vec![
-            "step_started",
-            "tool_call_start",
-            "tool_call_args",
-            "tool_call_end",
-            "tool_call_result",
-            "step_finished",
-            "step_started",
-            "text_message_content",
-            "step_finished",
-            "run_finished",
+            "STEP_STARTED",
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+            "TOOL_CALL_RESULT",
+            "STEP_FINISHED",
+            "STEP_STARTED",
+            "TEXT_MESSAGE_CONTENT",
+            "STEP_FINISHED",
+            "RUN_FINISHED",
         ],
     );
 }
@@ -175,17 +175,17 @@ async fn test_driver_with_test_pipeline() {
     assert_eq!(
         types,
         vec![
-            "run_started",
-            "step_started",
-            "tool_call_start",
-            "tool_call_args",
-            "tool_call_end",
-            "tool_call_result",
-            "step_finished",
-            "step_started",
-            "text_message_content",
-            "step_finished",
-            "run_finished",
+            "RUN_STARTED",
+            "STEP_STARTED",
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+            "TOOL_CALL_RESULT",
+            "STEP_FINISHED",
+            "STEP_STARTED",
+            "TEXT_MESSAGE_CONTENT",
+            "STEP_FINISHED",
+            "RUN_FINISHED",
         ]
     );
 }

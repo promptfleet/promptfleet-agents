@@ -13,10 +13,10 @@ mod agent_io_serialization {
             thread_id: "t1".into(),
             run_id: "r1".into(),
         };
-        assert_eq!(wire_type(&e), "run_started");
+        assert_eq!(wire_type(&e), "RUN_STARTED");
         let v = serde_json::to_value(&e).unwrap();
-        assert_eq!(v["thread_id"], "t1");
-        assert_eq!(v["run_id"], "r1");
+        assert_eq!(v["threadId"], "t1");
+        assert_eq!(v["runId"], "r1");
     }
 
     #[test]
@@ -26,7 +26,7 @@ mod agent_io_serialization {
             run_id: "r1".into(),
             result: Some(json!({"usage": {"total_tokens": 42}})),
         };
-        assert_eq!(wire_type(&e), "run_finished");
+        assert_eq!(wire_type(&e), "RUN_FINISHED");
     }
 
     #[test]
@@ -35,7 +35,7 @@ mod agent_io_serialization {
             message: "boom".into(),
             code: Some("E1".into()),
         };
-        assert_eq!(wire_type(&e), "run_error");
+        assert_eq!(wire_type(&e), "RUN_ERROR");
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["message"], "boom");
         assert_eq!(v["code"], "E1");
@@ -56,7 +56,7 @@ mod agent_io_serialization {
         let e = AgentIoEvent::StepStarted {
             step_name: "turn_1".into(),
         };
-        assert_eq!(wire_type(&e), "step_started");
+        assert_eq!(wire_type(&e), "STEP_STARTED");
     }
 
     #[test]
@@ -64,7 +64,7 @@ mod agent_io_serialization {
         let e = AgentIoEvent::StepFinished {
             step_name: "turn_2".into(),
         };
-        assert_eq!(wire_type(&e), "step_finished");
+        assert_eq!(wire_type(&e), "STEP_FINISHED");
     }
 
     #[test]
@@ -73,7 +73,7 @@ mod agent_io_serialization {
             message_id: "m1".into(),
             role: "assistant".into(),
         };
-        assert_eq!(wire_type(&e), "text_message_start");
+        assert_eq!(wire_type(&e), "TEXT_MESSAGE_START");
     }
 
     #[test]
@@ -82,7 +82,7 @@ mod agent_io_serialization {
             message_id: "m1".into(),
             delta: "hello".into(),
         };
-        assert_eq!(wire_type(&e), "text_message_content");
+        assert_eq!(wire_type(&e), "TEXT_MESSAGE_CONTENT");
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["delta"], "hello");
     }
@@ -92,7 +92,7 @@ mod agent_io_serialization {
         let e = AgentIoEvent::TextMessageEnd {
             message_id: "m1".into(),
         };
-        assert_eq!(wire_type(&e), "text_message_end");
+        assert_eq!(wire_type(&e), "TEXT_MESSAGE_END");
     }
 
     #[test]
@@ -101,33 +101,33 @@ mod agent_io_serialization {
             wire_type(&AgentIoEvent::ReasoningStart {
                 message_id: "r".into()
             }),
-            "reasoning_start"
+            "REASONING_START"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ReasoningMessageStart {
                 message_id: "r".into(),
                 role: "assistant".into()
             }),
-            "reasoning_message_start"
+            "REASONING_MESSAGE_START"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ReasoningMessageContent {
                 message_id: "r".into(),
                 delta: "think".into()
             }),
-            "reasoning_message_content"
+            "REASONING_MESSAGE_CONTENT"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ReasoningMessageEnd {
                 message_id: "r".into()
             }),
-            "reasoning_message_end"
+            "REASONING_MESSAGE_END"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ReasoningEnd {
                 message_id: "r".into()
             }),
-            "reasoning_end"
+            "REASONING_END"
         );
     }
 
@@ -139,20 +139,20 @@ mod agent_io_serialization {
                 tool_call_name: "search".into(),
                 parent_message_id: None,
             }),
-            "tool_call_start"
+            "TOOL_CALL_START"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ToolCallArgs {
                 tool_call_id: "c1".into(),
                 delta: "{\"q\":".into(),
             }),
-            "tool_call_args"
+            "TOOL_CALL_ARGS"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ToolCallEnd {
                 tool_call_id: "c1".into(),
             }),
-            "tool_call_end"
+            "TOOL_CALL_END"
         );
         assert_eq!(
             wire_type(&AgentIoEvent::ToolCallResult {
@@ -161,68 +161,25 @@ mod agent_io_serialization {
                 content: json!("ok"),
                 role: Some("tool".into()),
             }),
-            "tool_call_result"
+            "TOOL_CALL_RESULT"
         );
     }
 
     #[test]
-    fn delegation_lifecycle_wire_names() {
-        assert_eq!(
-            wire_type(&AgentIoEvent::DelegationStarted {
-                delegation_id: "d1".into(),
-                tool_call_id: "c1".into(),
-                subagent: "planner".into(),
-                task_id: Some("t1".into()),
-                metadata: None,
+    fn pf_extensions_use_custom_wire_type() {
+        let event = AgentIoEvent::Custom {
+            name: "delegation_started".into(),
+            value: json!({
+                "delegationId": "d1",
+                "toolCallId": "c1",
+                "subagent": "planner",
             }),
-            "delegation_started"
-        );
-        assert_eq!(
-            wire_type(&AgentIoEvent::DelegationProgress {
-                delegation_id: "d1".into(),
-                tool_call_id: "c1".into(),
-                subagent: "planner".into(),
-                task_id: Some("t1".into()),
-                status: "working".into(),
-                message: "planning".into(),
-                metadata: None,
-            }),
-            "delegation_progress"
-        );
-        assert_eq!(
-            wire_type(&AgentIoEvent::DelegationFinished {
-                delegation_id: "d1".into(),
-                tool_call_id: "c1".into(),
-                subagent: "planner".into(),
-                task_id: Some("t1".into()),
-                result: None,
-                metadata: None,
-            }),
-            "delegation_finished"
-        );
-        assert_eq!(
-            wire_type(&AgentIoEvent::DelegationFailed {
-                delegation_id: "d1".into(),
-                tool_call_id: "c1".into(),
-                subagent: "planner".into(),
-                task_id: Some("t1".into()),
-                error_kind: "transport".into(),
-                message: "boom".into(),
-                metadata: None,
-            }),
-            "delegation_failed"
-        );
-        assert_eq!(
-            wire_type(&AgentIoEvent::DelegationInputRequired {
-                delegation_id: "d1".into(),
-                tool_call_id: "c1".into(),
-                subagent: "planner".into(),
-                task_id: Some("t1".into()),
-                message: "Need approval".into(),
-                metadata: None,
-            }),
-            "delegation_input_required"
-        );
+        };
+        assert_eq!(wire_type(&event), "CUSTOM");
+        let v = serde_json::to_value(&event).unwrap();
+        assert_eq!(v["type"], "CUSTOM");
+        assert_eq!(v["name"], "delegation_started");
+        assert_eq!(v["value"]["toolCallId"], "c1");
     }
 
     #[test]
@@ -233,7 +190,7 @@ mod agent_io_serialization {
             parent_message_id: None,
         };
         let v = serde_json::to_value(&e).unwrap();
-        assert!(v.get("parent_message_id").is_none());
+        assert!(v.get("parentMessageId").is_none());
     }
 
     #[test]
@@ -242,7 +199,7 @@ mod agent_io_serialization {
             name: "citations_updated".into(),
             value: json!({"items": []}),
         };
-        assert_eq!(wire_type(&e), "custom");
+        assert_eq!(wire_type(&e), "CUSTOM");
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["name"], "citations_updated");
     }
@@ -283,17 +240,17 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["step_started"]);
+        assert_eq!(wire_types(&out), vec!["STEP_STARTED"]);
     }
 
     #[test]
     fn content_delta_maps_to_text_message_content() {
         let out =
             map_trace_to_agent_io(AgentTraceEvent::ContentDelta { delta: "hi".into() }, &ctx());
-        assert_eq!(wire_types(&out), vec!["text_message_content"]);
+        assert_eq!(wire_types(&out), vec!["TEXT_MESSAGE_CONTENT"]);
         let v = serde_json::to_value(&out[0]).unwrap();
         assert_eq!(v["delta"], "hi");
-        assert_eq!(v["message_id"], "msg-1");
+        assert_eq!(v["messageId"], "msg-1");
     }
 
     #[test]
@@ -306,7 +263,7 @@ mod agent_io_mapper {
         );
         assert_eq!(
             wire_types(&out),
-            vec!["reasoning_start", "reasoning_message_start"]
+            vec!["REASONING_START", "REASONING_MESSAGE_START"]
         );
     }
 
@@ -318,7 +275,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["reasoning_message_content"]);
+        assert_eq!(wire_types(&out), vec!["REASONING_MESSAGE_CONTENT"]);
     }
 
     #[test]
@@ -331,7 +288,7 @@ mod agent_io_mapper {
         );
         assert_eq!(
             wire_types(&out),
-            vec!["reasoning_message_end", "reasoning_end"]
+            vec!["REASONING_MESSAGE_END", "REASONING_END"]
         );
     }
 
@@ -346,11 +303,11 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["tool_call_start"]);
+        assert_eq!(wire_types(&out), vec!["TOOL_CALL_START"]);
         let v = serde_json::to_value(&out[0]).unwrap();
-        assert_eq!(v["tool_call_id"], "call_1");
-        assert_eq!(v["tool_call_name"], "search");
-        assert_eq!(v["parent_message_id"], "msg-1");
+        assert_eq!(v["toolCallId"], "call_1");
+        assert_eq!(v["toolCallName"], "search");
+        assert_eq!(v["parentMessageId"], "msg-1");
     }
 
     #[test]
@@ -363,7 +320,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["tool_call_args"]);
+        assert_eq!(wire_types(&out), vec!["TOOL_CALL_ARGS"]);
     }
 
     #[test]
@@ -377,7 +334,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["tool_call_end"]);
+        assert_eq!(wire_types(&out), vec!["TOOL_CALL_END"]);
     }
 
     #[test]
@@ -393,7 +350,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["tool_call_result"]);
+        assert_eq!(wire_types(&out), vec!["TOOL_CALL_RESULT"]);
         let v = serde_json::to_value(&out[0]).unwrap();
         assert_eq!(v["content"]["data"], "found");
     }
@@ -407,7 +364,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["step_finished"]);
+        assert_eq!(wire_types(&out), vec!["STEP_FINISHED"]);
     }
 
     #[test]
@@ -423,10 +380,10 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["run_finished"]);
+        assert_eq!(wire_types(&out), vec!["RUN_FINISHED"]);
         let v = serde_json::to_value(&out[0]).unwrap();
-        assert_eq!(v["thread_id"], "thread-1");
-        assert_eq!(v["run_id"], "run-1");
+        assert_eq!(v["threadId"], "thread-1");
+        assert_eq!(v["runId"], "run-1");
     }
 
     #[test]
@@ -439,7 +396,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["custom"]);
+        assert_eq!(wire_types(&out), vec!["CUSTOM"]);
         let v = serde_json::to_value(&out[0]).unwrap();
         assert_eq!(v["name"], "progress_update");
     }
@@ -461,10 +418,11 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["delegation_progress"]);
+        assert_eq!(wire_types(&out), vec!["CUSTOM"]);
         let v = serde_json::to_value(&out[0]).unwrap();
-        assert_eq!(v["subagent"], "planner");
-        assert_eq!(v["tool_call_id"], "call_1");
+        assert_eq!(v["name"], "delegation_progress");
+        assert_eq!(v["value"]["subagent"], "planner");
+        assert_eq!(v["value"]["toolCallId"], "call_1");
     }
 
     #[test]
@@ -485,7 +443,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["delegation_started"]);
+        assert_eq!(wire_types(&out), vec!["CUSTOM"]);
     }
 
     #[test]
@@ -507,10 +465,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(
-            wire_types(&out),
-            vec!["delegation_finished", "tool_call_result"]
-        );
+        assert_eq!(wire_types(&out), vec!["CUSTOM", "TOOL_CALL_RESULT"]);
     }
 
     #[test]
@@ -536,10 +491,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(
-            wire_types(&out),
-            vec!["delegation_failed", "tool_call_result"]
-        );
+        assert_eq!(wire_types(&out), vec!["CUSTOM", "TOOL_CALL_RESULT"]);
     }
 
     #[test]
@@ -551,7 +503,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["custom"]);
+        assert_eq!(wire_types(&out), vec!["CUSTOM"]);
         let v = serde_json::to_value(&out[0]).unwrap();
         assert_eq!(v["name"], "context_summarized");
     }
@@ -564,7 +516,7 @@ mod agent_io_mapper {
             },
             &ctx(),
         );
-        assert_eq!(wire_types(&out), vec!["run_error"]);
+        assert_eq!(wire_types(&out), vec!["RUN_ERROR"]);
         let v = serde_json::to_value(&out[0]).unwrap();
         assert_eq!(v["message"], "timeout");
         assert_eq!(v["code"], "ENGINE_ERROR");
@@ -614,10 +566,10 @@ mod agent_io_mapper {
         assert_eq!(
             wire_types(&all),
             vec![
-                "tool_call_start",
-                "tool_call_args",
-                "tool_call_end",
-                "tool_call_result"
+                "TOOL_CALL_START",
+                "TOOL_CALL_ARGS",
+                "TOOL_CALL_END",
+                "TOOL_CALL_RESULT"
             ]
         );
     }
@@ -875,7 +827,7 @@ mod broadcast_lag_tests {
         let fast_task = tokio::spawn(async move {
             loop {
                 let item = fast.recv().await.expect("fast receiver should keep up");
-                if item == "run_finished" {
+                if item == "RUN_FINISHED" {
                     return true;
                 }
             }
@@ -890,7 +842,7 @@ mod broadcast_lag_tests {
         let lag = slow.recv().await.expect_err("slow receiver should lag");
         assert!(matches!(lag, RecvError::Lagged(_)));
 
-        broadcast.emit("run_finished".to_string());
+        broadcast.emit("RUN_FINISHED".to_string());
 
         let fast_seen_terminal = fast_task.await.expect("fast receiver task should complete");
         assert!(
@@ -901,7 +853,7 @@ mod broadcast_lag_tests {
         let mut slow_seen_terminal = false;
         for _ in 0..6 {
             match slow.recv().await {
-                Ok(item) if item == "run_finished" => {
+                Ok(item) if item == "RUN_FINISHED" => {
                     slow_seen_terminal = true;
                     break;
                 }
@@ -1129,7 +1081,7 @@ mod driver_tests {
             out.push(item);
         }
         let types: Vec<&str> = out.iter().map(AgentIoEvent::wire_type).collect();
-        assert_eq!(types, vec!["run_started", "tool_call_result", "custom"]);
+        assert_eq!(types, vec!["RUN_STARTED", "TOOL_CALL_RESULT", "CUSTOM"]);
     }
 
     #[tokio::test]
@@ -1161,7 +1113,7 @@ mod driver_tests {
         let types: Vec<&str> = out.iter().map(AgentIoEvent::wire_type).collect();
         assert_eq!(
             types,
-            vec!["run_started", "text_message_content", "run_finished"]
+            vec!["RUN_STARTED", "TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]
         );
     }
 

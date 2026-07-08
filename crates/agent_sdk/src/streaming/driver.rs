@@ -130,8 +130,8 @@ impl AgUiStream {
         self.pending.push_back(AgentIoEvent::Custom {
             name: "run_cancelled".to_string(),
             value: serde_json::json!({
-                "run_id": self.ctx.run_id,
-                "thread_id": self.ctx.thread_id,
+                "runId": self.ctx.run_id,
+                "threadId": self.ctx.thread_id,
             }),
         });
         self.finished = true;
@@ -386,8 +386,8 @@ mod tests {
         let names = collect_event_names(events).await;
         assert_eq!(
             names.first().map(String::as_str),
-            Some("run_started"),
-            "first event must be run_started, got: {:?}",
+            Some("RUN_STARTED"),
+            "first event must be RUN_STARTED, got: {:?}",
             names
         );
     }
@@ -402,7 +402,7 @@ mod tests {
             },
         ];
         let names = collect_event_names(events).await;
-        assert_eq!(names.first().map(String::as_str), Some("run_started"));
+        assert_eq!(names.first().map(String::as_str), Some("RUN_STARTED"));
         assert!(
             names.contains(&"interaction_requested".to_string()),
             "expected interaction_requested, got: {:?}",
@@ -414,8 +414,8 @@ mod tests {
             names
         );
         assert!(
-            !names.contains(&"run_finished".to_string()),
-            "run_finished must not appear when interaction pending, got: {:?}",
+            !names.contains(&"RUN_FINISHED".to_string()),
+            "RUN_FINISHED must not appear when interaction pending, got: {:?}",
             names
         );
     }
@@ -427,10 +427,10 @@ mod tests {
             usage: None,
         }];
         let names = collect_event_names(events).await;
-        assert_eq!(names.first().map(String::as_str), Some("run_started"));
+        assert_eq!(names.first().map(String::as_str), Some("RUN_STARTED"));
         assert!(
-            names.contains(&"run_finished".to_string()),
-            "expected run_finished, got: {:?}",
+            names.contains(&"RUN_FINISHED".to_string()),
+            "expected RUN_FINISHED, got: {:?}",
             names
         );
         assert!(

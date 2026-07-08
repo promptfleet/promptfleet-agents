@@ -396,7 +396,7 @@ mod tests {
             .expect("pipeline run");
 
         let mapped = result.mapped_events();
-        assert!(mapped.iter().any(|e| e.wire_type() == "tool_call_result"));
+        assert!(mapped.iter().any(|e| e.wire_type() == "TOOL_CALL_RESULT"));
     }
 
     #[tokio::test]
@@ -564,16 +564,16 @@ mod tests {
         assert_eq!(
             types,
             vec![
-                "step_started",
-                "reasoning_start",
-                "reasoning_message_start",
-                "reasoning_message_content",
-                "reasoning_message_content",
-                "reasoning_message_end",
-                "reasoning_end",
-                "text_message_content",
-                "step_finished",
-                "run_finished",
+                "STEP_STARTED",
+                "REASONING_START",
+                "REASONING_MESSAGE_START",
+                "REASONING_MESSAGE_CONTENT",
+                "REASONING_MESSAGE_CONTENT",
+                "REASONING_MESSAGE_END",
+                "REASONING_END",
+                "TEXT_MESSAGE_CONTENT",
+                "STEP_FINISHED",
+                "RUN_FINISHED",
             ]
         );
     }
@@ -594,12 +594,12 @@ mod tests {
             .iter()
             .map(|e| e.wire_type())
             .collect();
-        assert_eq!(types.last().copied(), Some("run_error"));
+        assert_eq!(types.last().copied(), Some("RUN_ERROR"));
 
         let capture = result.http_capture().expect("sse capture");
         capture.assert_terminal("run_event");
         let last_index = capture.frames.len().saturating_sub(1);
-        capture.assert_json_path_eq(last_index, "type", serde_json::json!("run_error"));
+        capture.assert_json_path_eq(last_index, "type", serde_json::json!("RUN_ERROR"));
     }
 
     #[tokio::test]
@@ -749,7 +749,7 @@ mod tests {
             .last()
             .map(|e| e.wire_type())
             .expect("request terminal event");
-        assert_eq!(streaming_terminal, "run_error");
-        assert_eq!(request_terminal, "run_error");
+        assert_eq!(streaming_terminal, "RUN_ERROR");
+        assert_eq!(request_terminal, "RUN_ERROR");
     }
 }

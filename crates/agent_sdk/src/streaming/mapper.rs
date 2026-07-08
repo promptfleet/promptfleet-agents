@@ -204,6 +204,13 @@ pub fn map_trace_to_agent_io(event: AgentTraceEvent, ctx: &IoEventContext) -> Ve
     }
 }
 
+fn custom_event(name: impl Into<String>, value: serde_json::Value) -> AgentIoEvent {
+    AgentIoEvent::Custom {
+        name: name.into(),
+        value,
+    }
+}
+
 fn delegation_event_from_handoff(
     from_agent: &str,
     to_agent: &str,
@@ -240,17 +247,20 @@ fn delegation_event_from_handoff(
         .and_then(|v| v.as_str())
         .map(ToString::to_string);
 
-    Some(AgentIoEvent::DelegationStarted {
-        delegation_id,
-        tool_call_id,
-        subagent,
-        task_id,
-        metadata: Some(json!({
+    Some(custom_event(
+        "delegation_started",
+        json!({
+            "delegationId": delegation_id,
+            "toolCallId": tool_call_id,
+            "subagent": subagent,
+            "taskId": task_id,
+            "metadata": {
             "fromAgent": from_agent,
             "toAgent": to_agent,
             "mode": meta.get("mode").cloned(),
-        })),
-    })
+            },
+        }),
+    ))
 }
 
 fn delegation_event_from_progress(
@@ -297,36 +307,45 @@ fn delegation_event_from_progress(
     });
 
     match state.as_str() {
-        "failed" => Some(AgentIoEvent::DelegationFailed {
-            delegation_id,
-            tool_call_id,
-            subagent,
-            task_id,
-            error_kind: meta
+        "failed" => Some(custom_event(
+            "delegation_failed",
+            json!({
+                "delegationId": delegation_id,
+                "toolCallId": tool_call_id,
+                "subagent": subagent,
+                "taskId": task_id,
+                "errorKind": meta
                 .get("error_kind")
                 .and_then(|v| v.as_str())
                 .unwrap_or("subagent_failed")
                 .to_string(),
-            message: message.to_string(),
-            metadata: Some(passthrough_meta),
-        }),
-        "inputrequired" => Some(AgentIoEvent::DelegationInputRequired {
-            delegation_id,
-            tool_call_id,
-            subagent,
-            task_id,
-            message: message.to_string(),
-            metadata: Some(passthrough_meta),
-        }),
-        _ => Some(AgentIoEvent::DelegationProgress {
-            delegation_id,
-            tool_call_id,
-            subagent,
-            task_id,
-            status: state,
-            message: message.to_string(),
-            metadata: Some(passthrough_meta),
-        }),
+                "message": message,
+                "metadata": passthrough_meta,
+            }),
+        )),
+        "inputrequired" => Some(custom_event(
+            "delegation_input_required",
+            json!({
+                "delegationId": delegation_id,
+                "toolCallId": tool_call_id,
+                "subagent": subagent,
+                "taskId": task_id,
+                "message": message,
+                "metadata": passthrough_meta,
+            }),
+        )),
+        _ => Some(custom_event(
+            "delegation_progress",
+            json!({
+                "delegationId": delegation_id,
+                "toolCallId": tool_call_id,
+                "subagent": subagent,
+                "taskId": task_id,
+                "status": state,
+                "message": message,
+                "metadata": passthrough_meta,
+            }),
+        )),
     }
 }
 
@@ -343,18 +362,21 @@ fn delegation_events_from_tool_result(
             .get("task_id")
             .and_then(|v| v.as_str())
             .map(ToString::to_string);
-        return vec![AgentIoEvent::DelegationFinished {
-            delegation_id: result
+        return vec![custom_event(
+            "delegation_finished",
+            json!({
+                "delegationId": result
                 .get("delegation_id")
                 .and_then(|v| v.as_str())
                 .unwrap_or(tool_call_id)
                 .to_string(),
-            tool_call_id: tool_call_id.to_string(),
-            subagent: subagent.to_string(),
-            task_id,
-            result: result.get("result").cloned(),
-            metadata: Some(json!({ "result": result })),
-        }];
+                "toolCallId": tool_call_id,
+                "subagent": subagent,
+                "taskId": task_id,
+                "result": result.get("result").cloned(),
+                "metadata": { "result": result },
+            }),
+        )];
     }
 
     let Some(error_obj) = result.get("error").and_then(|v| v.as_object()) else {
@@ -364,38 +386,41 @@ fn delegation_events_from_tool_result(
         return Vec::new();
     }
 
-    vec![AgentIoEvent::DelegationFailed {
-        delegation_id: error_obj
+    vec![custom_event(
+        "delegation_failed",
+        json!({
+            "delegationId": error_obj
             .get("delegation_id")
             .and_then(|v| v.as_str())
             .unwrap_or(tool_call_id)
             .to_string(),
-        tool_call_id: error_obj
+            "toolCallId": error_obj
             .get("tool_call_id")
             .and_then(|v| v.as_str())
             .unwrap_or(tool_call_id)
             .to_string(),
-        subagent: error_obj
+            "subagent": error_obj
             .get("agent_name")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string(),
-        task_id: error_obj
+            "taskId": error_obj
             .get("task_id")
             .and_then(|v| v.as_str())
             .map(ToString::to_string),
-        error_kind: error_obj
+            "errorKind": error_obj
             .get("error_kind")
             .and_then(|v| v.as_str())
             .unwrap_or("subagent_failed")
             .to_string(),
-        message: error_obj
+            "message": error_obj
             .get("message")
             .and_then(|v| v.as_str())
             .unwrap_or("delegation failed")
             .to_string(),
-        metadata: Some(serde_json::Value::Object(error_obj.clone())),
-    }]
+            "metadata": serde_json::Value::Object(error_obj.clone()),
+        }),
+    )]
 }
 
 pub fn map_trace_to_stream_response(

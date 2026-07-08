@@ -2,7 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(
+    tag = "type",
+    rename_all = "SCREAMING_SNAKE_CASE",
+    rename_all_fields = "camelCase"
+)]
 pub enum AgentIoEvent {
     RunStarted {
         thread_id: String,
@@ -74,58 +78,6 @@ pub enum AgentIoEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         role: Option<String>,
     },
-    DelegationStarted {
-        delegation_id: String,
-        tool_call_id: String,
-        subagent: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        task_id: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<Value>,
-    },
-    DelegationProgress {
-        delegation_id: String,
-        tool_call_id: String,
-        subagent: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        task_id: Option<String>,
-        status: String,
-        message: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<Value>,
-    },
-    DelegationFinished {
-        delegation_id: String,
-        tool_call_id: String,
-        subagent: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        task_id: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        result: Option<Value>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<Value>,
-    },
-    DelegationFailed {
-        delegation_id: String,
-        tool_call_id: String,
-        subagent: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        task_id: Option<String>,
-        error_kind: String,
-        message: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<Value>,
-    },
-    DelegationInputRequired {
-        delegation_id: String,
-        tool_call_id: String,
-        subagent: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        task_id: Option<String>,
-        message: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<Value>,
-    },
     Custom {
         name: String,
         value: Value,
@@ -135,29 +87,24 @@ pub enum AgentIoEvent {
 impl AgentIoEvent {
     pub fn wire_type(&self) -> &'static str {
         match self {
-            Self::RunStarted { .. } => "run_started",
-            Self::RunFinished { .. } => "run_finished",
-            Self::RunError { .. } => "run_error",
-            Self::StepStarted { .. } => "step_started",
-            Self::StepFinished { .. } => "step_finished",
-            Self::TextMessageStart { .. } => "text_message_start",
-            Self::TextMessageContent { .. } => "text_message_content",
-            Self::TextMessageEnd { .. } => "text_message_end",
-            Self::ReasoningStart { .. } => "reasoning_start",
-            Self::ReasoningMessageStart { .. } => "reasoning_message_start",
-            Self::ReasoningMessageContent { .. } => "reasoning_message_content",
-            Self::ReasoningMessageEnd { .. } => "reasoning_message_end",
-            Self::ReasoningEnd { .. } => "reasoning_end",
-            Self::ToolCallStart { .. } => "tool_call_start",
-            Self::ToolCallArgs { .. } => "tool_call_args",
-            Self::ToolCallEnd { .. } => "tool_call_end",
-            Self::ToolCallResult { .. } => "tool_call_result",
-            Self::DelegationStarted { .. } => "delegation_started",
-            Self::DelegationProgress { .. } => "delegation_progress",
-            Self::DelegationFinished { .. } => "delegation_finished",
-            Self::DelegationFailed { .. } => "delegation_failed",
-            Self::DelegationInputRequired { .. } => "delegation_input_required",
-            Self::Custom { .. } => "custom",
+            Self::RunStarted { .. } => "RUN_STARTED",
+            Self::RunFinished { .. } => "RUN_FINISHED",
+            Self::RunError { .. } => "RUN_ERROR",
+            Self::StepStarted { .. } => "STEP_STARTED",
+            Self::StepFinished { .. } => "STEP_FINISHED",
+            Self::TextMessageStart { .. } => "TEXT_MESSAGE_START",
+            Self::TextMessageContent { .. } => "TEXT_MESSAGE_CONTENT",
+            Self::TextMessageEnd { .. } => "TEXT_MESSAGE_END",
+            Self::ReasoningStart { .. } => "REASONING_START",
+            Self::ReasoningMessageStart { .. } => "REASONING_MESSAGE_START",
+            Self::ReasoningMessageContent { .. } => "REASONING_MESSAGE_CONTENT",
+            Self::ReasoningMessageEnd { .. } => "REASONING_MESSAGE_END",
+            Self::ReasoningEnd { .. } => "REASONING_END",
+            Self::ToolCallStart { .. } => "TOOL_CALL_START",
+            Self::ToolCallArgs { .. } => "TOOL_CALL_ARGS",
+            Self::ToolCallEnd { .. } => "TOOL_CALL_END",
+            Self::ToolCallResult { .. } => "TOOL_CALL_RESULT",
+            Self::Custom { .. } => "CUSTOM",
         }
     }
 }

@@ -1113,7 +1113,13 @@ mod driver_tests {
         let types: Vec<&str> = out.iter().map(AgentIoEvent::wire_type).collect();
         assert_eq!(
             types,
-            vec!["RUN_STARTED", "TEXT_MESSAGE_CONTENT", "RUN_FINISHED"]
+            vec![
+                "RUN_STARTED",
+                "TEXT_MESSAGE_START",
+                "TEXT_MESSAGE_CONTENT",
+                "TEXT_MESSAGE_END",
+                "RUN_FINISHED"
+            ]
         );
     }
 

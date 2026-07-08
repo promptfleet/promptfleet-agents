@@ -80,6 +80,8 @@ impl AgUiStreamDriver {
             pending: VecDeque::new(),
             summary: RunSummary::default(),
             started: false,
+            text_message_started: false,
+            text_message_ended: false,
             finished: false,
             cancellation_emitted: false,
         }
@@ -94,6 +96,8 @@ pub struct AgUiStream {
     pending: VecDeque<AgentIoEvent>,
     summary: RunSummary,
     started: bool,
+    text_message_started: bool,
+    text_message_ended: bool,
     finished: bool,
     cancellation_emitted: bool,
 }
@@ -127,6 +131,7 @@ impl AgUiStream {
         }
 
         self.summary.status = RunStatus::Cancelled;
+        self.maybe_emit_text_message_end();
         self.pending.push_back(AgentIoEvent::Custom {
             name: "run_cancelled".to_string(),
             value: serde_json::json!({
@@ -170,8 +175,38 @@ impl AgUiStream {
         }
     }
 
+    fn maybe_emit_text_message_start(&mut self) {
+        if self.text_message_started {
+            return;
+        }
+        self.text_message_started = true;
+        self.pending.push_back(AgentIoEvent::TextMessageStart {
+            message_id: self.ctx.message_id.clone(),
+            role: "assistant".to_string(),
+        });
+    }
+
+    fn maybe_emit_text_message_end(&mut self) {
+        if !self.text_message_started || self.text_message_ended {
+            return;
+        }
+        self.text_message_ended = true;
+        self.pending.push_back(AgentIoEvent::TextMessageEnd {
+            message_id: self.ctx.message_id.clone(),
+        });
+    }
+
     fn enqueue_events(&mut self, event: AgentTraceEvent) {
         self.update_summary(&event);
+        if matches!(event, AgentTraceEvent::ContentDelta { .. }) {
+            self.maybe_emit_text_message_start();
+        }
+        if matches!(
+            event,
+            AgentTraceEvent::Completed { .. } | AgentTraceEvent::Failed { .. }
+        ) {
+            self.maybe_emit_text_message_end();
+        }
 
         // When the run completes but an interaction was already requested, replace
         // run_finished with run_input_required so the frontend knows to show the
@@ -257,6 +292,10 @@ impl Stream for AgUiStream {
                     continue;
                 }
                 Poll::Ready(None) => {
+                    this.maybe_emit_text_message_end();
+                    if let Some(next) = this.pending.pop_front() {
+                        return Poll::Ready(Some(next));
+                    }
                     this.finished = true;
                     return Poll::Ready(None);
                 }

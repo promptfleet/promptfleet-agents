@@ -4,6 +4,7 @@ use crate::mcp_tools::error::McpToolError;
 use std::collections::HashMap;
 
 pub const MCP_FORWARDED_HEADERS_META_KEY: &str = "forwarded_headers";
+pub use protocol_transport_core::MCP_CALLER_AUTHORIZATION_HEADER;
 
 pub fn build_forwarded_headers_meta(
     request_headers: Option<&HashMap<String, String>>,
@@ -13,10 +14,16 @@ pub fn build_forwarded_headers_meta(
         return None;
     };
 
+    let delegated_authorization = request_headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(MCP_CALLER_AUTHORIZATION_HEADER))
+        .map(|(_, value)| value.clone());
     let mut forwarded = protocol_transport_core::sanitize_headers(request_headers).into_map();
     forwarded.retain(|name, _| !name.eq_ignore_ascii_case("mcp-session-id"));
-    if !include_authorization {
-        forwarded.retain(|name, _| !name.eq_ignore_ascii_case("authorization"));
+    forwarded.retain(|name, _| !name.eq_ignore_ascii_case(MCP_CALLER_AUTHORIZATION_HEADER));
+    forwarded.retain(|name, _| !name.eq_ignore_ascii_case("authorization"));
+    if include_authorization && let Some(authorization) = delegated_authorization {
+        forwarded.insert("authorization".to_string(), authorization);
     }
     if forwarded.is_empty() {
         return None;
@@ -169,7 +176,10 @@ pub trait McpToolSource: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{MCP_FORWARDED_HEADERS_META_KEY, build_forwarded_headers_meta, merge_request_meta};
+    use super::{
+        MCP_CALLER_AUTHORIZATION_HEADER, MCP_FORWARDED_HEADERS_META_KEY,
+        build_forwarded_headers_meta, merge_request_meta,
+    };
     use std::collections::HashMap;
 
     #[test]
@@ -195,6 +205,51 @@ mod tests {
         assert!(!forwarded.contains_key("authorization"));
         assert!(!forwarded.contains_key("mcp-session-id"));
         assert!(!forwarded.contains_key("content-length"));
+    }
+
+    #[test]
+    fn test_delegated_authorization_replaces_runtime_authorization_when_enabled() {
+        let headers = HashMap::from([
+            (
+                "authorization".to_string(),
+                "Bearer runtime-token".to_string(),
+            ),
+            (
+                MCP_CALLER_AUTHORIZATION_HEADER.to_string(),
+                "Bearer delegated-token".to_string(),
+            ),
+        ]);
+
+        let meta = build_forwarded_headers_meta(Some(&headers), true).expect("meta");
+        let forwarded = meta[MCP_FORWARDED_HEADERS_META_KEY]
+            .as_object()
+            .expect("forwarded headers object");
+
+        assert_eq!(
+            forwarded.get("authorization").and_then(|value| value.as_str()),
+            Some("Bearer delegated-token")
+        );
+        assert!(!forwarded.contains_key(MCP_CALLER_AUTHORIZATION_HEADER));
+    }
+
+    #[test]
+    fn test_delegated_authorization_is_removed_when_forwarding_is_disabled() {
+        let headers = HashMap::from([(
+            MCP_CALLER_AUTHORIZATION_HEADER.to_string(),
+            "Bearer delegated-token".to_string(),
+        )]);
+
+        assert!(build_forwarded_headers_meta(Some(&headers), false).is_none());
+    }
+
+    #[test]
+    fn test_runtime_authorization_is_not_forwarded_without_delegation_header() {
+        let headers = HashMap::from([(
+            "authorization".to_string(),
+            "Bearer runtime-token".to_string(),
+        )]);
+
+        assert!(build_forwarded_headers_meta(Some(&headers), true).is_none());
     }
 
     #[test]

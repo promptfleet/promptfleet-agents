@@ -634,18 +634,21 @@ mod core_loop_tests {
 
     struct MockTurnInvoker {
         turns: Mutex<Vec<TurnResult>>,
+        requests: Mutex<Vec<LlmRequest>>,
     }
 
     impl MockTurnInvoker {
         fn new(turns: Vec<TurnResult>) -> Self {
             Self {
                 turns: Mutex::new(turns),
+                requests: Mutex::new(Vec::new()),
             }
         }
     }
 
     impl LlmTurnInvoker for MockTurnInvoker {
-        fn invoke_turn(&self, _request: LlmRequest) -> TurnFuture {
+        fn invoke_turn(&self, request: LlmRequest) -> TurnFuture {
+            self.requests.lock().unwrap().push(request);
             let result = {
                 let mut guard = self.turns.lock().unwrap();
                 if guard.is_empty() {
@@ -738,7 +741,7 @@ mod core_loop_tests {
     }
 
     #[tokio::test]
-    async fn core_loop_tool_call_then_text() {
+    async fn core_loop_tool_call_then_text_preserves_second_turn_history() {
         let invoker = MockTurnInvoker::new(vec![
             TurnResult {
                 content: String::new(),
@@ -781,6 +784,21 @@ mod core_loop_tests {
         assert_eq!(result.text.as_deref(), Some("Done!"));
         assert_eq!(result.turns_used, 2);
         assert_eq!(result.tool_calls_made, 1);
+
+        let requests = invoker.requests.lock().unwrap();
+        let history = &requests[1].messages;
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[1].role, "assistant");
+        let tool_call = &history[1].tool_calls.as_ref().expect("tool calls")[0];
+        assert_eq!(tool_call.id, "call_1");
+        assert_eq!(tool_call.name, "echo");
+        assert_eq!(tool_call.arguments, serde_json::json!({"text": "hello"}));
+        assert_eq!(history[2].role, "tool");
+        assert_eq!(history[2].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(
+            history[2].content.as_deref(),
+            Some("{\"echoed\":{\"text\":\"hello\"}}")
+        );
     }
 
     #[tokio::test]

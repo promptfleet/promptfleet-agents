@@ -211,22 +211,54 @@ impl OpenAIClient {
         messages.iter().map(Self::map_openai_chat_message).collect()
     }
 
-    fn map_openai_responses_message(m: &ChatMessage) -> serde_json::Value {
-        let mut mapped = Self::map_openai_chat_message(m);
-        if m.role != "tool" {
-            if let Some(obj) = mapped.as_object_mut() {
-                if let Some(content) = Self::text_or_parts_content_responses(m) {
-                    obj.insert("content".to_string(), content);
-                }
-            }
+    fn map_openai_responses_message(m: &ChatMessage) -> Vec<serde_json::Value> {
+        if m.role == "tool" {
+            return vec![serde_json::json!({
+                "type": "function_call_output",
+                "call_id": m.tool_call_id.as_deref().unwrap_or_default(),
+                "output": m.content.as_deref().unwrap_or_default(),
+            })];
         }
-        mapped
+
+        let tool_calls = if m.role == "assistant" {
+            m.tool_calls.as_deref().unwrap_or_default()
+        } else {
+            &[]
+        };
+        let content = Self::text_or_parts_content_responses(m);
+        let has_content = content.as_ref().is_some_and(|value| match value {
+            serde_json::Value::String(text) => !text.is_empty(),
+            serde_json::Value::Array(parts) => !parts.is_empty(),
+            _ => true,
+        });
+        let mut items = Vec::with_capacity(tool_calls.len() + usize::from(has_content));
+
+        if has_content || tool_calls.is_empty() {
+            items.push(serde_json::json!({
+                "role": m.role,
+                "content": content.unwrap_or_else(|| serde_json::Value::String(String::new())),
+            }));
+        }
+
+        items.extend(tool_calls.iter().map(|tool_call| {
+            let arguments = match &tool_call.arguments {
+                serde_json::Value::String(arguments) => arguments.clone(),
+                other => other.to_string(),
+            };
+            serde_json::json!({
+                "type": "function_call",
+                "call_id": tool_call.id,
+                "name": tool_call.name,
+                "arguments": arguments,
+            })
+        }));
+        items
     }
 
     fn map_messages_openai_responses(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
         messages
             .iter()
-            .map(Self::map_openai_responses_message)
+            .flat_map(Self::map_openai_responses_message)
             .collect()
     }
 }
@@ -423,6 +455,64 @@ mod tests {
         assert_eq!(tools[0]["type"], "function");
         assert_eq!(tools[0]["name"], "fn1");
         assert_eq!(tools[0]["strict"], true);
+    }
+
+    #[test]
+    fn test_to_responses_payload_maps_function_call_history_items() {
+        let request = LlmRequest {
+            model: "gpt-5.4-mini".to_string(),
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: Some("How many agents are running?".to_string()),
+                    ..Default::default()
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    tool_calls: Some(vec![crate::types::ToolCallRequest {
+                        id: "call_agents".to_string(),
+                        name: "list_agents".to_string(),
+                        arguments: serde_json::json!({"status": "running"}),
+                    }]),
+                    ..Default::default()
+                },
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: Some("{\"total\":3}".to_string()),
+                    tool_call_id: Some("call_agents".to_string()),
+                    name: Some("list_agents".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let input = payload["input"].as_array().expect("responses input");
+
+        assert_eq!(input.len(), 3);
+        assert_eq!(input[0]["role"], "user");
+        assert_eq!(input[0]["content"], "How many agents are running?");
+        assert_eq!(
+            input[1],
+            serde_json::json!({
+                "type": "function_call",
+                "call_id": "call_agents",
+                "name": "list_agents",
+                "arguments": "{\"status\":\"running\"}",
+            })
+        );
+        assert_eq!(
+            input[2],
+            serde_json::json!({
+                "type": "function_call_output",
+                "call_id": "call_agents",
+                "output": "{\"total\":3}",
+            })
+        );
+        assert!(input[1].get("content").is_none());
+        assert!(input[1].get("tool_calls").is_none());
+        assert!(input[2].get("role").is_none());
     }
 
     #[test]

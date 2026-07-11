@@ -43,7 +43,9 @@ pub use adapter::McpToolAdapter;
 pub use config::{McpServerEntry, McpServersConfig, McpTransportType, ToolPolicy};
 pub use error::McpToolError;
 pub use server_adapter::McpServerAdapter;
-pub use types::{McpCallResult, McpContent, McpToolDescriptor, McpToolSource};
+pub use types::{
+    MCP_CALLER_AUTHORIZATION_HEADER, McpCallResult, McpContent, McpToolDescriptor, McpToolSource,
+};
 pub use web_search::{
     ExtractOptions, ExtractedContent, SearchDepth, SearchOptions, SearchResponse, SearchResult,
     WebSearchError, WebSearchProvider, tool_category,

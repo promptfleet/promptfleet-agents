@@ -28,7 +28,9 @@ pub use transport::*;
 
 // Re-export core types for convenience
 pub use error::{ProtocolError, ProtocolResult, TransportError, TransportResult};
-pub use forward_headers::{ForwardedHeaders, sanitize_header_map, sanitize_headers};
+pub use forward_headers::{
+    ForwardedHeaders, MCP_CALLER_AUTHORIZATION_HEADER, sanitize_header_map, sanitize_headers,
+};
 pub use headers::ProtocolHeaders;
 pub use jsonrpc::{
     JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcIncoming, JsonRpcNotification, JsonRpcRequest,

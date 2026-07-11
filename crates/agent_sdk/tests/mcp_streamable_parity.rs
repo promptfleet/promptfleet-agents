@@ -120,11 +120,20 @@ impl ServerHandler for RmcpServer {
 }
 
 async fn start_rmcp_server() -> (String, tokio::task::JoinHandle<()>) {
+    start_rmcp_server_with_mode(true).await
+}
+
+async fn start_rmcp_server_with_mode(
+    stateful_mode: bool,
+) -> (String, tokio::task::JoinHandle<()>) {
+    let mut config =
+        rmcp::transport::streamable_http_server::tower::StreamableHttpServerConfig::default();
+    config.stateful_mode = stateful_mode;
     let service = rmcp::transport::StreamableHttpService::new(
         || Ok(RmcpServer::new()),
         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default()
             .into(),
-        Default::default(),
+        config,
     );
     let app = Router::new().nest_service("/mcp", service);
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
@@ -133,6 +142,43 @@ async fn start_rmcp_server() -> (String, tokio::task::JoinHandle<()>) {
         axum::serve(listener, app).await.expect("serve");
     });
     (format!("http://{addr}/mcp"), handle)
+}
+
+#[tokio::test]
+async fn native_rmcp_client_supports_stateless_streamable_server() {
+    timeout(Duration::from_secs(20), async {
+        let (url, server) = start_rmcp_server_with_mode(false).await;
+        let config = McpServersConfig::from_json(&format!(
+            r#"{{
+                "mcp_servers": {{
+                    "directory": {{
+                        "url": "{url}"
+                    }}
+                }}
+            }}"#
+        ))
+        .expect("native config");
+
+        let backend = NativeMcpBackend::connect(&config)
+            .await
+            .expect("native backend");
+        let tools = backend.list_tools("directory").await.expect("native tools");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, expected_tool_name());
+
+        let result = backend
+            .call_tool(
+                "directory",
+                expected_tool_name(),
+                serde_json::json!({ "q": "planner" }),
+            )
+            .await
+            .expect("native tool call");
+        assert_eq!(result.to_json(), expected_tool_json("planner"));
+        server.abort();
+    })
+    .await
+    .expect("stateless integration test timed out");
 }
 
 #[derive(Clone)]

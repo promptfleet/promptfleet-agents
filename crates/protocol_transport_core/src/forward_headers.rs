@@ -1,5 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+/// Dedicated short-lived credential for a downstream MCP call. This must not
+/// be treated as the runtime transport's own Authorization header.
+pub const MCP_CALLER_AUTHORIZATION_HEADER: &str = "x-pf-mcp-caller-authorization";
+
 const HOP_BY_HOP_HEADERS: &[&str] = &[
     "connection",
     "keep-alive",

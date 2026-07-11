@@ -128,7 +128,8 @@ impl ChatContentPart {
 /// Provider-neutral chat message supporting text, image inputs, tool calls, and tool results.
 ///
 /// Each provider maps this internal representation to its own wire format:
-/// - OpenAI: `tool_calls` in assistant messages, `role: "tool"` for results
+/// - OpenAI Chat Completions: `tool_calls` in assistant messages, `role: "tool"` for results
+/// - OpenAI Responses: `function_call` and `function_call_output` input items
 /// - Anthropic: `tool_use` content blocks, `tool_result` content blocks
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChatMessage {

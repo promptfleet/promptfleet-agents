@@ -29,8 +29,8 @@ use crate::mcp_tools::config::{
 };
 use crate::mcp_tools::error::McpToolError;
 use crate::mcp_tools::types::{
-    McpCallResult, McpContent, McpToolDescriptor, McpToolSource, build_forwarded_headers_meta,
-    merge_request_meta,
+    MCP_CALLER_AUTHORIZATION_HEADER, McpCallResult, McpContent, McpToolDescriptor, McpToolSource,
+    build_forwarded_headers_meta, merge_request_meta,
 };
 
 /// Handle wrapping a single `McpClient` connection.
@@ -119,6 +119,8 @@ impl WasmClientHandle {
         )
         .into_map();
         forwarded.retain(|name, _| !name.eq_ignore_ascii_case("authorization"));
+        forwarded
+            .retain(|name, _| !name.eq_ignore_ascii_case(MCP_CALLER_AUTHORIZATION_HEADER));
         forwarded.retain(|name, _| !name.eq_ignore_ascii_case("mcp-session-id"));
 
         if !forwarded.is_empty() {

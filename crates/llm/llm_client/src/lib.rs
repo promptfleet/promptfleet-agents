@@ -43,6 +43,7 @@ pub mod auth;
 pub mod client;
 pub mod error;
 pub mod model_client;
+pub(crate) mod multimodal;
 pub mod prepare;
 pub mod profile;
 pub mod provider;

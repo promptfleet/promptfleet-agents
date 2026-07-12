@@ -27,6 +27,7 @@ use crate::agent::{Response, RuntimeResponse, TaskOpts};
 use crate::error::SdkResult;
 use crate::structured::StructuredOutputContract;
 use agent_core::{ContentPart, TaskPhase};
+use base64::Engine as _;
 use log::debug;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -439,13 +440,71 @@ pub(crate) fn build_runtime_messages_with_history(
         Some(dctx) if !dctx.is_empty() => format!("{}\n\nUser: {}", dctx, user_text),
         _ => user_text,
     };
-    messages.push(llm_client::ChatMessage {
-        role: "user".into(),
-        content: Some(combined_user),
-        ..Default::default()
-    });
+    let file_parts = current_user_file_parts(&msg_ctx.runtime_message);
+    if file_parts.is_empty() {
+        messages.push(llm_client::ChatMessage {
+            role: "user".into(),
+            content: Some(combined_user),
+            ..Default::default()
+        });
+    } else {
+        let mut content_parts = Vec::with_capacity(file_parts.len() + 1);
+        if !combined_user.trim().is_empty() {
+            content_parts.push(llm_client::ChatContentPart::text(combined_user));
+        }
+        content_parts.extend(file_parts);
+        messages.push(llm_client::ChatMessage {
+            role: "user".into(),
+            content_parts: Some(content_parts),
+            ..Default::default()
+        });
+    }
 
     messages
+}
+
+fn current_user_file_parts(
+    message: &agent_core::AgentMessage,
+) -> Vec<llm_client::ChatContentPart> {
+    const MAX_INLINE_FILE_BYTES: usize = 25 * 1024 * 1024;
+
+    message
+        .parts
+        .iter()
+        .filter_map(|part| {
+            let agent_core::ContentPart::File {
+                uri,
+                mime: Some(media_type),
+                data: Some(data),
+            } = part
+            else {
+                return None;
+            };
+            if data.is_empty() || data.len() > MAX_INLINE_FILE_BYTES {
+                return None;
+            }
+            let filename = uri
+                .rsplit(['/', '\\'])
+                .next()
+                .map(str::trim)
+                .filter(|filename| !filename.is_empty())?;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+            if media_type.starts_with("image/") {
+                Some(llm_client::ChatContentPart::image_base64(
+                    media_type,
+                    encoded,
+                    None,
+                ))
+            } else {
+                Some(llm_client::ChatContentPart::file_base64(
+                    filename,
+                    media_type,
+                    encoded,
+                    None,
+                ))
+            }
+        })
+        .collect()
 }
 
 fn render_runtime_data_parts(message: &agent_core::AgentMessage) -> Option<String> {

@@ -25,6 +25,7 @@ protocol_transport_core = { workspace = true }
 # Core utilities
 serde = { workspace = true }
 serde_json = { workspace = true }
+base64 = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }

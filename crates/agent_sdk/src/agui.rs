@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use agent_core::{AgentMessage, ContentPart, ConversationContext, Role};
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+use base64::Engine as _;
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use axum::extract::State;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use axum::http::HeaderMap;
@@ -196,7 +198,9 @@ impl AgUiState {
             .lock()
             .expect("thread conversation lock poisoned");
         let state = conversations.entry(thread_id.to_string()).or_default();
-        state.history.push(user_message);
+        if let Some(user_message) = message_without_file_parts(user_message) {
+            state.history.push(user_message);
+        }
         if !assistant_text.trim().is_empty() {
             state.history.push(AgentMessage::new(
                 Role::Agent,
@@ -305,17 +309,18 @@ impl RunAgentInput {
 
     pub fn split_prompt_and_history(&self) -> (AgentMessage, Vec<AgentMessage>) {
         let interaction_response = self.interaction_response();
-        let mut messages: Vec<AgentMessage> = self
+        let prompt_index = self
             .messages
             .iter()
-            .map(run_agent_message_to_agent_message)
-            .collect();
-        let prompt_index = messages
-            .iter()
-            .rposition(|message| message.role == Role::User)
-            .or_else(|| (!messages.is_empty()).then_some(messages.len() - 1));
+            .rposition(|message| {
+                !matches!(
+                    message.role.as_str(),
+                    "assistant" | "system" | "developer"
+                )
+            })
+            .or_else(|| (!self.messages.is_empty()).then_some(self.messages.len() - 1));
         let mut user_message = prompt_index
-            .map(|index| messages.remove(index))
+            .map(|index| run_agent_message_to_agent_message(&self.messages[index]))
             .unwrap_or_else(|| AgentMessage::user_text(""));
         if let Some(response) = interaction_response {
             user_message
@@ -331,8 +336,24 @@ impl RunAgentInput {
                     "app_context": context
                 })));
         }
-        (user_message, messages)
+        let history = self
+            .messages
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| Some(*index) != prompt_index)
+            .map(|(_, message)| run_agent_message_to_agent_message_with_files(message, false))
+            .filter_map(message_without_file_parts)
+            .collect();
+        (user_message, history)
     }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+fn message_without_file_parts(mut message: AgentMessage) -> Option<AgentMessage> {
+    message
+        .parts
+        .retain(|part| !matches!(part, ContentPart::File { .. }));
+    (!message.parts.is_empty()).then_some(message)
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -438,43 +459,91 @@ async fn agui_run(
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 fn run_agent_message_to_agent_message(message: &RunAgentMessage) -> AgentMessage {
+    run_agent_message_to_agent_message_with_files(message, true)
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+fn run_agent_message_to_agent_message_with_files(
+    message: &RunAgentMessage,
+    include_files: bool,
+) -> AgentMessage {
     let role = match message.role.as_str() {
         "assistant" => Role::Agent,
         "system" | "developer" => Role::System,
         _ => Role::User,
     };
-    let mut parts = content_value_to_parts(message.content.as_ref());
+    let mut parts = content_value_to_parts(message.content.as_ref(), include_files);
     if let Some(tool_calls) = &message.tool_calls {
         parts.push(ContentPart::Data(
             serde_json::json!({ "toolCalls": tool_calls }),
         ));
     }
-    if parts.is_empty() {
+    if parts.is_empty() && include_files {
         parts.push(ContentPart::Text(String::new()));
     }
     AgentMessage::new(role, parts)
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-fn content_value_to_parts(content: Option<&Value>) -> Vec<ContentPart> {
+fn content_value_to_parts(content: Option<&Value>, include_files: bool) -> Vec<ContentPart> {
     match content {
         Some(Value::String(text)) => vec![ContentPart::Text(text.clone())],
         Some(Value::Array(items)) => items
             .iter()
-            .map(|item| {
-                item.get("text")
-                    .and_then(Value::as_str)
-                    .map(|text| ContentPart::Text(text.to_string()))
-                    .unwrap_or_else(|| ContentPart::Data(item.clone()))
-            })
+            .filter_map(|item| content_item_to_part(item, include_files))
             .collect(),
         Some(Value::Null) | None => Vec::new(),
-        Some(value) => value
-            .get("text")
-            .and_then(Value::as_str)
-            .map(|text| vec![ContentPart::Text(text.to_string())])
-            .unwrap_or_else(|| vec![ContentPart::Data(value.clone())]),
+        Some(value) => content_item_to_part(value, include_files).into_iter().collect(),
     }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+const MAX_AGUI_INLINE_FILE_BYTES: usize = 25 * 1024 * 1024;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+fn content_item_to_part(item: &Value, include_files: bool) -> Option<ContentPart> {
+    if item.get("type").and_then(Value::as_str) == Some("file") {
+        return if include_files {
+            inline_file_content_part(item)
+        } else {
+            None
+        };
+    }
+    item.get("text")
+        .and_then(Value::as_str)
+        .map(|text| ContentPart::Text(text.to_string()))
+        .or_else(|| Some(ContentPart::Data(item.clone())))
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+fn inline_file_content_part(item: &Value) -> Option<ContentPart> {
+    let filename = item.get("filename").and_then(Value::as_str)?.trim();
+    let mime_type = item.get("mimeType").and_then(Value::as_str)?.trim();
+    let encoded = item.get("data").and_then(Value::as_str)?;
+    let max_encoded_len = ((MAX_AGUI_INLINE_FILE_BYTES + 2) / 3) * 4;
+    if filename.is_empty()
+        || filename.len() > 255
+        || filename.contains(['/', '\\', '\0'])
+        || mime_type.is_empty()
+        || mime_type.len() > 255
+        || !mime_type.contains('/')
+        || mime_type.chars().any(char::is_whitespace)
+        || encoded.is_empty()
+        || encoded.len() > max_encoded_len
+    {
+        return None;
+    }
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    if data.is_empty() || data.len() > MAX_AGUI_INLINE_FILE_BYTES {
+        return None;
+    }
+    Some(ContentPart::File {
+        uri: filename.to_string(),
+        mime: Some(mime_type.to_string()),
+        data: Some(data),
+    })
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -499,4 +568,139 @@ fn agui_validation_error_response(
         },
     ]))
     .into_response()
+}
+
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "event-stream"))]
+mod file_input_tests {
+    use super::*;
+    use crate::agent::MessageContext;
+    use llm_client::{ChatContentPart, LlmRequest};
+
+    #[test]
+    fn test_agui_current_user_files_reach_llm_request_while_history_files_do_not() {
+        let input: RunAgentInput = serde_json::from_value(serde_json::json!({
+            "threadId": "thread-1",
+            "runId": "run-1",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        { "type": "text", "text": "previous response" },
+                        {
+                            "type": "file",
+                            "filename": "old.pdf",
+                            "mimeType": "application/pdf",
+                            "data": "b2xk"
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": "Review these attachments" },
+                        {
+                            "type": "file",
+                            "filename": "incident.pdf",
+                            "mimeType": "application/pdf",
+                            "data": "cGRm"
+                        },
+                        {
+                            "type": "file",
+                            "filename": "screenshot.png",
+                            "mimeType": "image/png",
+                            "data": "aW1n"
+                        }
+                    ]
+                }
+            ]
+        }))
+        .unwrap();
+
+        let (current_user, history) = input.split_prompt_and_history();
+        assert_eq!(
+            history[0].parts,
+            vec![ContentPart::Text("previous response".to_string())]
+        );
+        assert!(matches!(
+            &current_user.parts[1],
+            ContentPart::File {
+                uri,
+                mime: Some(mime),
+                data: Some(data),
+            } if uri == "incident.pdf" && mime == "application/pdf" && data == b"pdf"
+        ));
+
+        let message_context = MessageContext::from_runtime_message(
+            current_user,
+            HashMap::new(),
+            HashMap::new(),
+            false,
+            None,
+        );
+        let request = LlmRequest {
+            model: "gpt-5.4-mini".to_string(),
+            messages: crate::agent::llm_orchestrator::build_runtime_messages_with_history(
+                &message_context,
+                &history,
+                None,
+            ),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            request.messages[0].content.as_deref(),
+            Some("previous response")
+        );
+        assert!(request.messages[0].content_parts.is_none());
+        let current_parts = request.messages[1]
+            .content_parts
+            .as_ref()
+            .expect("current user multimodal parts");
+        assert!(matches!(
+            &current_parts[0],
+            ChatContentPart::Text { text } if text == "Review these attachments"
+        ));
+        assert!(matches!(
+            &current_parts[1],
+            ChatContentPart::FileBase64 {
+                filename,
+                media_type,
+                data,
+                detail: None,
+            } if filename == "incident.pdf" && media_type == "application/pdf" && data == "cGRm"
+        ));
+        assert!(matches!(
+            &current_parts[2],
+            ChatContentPart::ImageBase64 {
+                media_type,
+                data,
+                detail: None,
+            } if media_type == "image/png" && data == "aW1n"
+        ));
+    }
+
+    #[test]
+    fn test_agui_malformed_file_part_is_dropped_without_exposing_encoded_data() {
+        let message = RunAgentMessage {
+            id: None,
+            role: "user".to_string(),
+            content: Some(serde_json::json!([
+                { "type": "text", "text": "hello" },
+                {
+                    "type": "file",
+                    "filename": "bad.pdf",
+                    "mimeType": "application/pdf",
+                    "data": "not base64"
+                }
+            ])),
+            name: None,
+            tool_calls: None,
+        };
+
+        let converted = run_agent_message_to_agent_message(&message);
+        assert_eq!(
+            converted.parts,
+            vec![ContentPart::Text("hello".to_string())]
+        );
+    }
 }

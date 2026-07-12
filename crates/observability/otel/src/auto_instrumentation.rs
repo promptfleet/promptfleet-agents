@@ -5,11 +5,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Auto-instrumentation wrapper for HTTP requests
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 pub struct AutoInstrumentedHttpClient {
     inner: reqwest::Client,
     observability: Arc<dyn ObservabilityPlugin>,
 }
 
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
 impl AutoInstrumentedHttpClient {
     /// Create a new auto-instrumented HTTP client
     pub fn new(client: reqwest::Client, observability: Arc<dyn ObservabilityPlugin>) -> Self {
@@ -104,6 +106,7 @@ impl TraceContextPropagator {
     }
 
     /// Inject trace context into reqwest headers
+    #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
     pub fn inject_reqwest(
         context: &W3CTraceContext,
         builder: reqwest::RequestBuilder,

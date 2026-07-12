@@ -2,6 +2,7 @@ use crate::{
     auth::AuthProvider,
     error::LlmError,
     model_client::{ClientCapabilities, HttpModelClient},
+    multimodal::{FileDetailPolicy, validate_multimodal_inputs},
     provider::LlmProvider,
     types::{
         ChatContentPart, ChatMessage, LlmChoice, LlmRequest, LlmResponse, ToolCall,
@@ -36,6 +37,10 @@ impl AnthropicClient {
 // ---------------------------------------------------------------------------
 
 impl AnthropicClient {
+    fn validate_multimodal_request(req: &LlmRequest) -> Result<(), LlmError> {
+        validate_multimodal_inputs(req, FileDetailPolicy::PdfOnly)
+    }
+
     fn content_blocks(msg: &ChatMessage) -> Option<serde_json::Value> {
         if let Some(parts) = &msg.content_parts {
             let blocks = parts
@@ -57,6 +62,16 @@ impl AnthropicClient {
                         media_type, data, ..
                     } => serde_json::json!({
                         "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": data,
+                        },
+                    }),
+                    ChatContentPart::FileBase64 {
+                        media_type, data, ..
+                    } => serde_json::json!({
+                        "type": "document",
                         "source": {
                             "type": "base64",
                             "media_type": media_type,
@@ -373,6 +388,7 @@ impl AnthropicClient {
     }
 
     pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
+        Self::validate_multimodal_request(&req)?;
         let payload = Self::to_messages_payload(&req);
         log::info!("AnthropicClient::llm endpoint=/v1/messages");
         let raw = self.inner.post_json("/v1/messages", payload).await?;
@@ -395,6 +411,7 @@ impl AnthropicClient {
         &self,
         req: LlmRequest,
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
+        Self::validate_multimodal_request(&req)?;
         let mut payload = Self::to_messages_payload(&req);
         if let Some(obj) = payload.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
@@ -412,6 +429,7 @@ impl AnthropicClient {
         &self,
         req: LlmRequest,
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
+        Self::validate_multimodal_request(&req)?;
         let mut payload = Self::to_messages_payload(&req);
         if let Some(obj) = payload.as_object_mut() {
             obj.insert("stream".to_string(), serde_json::Value::Bool(true));
@@ -728,12 +746,19 @@ mod tests {
                 role: "user".to_string(),
                 content_parts: Some(vec![
                     ChatContentPart::text("what is visible?"),
-                    ChatContentPart::image_base64("image/png", "abc123", None),
+                    ChatContentPart::image_base64("image/png", "aW1hZ2U=", None),
+                    ChatContentPart::file_base64(
+                        "context.pdf",
+                        "application/pdf",
+                        "JVBERi0xLjQ=",
+                        None,
+                    ),
                 ]),
                 ..Default::default()
             }],
             ..Default::default()
         };
+        AnthropicClient::validate_multimodal_request(&req).unwrap();
         let payload = AnthropicClient::to_messages_payload(&req);
         let content = payload["messages"][0]["content"].as_array().unwrap();
 
@@ -741,7 +766,30 @@ mod tests {
         assert_eq!(content[1]["type"], "image");
         assert_eq!(content[1]["source"]["type"], "base64");
         assert_eq!(content[1]["source"]["media_type"], "image/png");
-        assert_eq!(content[1]["source"]["data"], "abc123");
+        assert_eq!(content[1]["source"]["data"], "aW1hZ2U=");
+        assert_eq!(content[2]["type"], "document");
+        assert_eq!(content[2]["source"]["media_type"], "application/pdf");
+        assert_eq!(content[2]["source"]["data"], "JVBERi0xLjQ=");
+    }
+
+    #[test]
+    fn test_validate_multimodal_request_rejects_unsupported_image_mime() {
+        let req = LlmRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::image_base64(
+                    "image/svg+xml",
+                    "PHN2Zz4=",
+                    None,
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let error = AnthropicClient::validate_multimodal_request(&req)
+            .expect_err("unsupported image MIME must fail before serialization");
+        assert!(error.to_string().contains("canonical MIME"));
     }
 
     #[test]

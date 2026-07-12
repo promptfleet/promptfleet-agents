@@ -23,9 +23,9 @@ pub mod plugin;
 pub mod extension;
 
 // Public API exports
-pub use auto_instrumentation::{
-    AutoInstrumentedHttpClient, FunctionInstrumentation, TraceContextPropagator,
-};
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+pub use auto_instrumentation::AutoInstrumentedHttpClient;
+pub use auto_instrumentation::{FunctionInstrumentation, TraceContextPropagator};
 pub use collector_client::{CollectorClient, LogData, MetricData, OtelSpanData, SpanEvent};
 pub use plugin::{Otel, OtelBuilder, OtelConfig, OtelConfigBuilder};
 pub use resource_attributes::ResourceAttributeManager;

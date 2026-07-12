@@ -2,6 +2,7 @@ use crate::{
     auth::AuthProvider,
     error::LlmError,
     model_client::{ApiMode, ClientCapabilities, HttpModelClient},
+    multimodal::{FileDetailPolicy, validate_multimodal_inputs},
     provider::LlmProvider,
     types::{ChatContentPart, ChatMessage, LlmChoice, LlmRequest, LlmResponse, Usage},
 };
@@ -34,6 +35,15 @@ impl OpenAIClient {
             chat_path,
             responses_path,
         }
+    }
+
+    fn validate_multimodal_request(req: &LlmRequest, mode: ApiMode) -> Result<(), LlmError> {
+        let file_detail_policy = if matches!(mode, ApiMode::Chat) {
+            FileDetailPolicy::Unsupported
+        } else {
+            FileDetailPolicy::PdfOnly
+        };
+        validate_multimodal_inputs(req, file_detail_policy)
     }
 
     fn text_or_parts_content_chat(m: &ChatMessage) -> Option<serde_json::Value> {
@@ -81,6 +91,18 @@ impl OpenAIClient {
                             "image_url": serde_json::Value::Object(image_url),
                         })
                     }
+                    ChatContentPart::FileBase64 {
+                        filename,
+                        media_type,
+                        data,
+                        ..
+                    } => serde_json::json!({
+                        "type": "file",
+                        "file": {
+                            "filename": filename,
+                            "file_data": format!("data:{media_type};base64,{data}"),
+                        },
+                    }),
                 })
                 .collect();
             return Some(serde_json::Value::Array(mapped));
@@ -136,6 +158,35 @@ impl OpenAIClient {
                             );
                         }
                         serde_json::Value::Object(image)
+                    }
+                    ChatContentPart::FileBase64 {
+                        filename,
+                        media_type,
+                        data,
+                        detail,
+                    } => {
+                        let mut file = serde_json::Map::new();
+                        file.insert(
+                            "type".to_string(),
+                            serde_json::Value::String("input_file".to_string()),
+                        );
+                        file.insert(
+                            "filename".to_string(),
+                            serde_json::Value::String(filename.clone()),
+                        );
+                        file.insert(
+                            "file_data".to_string(),
+                            serde_json::Value::String(format!(
+                                "data:{media_type};base64,{data}"
+                            )),
+                        );
+                        if let Some(detail) = detail {
+                            file.insert(
+                                "detail".to_string(),
+                                serde_json::Value::String(detail.clone()),
+                            );
+                        }
+                        serde_json::Value::Object(file)
                     }
                 })
                 .collect();
@@ -285,7 +336,7 @@ mod tests {
     fn test_decide_mode_auto_routes_gpt5_to_responses() {
         let client = mk_client(ApiMode::Auto);
         assert!(matches!(
-            client.decide_mode("gpt-5-mini"),
+            client.decide_mode("gpt-5.4-mini"),
             ApiMode::Responses
         ));
         assert!(matches!(client.decide_mode("gpt-4o-mini"), ApiMode::Chat));
@@ -350,7 +401,7 @@ mod tests {
                     ChatContentPart::text("what is visible?"),
                     ChatContentPart::image_base64(
                         "image/png",
-                        "abc123",
+                        "aW1hZ2U=",
                         Some("low".to_string()),
                     ),
                 ]),
@@ -358,6 +409,7 @@ mod tests {
             }],
             ..Default::default()
         };
+        OpenAIClient::validate_multimodal_request(&request, ApiMode::Chat).unwrap();
         let payload = OpenAIClient::to_chat_payload(&request);
         let content = payload["messages"][0]["content"].as_array().unwrap();
 
@@ -365,7 +417,7 @@ mod tests {
         assert_eq!(content[1]["type"], "image_url");
         assert_eq!(
             content[1]["image_url"]["url"],
-            "data:image/png;base64,abc123"
+            "data:image/png;base64,aW1hZ2U="
         );
         assert_eq!(content[1]["image_url"]["detail"], "low");
     }
@@ -384,12 +436,137 @@ mod tests {
             }],
             ..Default::default()
         };
+        OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses).unwrap();
         let payload = OpenAIClient::to_responses_payload(&request);
         let content = payload["input"][0]["content"].as_array().unwrap();
 
         assert_eq!(content[0]["type"], "input_text");
         assert_eq!(content[1]["type"], "input_image");
         assert_eq!(content[1]["image_url"], "https://example.test/screen.png");
+    }
+
+    #[test]
+    fn test_to_responses_payload_maps_base64_image_input() {
+        let request = LlmRequest {
+            model: "gpt-5.4-mini".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::image_base64(
+                    "image/png",
+                    "aW1hZ2U=",
+                    Some("high".to_string()),
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses).unwrap();
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let image = &payload["input"][0]["content"][0];
+
+        assert_eq!(image["type"], "input_image");
+        assert_eq!(image["image_url"], "data:image/png;base64,aW1hZ2U=");
+        assert_eq!(image["detail"], "high");
+    }
+
+    #[test]
+    fn test_to_responses_payload_maps_pdf_with_page_detail() {
+        let request = LlmRequest {
+            model: "gpt-5.4-mini".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::file_base64(
+                    "incident.pdf",
+                    "application/pdf",
+                    "JVBERi0xLjQ=",
+                    Some("high".to_string()),
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses).unwrap();
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let file = &payload["input"][0]["content"][0];
+
+        assert_eq!(file["type"], "input_file");
+        assert_eq!(file["filename"], "incident.pdf");
+        assert_eq!(
+            file["file_data"],
+            "data:application/pdf;base64,JVBERi0xLjQ="
+        );
+        assert_eq!(file["detail"], "high");
+    }
+
+    #[test]
+    fn test_to_responses_payload_maps_docx_without_pdf_detail() {
+        let request = LlmRequest {
+            model: "gpt-5.4-mini".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::file_base64(
+                    "notes.docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "UEsDBA==",
+                    None,
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses).unwrap();
+        let payload = OpenAIClient::to_responses_payload(&request);
+        let file = &payload["input"][0]["content"][0];
+
+        assert_eq!(file["type"], "input_file");
+        assert_eq!(file["filename"], "notes.docx");
+        assert_eq!(
+            file["file_data"],
+            "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA=="
+        );
+        assert!(file.get("detail").is_none());
+    }
+
+    #[test]
+    fn test_validate_multimodal_request_rejects_invalid_base64_before_request() {
+        let request = LlmRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::file_base64(
+                    "notes.txt",
+                    "text/plain",
+                    "not base64",
+                    None,
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let error = OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses)
+            .expect_err("invalid Base64 must fail validation");
+        assert!(error.to_string().contains("Base64"));
+    }
+
+    #[test]
+    fn test_validate_multimodal_request_rejects_detail_for_non_pdf() {
+        let request = LlmRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::file_base64(
+                    "notes.docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "UEsDBA==",
+                    Some("high".to_string()),
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let error = OpenAIClient::validate_multimodal_request(&request, ApiMode::Responses)
+            .expect_err("non-PDF detail must fail validation");
+        assert!(error.to_string().contains("only for PDF"));
     }
 
     #[test]
@@ -1291,6 +1468,7 @@ impl OpenAIClient {
         req: LlmRequest,
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
+        Self::validate_multimodal_request(&req, mode)?;
         let (path, mut payload) = match mode {
             ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
             ApiMode::Responses | ApiMode::Auto => (
@@ -1335,6 +1513,7 @@ impl OpenAIClient {
         req: LlmRequest,
     ) -> Result<crate::stream::LlmEventStream, LlmError> {
         let mode = self.decide_mode(&req.model);
+        Self::validate_multimodal_request(&req, mode)?;
         let (path, mut payload) = match mode {
             ApiMode::Chat => (self.chat_path.as_str(), Self::to_chat_payload(&req)),
             ApiMode::Responses | ApiMode::Auto => (
@@ -1372,6 +1551,7 @@ impl OpenAIClient {
 impl OpenAIClient {
     pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
         let mode = self.decide_mode(&req.model);
+        Self::validate_multimodal_request(&req, mode)?;
         match mode {
             ApiMode::Chat => {
                 let path = self.chat_path.clone();

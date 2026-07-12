@@ -2,6 +2,7 @@ use crate::{
     auth::AuthProvider,
     error::LlmError,
     model_client::{ClientCapabilities, HttpModelClient},
+    multimodal::{FileDetailPolicy, validate_multimodal_inputs},
     provider::LlmProvider,
     stream::{LlmEventStream, StreamEvent},
     types::{
@@ -34,6 +35,10 @@ impl GoogleGenerateContentClient {
 }
 
 impl GoogleGenerateContentClient {
+    fn validate_multimodal_request(req: &LlmRequest) -> Result<(), LlmError> {
+        validate_multimodal_inputs(req, FileDetailPolicy::PdfOnly)
+    }
+
     #[cfg(test)]
     fn to_generate_content_payload(req: &LlmRequest) -> Value {
         let name_map = ToolNameMap::from_request(req);
@@ -254,6 +259,7 @@ impl GoogleGenerateContentClient {
     }
 
     pub async fn llm(&self, req: LlmRequest) -> Result<LlmResponse, LlmError> {
+        Self::validate_multimodal_request(&req)?;
         let name_map = ToolNameMap::from_request(&req);
         let path = generate_content_path(&req.model);
         let payload = Self::to_generate_content_payload_with_names(&req, &name_map);
@@ -334,6 +340,14 @@ fn text_parts(msg: &ChatMessage) -> Vec<Value> {
                 ChatContentPart::ImageUrl { url, .. } => Some(json!({
                     "fileData": {
                         "fileUri": url,
+                    }
+                })),
+                ChatContentPart::FileBase64 {
+                    media_type, data, ..
+                } => Some(json!({
+                    "inlineData": {
+                        "mimeType": media_type,
+                        "data": data,
                     }
                 })),
             })
@@ -650,23 +664,53 @@ mod tests {
 
     #[test]
     fn generate_content_payload_maps_multimodal_content_parts() {
-        let payload = GoogleGenerateContentClient::to_generate_content_payload(&LlmRequest {
+        let request = LlmRequest {
             model: "gemini-2.5-flash".to_string(),
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content_parts: Some(vec![
                     ChatContentPart::text("what is visible?"),
-                    ChatContentPart::image_base64("image/png", "abc123", None),
+                    ChatContentPart::image_base64("image/png", "aW1hZ2U=", None),
+                    ChatContentPart::file_base64(
+                        "context.pdf",
+                        "application/pdf",
+                        "JVBERi0xLjQ=",
+                        None,
+                    ),
                 ]),
                 ..Default::default()
             }],
             ..Default::default()
-        });
+        };
+        GoogleGenerateContentClient::validate_multimodal_request(&request).unwrap();
+        let payload = GoogleGenerateContentClient::to_generate_content_payload(&request);
 
         let parts = payload["contents"][0]["parts"].as_array().unwrap();
         assert_eq!(parts[0]["text"], "what is visible?");
         assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
-        assert_eq!(parts[1]["inlineData"]["data"], "abc123");
+        assert_eq!(parts[1]["inlineData"]["data"], "aW1hZ2U=");
+        assert_eq!(parts[2]["inlineData"]["mimeType"], "application/pdf");
+        assert_eq!(parts[2]["inlineData"]["data"], "JVBERi0xLjQ=");
+    }
+
+    #[test]
+    fn test_validate_multimodal_request_rejects_unknown_image_detail() {
+        let request = LlmRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content_parts: Some(vec![ChatContentPart::image_base64(
+                    "image/png",
+                    "aW1hZ2U=",
+                    Some("full".to_string()),
+                )]),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let error = GoogleGenerateContentClient::validate_multimodal_request(&request)
+            .expect_err("unknown image detail must fail before serialization");
+        assert!(error.to_string().contains("auto, low, or high"));
     }
 
     #[test]

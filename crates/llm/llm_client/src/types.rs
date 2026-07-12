@@ -76,7 +76,7 @@ fn parse_tool_choice_value(v: &serde_json::Value) -> Result<ToolChoice, String> 
 ///
 /// Text-only callers can keep using [`ChatMessage::content`]. Multimodal
 /// callers should use [`ChatMessage::content_parts`] so each provider can map
-/// text and image inputs to its own wire format.
+/// text, image, and file inputs to its own wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatContentPart {
@@ -88,9 +88,24 @@ pub enum ChatContentPart {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
     },
+    /// Inline image input using canonical RFC 4648 standard Base64. Supported
+    /// MIME types are PNG, JPEG, WebP, and GIF.
     ImageBase64 {
         media_type: String,
         data: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+    },
+    /// Inline file input. `data` is canonical RFC 4648 standard Base64 without
+    /// a `data:` URL prefix; providers add their own wire-format envelope.
+    /// Supported MIME types are PDF, DOCX, plain text, and Markdown.
+    FileBase64 {
+        filename: String,
+        media_type: String,
+        data: String,
+        /// OpenAI Responses PDF page-image detail (`auto`, `low`, or `high`).
+        /// Other providers may ignore this field when their API has no
+        /// equivalent setting.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
     },
@@ -120,12 +135,26 @@ impl ChatContentPart {
         }
     }
 
+    pub fn file_base64(
+        filename: impl Into<String>,
+        media_type: impl Into<String>,
+        data: impl Into<String>,
+        detail: Option<String>,
+    ) -> Self {
+        Self::FileBase64 {
+            filename: filename.into(),
+            media_type: media_type.into(),
+            data: data.into(),
+            detail,
+        }
+    }
+
     pub fn is_empty_text(&self) -> bool {
         matches!(self, Self::Text { text } if text.trim().is_empty())
     }
 }
 
-/// Provider-neutral chat message supporting text, image inputs, tool calls, and tool results.
+/// Provider-neutral chat message supporting text, image/file inputs, tool calls, and tool results.
 ///
 /// Each provider maps this internal representation to its own wire format:
 /// - OpenAI Chat Completions: `tool_calls` in assistant messages, `role: "tool"` for results

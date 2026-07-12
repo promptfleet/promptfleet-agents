@@ -34,6 +34,7 @@ pub struct SpanEvent {
 /// OTLP collector client for sending telemetry data
 pub struct CollectorClient {
     endpoint: String,
+    #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
     client: reqwest::Client,
 }
 
@@ -51,38 +52,44 @@ struct OtlpHttpRequest {
 impl CollectorClient {
     /// Create a new collector client (async - preferred for SpinKube environments)
     pub async fn new(endpoint: &str, _timeout: Duration) -> ObservabilityResult<Self> {
-        // ✅ **WASM-NATIVE FIX**: keep WASM compatibility while ensuring native exports
-        // are bounded-time (timeouts) to avoid hanging flush loops forever.
-        let builder = reqwest::Client::builder();
-        // Note: reqwest timeouts are not available on all wasm32 targets (including WASI),
-        // but they *are* desirable on native to avoid hanging flush loops forever.
-        #[cfg(not(target_arch = "wasm32"))]
-        let builder = builder.timeout(_timeout).connect_timeout(_timeout);
+        #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+        let client = {
+            let builder = reqwest::Client::builder();
+            #[cfg(not(target_arch = "wasm32"))]
+            let builder = builder.timeout(_timeout).connect_timeout(_timeout);
+            builder.build().map_err(|e| {
+                ObservabilityError::transport(format!("Failed to create HTTP client: {}", e))
+            })?
+        };
 
-        let client = builder.build().map_err(|e| {
-            ObservabilityError::transport(format!("Failed to create HTTP client: {}", e))
-        })?;
+        #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+        let _ = _timeout;
 
         Ok(Self {
             endpoint: endpoint.to_string(),
+            #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
             client,
         })
     }
 
     /// Create a new collector client synchronously (for WASM environments)
     pub fn new_sync(endpoint: &str, _timeout: Duration) -> ObservabilityResult<Self> {
-        // ✅ **WASM-NATIVE FIX**: keep WASM compatibility while ensuring native exports
-        // are bounded-time (timeouts) to avoid hanging flush loops forever.
-        let builder = reqwest::Client::builder();
-        #[cfg(not(target_arch = "wasm32"))]
-        let builder = builder.timeout(_timeout).connect_timeout(_timeout);
+        #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+        let client = {
+            let builder = reqwest::Client::builder();
+            #[cfg(not(target_arch = "wasm32"))]
+            let builder = builder.timeout(_timeout).connect_timeout(_timeout);
+            builder.build().map_err(|e| {
+                ObservabilityError::transport(format!("Failed to create HTTP client: {}", e))
+            })?
+        };
 
-        let client = builder.build().map_err(|e| {
-            ObservabilityError::transport(format!("Failed to create HTTP client: {}", e))
-        })?;
+        #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+        let _ = _timeout;
 
         Ok(Self {
             endpoint: endpoint.to_string(),
+            #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
             client,
         })
     }
@@ -996,9 +1003,21 @@ impl CollectorClient {
     /// Health check endpoint for the OTLP collector
     pub async fn health_check(&self) -> ObservabilityResult<bool> {
         let url = format!("{}/health", self.endpoint);
-        match self.client.get(&url).send().await {
-            Ok(response) => Ok(response.status().is_success()),
-            Err(_) => Ok(false), // Collector might not have health endpoint
+
+        #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+        {
+            match self.send_wasi_get(&url).await {
+                Ok(response) => Ok((200..300).contains(&response.status())),
+                Err(_) => Ok(false), // Collector might not have health endpoint
+            }
+        }
+
+        #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+        {
+            match self.client.get(&url).send().await {
+                Ok(response) => Ok(response.status().is_success()),
+                Err(_) => Ok(false), // Collector might not have health endpoint
+            }
         }
     }
 
@@ -1006,21 +1025,55 @@ impl CollectorClient {
     #[cfg(feature = "structured-logging")]
     pub async fn get_collector_info(&self) -> ObservabilityResult<serde_json::Value> {
         let url = format!("{}/info", self.endpoint);
-        let response = self.client.get(&url).send().await.map_err(|e| {
-            ObservabilityError::transport(format!("Failed to get collector info: {}", e))
-        })?;
 
-        if !response.status().is_success() {
-            return Err(ObservabilityError::transport(
-                "Collector info endpoint not available".to_string(),
-            ));
+        #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+        {
+            let response = self.send_wasi_get(&url).await?;
+            if !(200..300).contains(&response.status()) {
+                return Err(ObservabilityError::transport(
+                    "Collector info endpoint not available".to_string(),
+                ));
+            }
+
+            let body = response.into_body().await.map_err(|e| {
+                ObservabilityError::transport(format!(
+                    "Failed to read collector info response: {e}"
+                ))
+            })?;
+            return serde_json::from_slice(&body).map_err(|e| {
+                ObservabilityError::transport(format!("Failed to parse collector info: {e}"))
+            });
         }
 
-        let info: serde_json::Value = response.json().await.map_err(|e| {
-            ObservabilityError::transport(format!("Failed to parse collector info: {}", e))
-        })?;
+        #[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+        {
+            let response = self.client.get(&url).send().await.map_err(|e| {
+                ObservabilityError::transport(format!("Failed to get collector info: {}", e))
+            })?;
 
-        Ok(info)
+            if !response.status().is_success() {
+                return Err(ObservabilityError::transport(
+                    "Collector info endpoint not available".to_string(),
+                ));
+            }
+
+            let info: serde_json::Value = response.json().await.map_err(|e| {
+                ObservabilityError::transport(format!("Failed to parse collector info: {}", e))
+            })?;
+
+            Ok(info)
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+    async fn send_wasi_get(&self, url: &str) -> ObservabilityResult<IncomingResponse> {
+        let parsed = Url::parse(url).map_err(|e| {
+            ObservabilityError::transport(format!("Invalid collector URL '{url}': {e}"))
+        })?;
+        let request = Request::new(spin_sdk::http::Method::Get, parsed.as_str());
+        http::send::<_, IncomingResponse>(request)
+            .await
+            .map_err(|e| ObservabilityError::transport(format!("Spin HTTP send error: {e}")))
     }
 }
 

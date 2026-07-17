@@ -91,6 +91,7 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
                             started,
                             value::STATUS_ERROR,
                             Some(error_type.as_str()),
+                            Some(err.to_string().as_str()),
                             None,
                             None,
                         );
@@ -135,6 +136,7 @@ impl LlmTurnInvoker for RequestResponseTurnInvoker {
                 operation.as_str(),
                 started,
                 value::STATUS_OK,
+                None,
                 None,
                 turn.finish_reason.as_deref(),
                 turn.usage.as_ref(),
@@ -266,6 +268,7 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                             started,
                             value::STATUS_ERROR,
                             Some(error_type.as_str()),
+                            Some(err.to_string().as_str()),
                             None,
                             None,
                         );
@@ -381,6 +384,7 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                                 started,
                                 value::STATUS_ERROR,
                                 Some(error_type.as_str()),
+                                Some(err.to_string().as_str()),
                                 None,
                                 None,
                             );
@@ -402,6 +406,7 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                                 started,
                                 value::STATUS_ERROR,
                                 Some(error_type.as_str()),
+                                Some(err.to_string().as_str()),
                                 None,
                                 None,
                             );
@@ -453,6 +458,7 @@ impl LlmTurnInvoker for StreamingTurnInvoker {
                     started,
                     status,
                     error_type,
+                    None,
                     finish_reason.as_deref(),
                     usage.as_ref(),
                 );
@@ -588,6 +594,7 @@ fn emit_llm_request_outcome(
     started: Instant,
     status: &str,
     error_type: Option<&str>,
+    error_message: Option<&str>,
     finish_reason: Option<&str>,
     usage: Option<&llm_client::Usage>,
 ) {
@@ -630,6 +637,9 @@ fn emit_llm_request_outcome(
         );
         if let Some(kind) = error_type {
             g.add_attribute(attr::ERROR_TYPE, kind);
+        }
+        if let Some(message) = error_message {
+            g.add_attribute(attr::ERROR_MESSAGE, message);
         }
         if let Some(reason) = finish_reason {
             g.add_attribute(attr::GEN_AI_RESPONSE_FINISH_REASONS, reason);

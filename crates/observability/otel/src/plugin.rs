@@ -2,7 +2,8 @@
 
 use observability_core::traits::{SpanGuard, SpanStatus};
 use observability_core::{
-    ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext, ports::MetricsPort,
+    ObservabilityPlugin, ObservabilityResult, TraceContext, W3CTraceContext, get_current_context,
+    ports::MetricsPort,
 };
 
 use crate::collector_client::{
@@ -337,22 +338,6 @@ impl Otel {
         &self.config
     }
 
-    /// Generate a new span ID
-    fn generate_span_id() -> String {
-        // Generate a unique 16-character hex string (64-bit)
-        format!("{:016x}", rand::random::<u64>())
-    }
-
-    /// Generate a new trace ID  
-    fn generate_trace_id() -> String {
-        // Generate a unique 32-character hex string (128-bit)
-        format!(
-            "{:016x}{:016x}",
-            rand::random::<u64>(),
-            rand::random::<u64>()
-        )
-    }
-
     /// Flush all buffered data
     async fn flush_all_buffers(&self) -> ObservabilityResult<()> {
         // Drain buffers into locals. If export fails, we **requeue** to avoid data loss.
@@ -521,13 +506,14 @@ impl Clone for Otel {
 
 impl ObservabilityPlugin for Otel {
     fn start_span(&self, name: &str, attributes: &[(&str, &str)]) -> SpanGuard {
-        let span_id = Self::generate_span_id();
-        let trace_id = Self::generate_trace_id();
+        let trace_context = get_current_context()
+            .map(|parent| parent.new_child())
+            .unwrap_or_else(TraceContext::new_root);
 
         let span_data = OtelSpanData {
-            span_id: span_id.clone(),
-            trace_id,
-            parent_span_id: None,
+            span_id: trace_context.span_id.clone(),
+            trace_id: trace_context.trace_id,
+            parent_span_id: trace_context.parent_span_id,
             name: name.to_string(),
             start_time: Instant::now(),
             end_time: None,
@@ -541,11 +527,11 @@ impl ObservabilityPlugin for Otel {
 
         {
             let mut spans = self.active_spans.lock().unwrap();
-            spans.insert(span_id.clone(), span_data);
+            spans.insert(trace_context.span_id.clone(), span_data);
         }
 
         SpanGuard::new(
-            span_id,
+            trace_context.span_id,
             Arc::new(self.clone()) as Arc<dyn ObservabilityPlugin>,
         )
     }
@@ -957,23 +943,26 @@ mod tests {
     }
 
     #[test]
-    fn test_span_id_generation() {
-        let span_id1 = Otel::generate_span_id();
-        let span_id2 = Otel::generate_span_id();
+    fn test_start_span_uses_current_trace_context_as_parent() {
+        let otel = Otel::builder()
+            .with_endpoint("http://127.0.0.1:1")
+            .with_service_name("context-test")
+            .build_sync()
+            .expect("otel init");
+        let parent = TraceContext::new_root();
 
-        assert_ne!(span_id1, span_id2);
-        assert_eq!(span_id1.len(), 16);
-        assert_eq!(span_id2.len(), 16);
-    }
+        observability_core::set_current_context(parent.clone());
+        let guard = otel.start_span("child", &[]);
+        observability_core::clear_current_context();
 
-    #[test]
-    fn test_trace_id_generation() {
-        let trace_id1 = Otel::generate_trace_id();
-        let trace_id2 = Otel::generate_trace_id();
-
-        assert_ne!(trace_id1, trace_id2);
-        assert_eq!(trace_id1.len(), 32);
-        assert_eq!(trace_id2.len(), 32);
+        let spans = otel.active_spans.lock().expect("span lock poisoned");
+        let child = spans
+            .get(guard.span_id())
+            .expect("child span should be active");
+        assert_eq!(child.trace_id, parent.trace_id);
+        assert_eq!(child.parent_span_id.as_deref(), Some(parent.span_id.as_str()));
+        drop(spans);
+        drop(guard);
     }
 
     #[tokio::test]

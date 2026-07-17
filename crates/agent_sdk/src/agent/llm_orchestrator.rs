@@ -185,7 +185,10 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
     });
     let invoker = StreamingTurnInvoker::new(llm, delta_sink);
 
-    tokio::spawn(async move {
+    #[cfg(feature = "agent-observability")]
+    let trace_context = observability::get_current_context();
+
+    let loop_future = async move {
         let prepared_history = match task_ctx.as_ref() {
             Some(task_ctx) => Some(
                 history_policy_runtime
@@ -240,7 +243,20 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
             request_headers,
         )
         .await;
-    });
+    };
+
+    #[cfg(feature = "agent-observability")]
+    match trace_context {
+        Some(context) => {
+            tokio::spawn(observability::with_context_future(context, loop_future));
+        }
+        None => {
+            tokio::spawn(loop_future);
+        }
+    }
+
+    #[cfg(not(feature = "agent-observability"))]
+    tokio::spawn(loop_future);
 
     struct CancelOnDrop(Arc<AtomicBool>);
     impl Drop for CancelOnDrop {
@@ -1182,8 +1198,60 @@ mod stream_tests {
         }
     }
 
+    #[cfg(feature = "agent-observability")]
+    struct ContextRecordingInvoker {
+        inner: MockStreamInvoker,
+        seen: Arc<std::sync::Mutex<Option<observability::TraceContext>>>,
+    }
+
+    #[cfg(feature = "agent-observability")]
+    impl LlmStreamInvoker for ContextRecordingInvoker {
+        fn request_stream(&self, req: llm_client::LlmRequest) -> LlmStreamFuture {
+            *self.seen.lock().expect("context lock poisoned") =
+                observability::get_current_context();
+            self.inner.request_stream(req)
+        }
+    }
+
     fn scenario_invoker(turns: Vec<Vec<llm_client::StreamEvent>>) -> Arc<dyn LlmStreamInvoker> {
         Arc::new(MockStreamInvoker::new(turns))
+    }
+
+    #[cfg(feature = "agent-observability")]
+    #[tokio::test]
+    async fn test_streaming_loop_propagates_trace_context_into_spawned_llm_task() {
+        let expected = observability::TraceContext::new_root();
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let invoker: Arc<dyn LlmStreamInvoker> = Arc::new(ContextRecordingInvoker {
+            inner: MockStreamInvoker::new(vec![vec![llm_client::StreamEvent::Done {
+                finish_reason: Some("stop".into()),
+                usage: None,
+            }]]),
+            seen: Arc::clone(&seen),
+        });
+
+        observability::set_current_context(expected.clone());
+        let mut stream = run_tools_loop_stream(
+            invoker,
+            "gpt-4".into(),
+            ToolRegistry::new(),
+            LlmPolicy::default(),
+            test_msg_ctx("test"),
+            None,
+            None,
+            None,
+        );
+        observability::clear_current_context();
+
+        while stream.next().await.is_some() {}
+
+        let actual = seen
+            .lock()
+            .expect("context lock poisoned")
+            .clone()
+            .expect("spawned LLM task should inherit trace context");
+        assert_eq!(actual.trace_id, expected.trace_id);
+        assert_eq!(actual.span_id, expected.span_id);
     }
 
     /// Build a minimal `MessageContext` for testing

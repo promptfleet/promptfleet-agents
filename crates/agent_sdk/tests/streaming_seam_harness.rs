@@ -183,8 +183,10 @@ async fn test_driver_with_test_pipeline() {
             "TOOL_CALL_RESULT",
             "STEP_FINISHED",
             "STEP_STARTED",
+            "TEXT_MESSAGE_START",
             "TEXT_MESSAGE_CONTENT",
             "STEP_FINISHED",
+            "TEXT_MESSAGE_END",
             "RUN_FINISHED",
         ]
     );

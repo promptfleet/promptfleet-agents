@@ -24,3 +24,25 @@ token = client.get_invoke_token(
 `PemRsaSigner` is available through the `pem` extra for development and protected-filesystem deployments. Prefer a non-exportable KMS/HSM signer in production.
 
 `oauth_audience` is the ZITADEL custom-domain origin used in the signed assertion, not the token endpoint URL. `oauth_scopes` must include the PromptFleet API project-audience scope shown by your platform administrator. The client uses the RFC 7523 JWT-bearer grant, adds the required `openid` scope, and refreshes the source token within five minutes even if ZITADEL reports a longer lifetime.
+
+The default HTTP transport verifies TLS hostnames and certificate chains using
+the operating system trust store through PyCA `truststore`, including managed
+enterprise roots. Applications that need an isolated CA policy can pass an
+explicitly configured `ssl.SSLContext` to `UrllibTransport`.
+
+## Runnable Agent Edge example
+
+[`examples/invoke_agent.py`](examples/invoke_agent.py) performs an authenticated
+`GetAgentCard` request without printing any token or key material. Install the
+local package with its protected-filesystem signer and configure:
+
+```bash
+python -m pip install -e '.[pem]'
+export PF_SERVICE_ACCOUNT_CLIENT_ID='...'
+export PF_SERVICE_ACCOUNT_KEY_ID='...'
+export PF_SERVICE_ACCOUNT_PRIVATE_KEY_FILE='/protected/path/private-key.pem'
+export PF_OAUTH_PROJECT_SCOPE='urn:zitadel:iam:org:project:id:...:aud'
+export PF_AGENT_EDGE_URL='https://my-agent.edge.promptfleet.ai/jsonrpc'
+export PF_AGENT_RESOURCE='agent:A-...'
+python examples/invoke_agent.py
+```

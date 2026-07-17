@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
+import ssl
 import threading
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Callable, Mapping, Protocol, Sequence
 from urllib import error, parse, request
+
+import truststore
 
 TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
 JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
@@ -150,6 +153,9 @@ class PromptFleetServiceAccountClient:
 
 
 class UrllibTransport:
+    def __init__(self, ssl_context: ssl.SSLContext | None = None) -> None:
+        self._ssl_context = ssl_context or truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
     def post_form(self, url: str, form: Mapping[str, str]) -> tuple[int, Mapping[str, object]]:
         body = parse.urlencode(form).encode("utf-8")
         outgoing = request.Request(
@@ -159,7 +165,7 @@ class UrllibTransport:
             headers={"content-type": "application/x-www-form-urlencoded"},
         )
         try:
-            with request.urlopen(outgoing, timeout=30) as response:
+            with request.urlopen(outgoing, timeout=30, context=self._ssl_context) as response:
                 return response.status, json.loads(response.read())
         except error.HTTPError as exc:
             return exc.code, json.loads(exc.read())

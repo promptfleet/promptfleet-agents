@@ -1,8 +1,11 @@
+import ssl
+
 from promptfleet_auth import (
     InvokeTokenRequest,
     PromptFleetServiceAccountClient,
     ServiceAccountClientOptions,
 )
+from promptfleet_auth.client import UrllibTransport
 
 
 class FakeSigner:
@@ -68,3 +71,10 @@ def test_rejects_missing_resource_binding() -> None:
         assert "resource" in str(exc)
     else:
         raise AssertionError("missing resource must be rejected")
+
+
+def test_default_http_transport_requires_hostname_and_certificate_verification() -> None:
+    context = UrllibTransport()._ssl_context
+
+    assert context.check_hostname is True
+    assert context.verify_mode == ssl.CERT_REQUIRED

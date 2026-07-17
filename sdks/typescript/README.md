@@ -26,3 +26,18 @@ const token = await client.getInvokeToken({
 `createNodePrivateKeySigner` is provided for development or protected-filesystem deployments. Prefer a non-exportable KMS/HSM signer in production.
 
 `oauthAudience` is the ZITADEL custom-domain origin used in the signed assertion, not the token endpoint URL. `oauthScopes` must include the PromptFleet API project-audience scope shown by your platform administrator. The client uses the RFC 7523 JWT-bearer grant, adds the required `openid` scope, and refreshes the source token within five minutes even if ZITADEL reports a longer lifetime.
+
+## Runnable Agent Edge example
+
+[`examples/invoke-agent.ts`](examples/invoke-agent.ts) performs an authenticated
+`GetAgentCard` request without printing any token or key material. Configure:
+
+```bash
+export PF_SERVICE_ACCOUNT_CLIENT_ID='...'
+export PF_SERVICE_ACCOUNT_KEY_ID='...'
+export PF_SERVICE_ACCOUNT_PRIVATE_KEY_FILE='/protected/path/private-key.pem'
+export PF_OAUTH_PROJECT_SCOPE='urn:zitadel:iam:org:project:id:...:aud'
+export PF_AGENT_EDGE_URL='https://my-agent.edge.promptfleet.ai/jsonrpc'
+export PF_AGENT_RESOURCE='agent:A-...'
+npm run example:agent
+```

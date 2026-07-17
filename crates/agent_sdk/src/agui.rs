@@ -14,11 +14,9 @@
 //! - Combine with [`crate::AgentHostBuilder::with_agui`] to serve AG-UI alongside A2A on one router.
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use std::collections::HashMap;
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use std::sync::atomic::AtomicBool;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use agent_core::{AgentMessage, ContentPart, ConversationContext, Role};
@@ -35,16 +33,12 @@ use axum::routing::post;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use axum::{Json, Router};
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use futures_util::StreamExt;
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use serde::{Deserialize, Serialize};
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use serde_json::Value;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use uuid::Uuid;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-use crate::agent::trace::AgentTraceEvent;
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 use crate::{Agent, SdkError, SdkResult};
 
@@ -105,139 +99,14 @@ impl AgUiApp {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PendingInteraction {
-    interaction_id: String,
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-#[derive(Debug, Clone, Default)]
-struct ThreadConversationState {
-    history: Vec<AgentMessage>,
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 struct AgUiState {
     agent: Arc<Agent>,
-    pending_interactions: Mutex<HashMap<String, PendingInteraction>>,
-    thread_conversations: Mutex<HashMap<String, ThreadConversationState>>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 impl AgUiState {
     fn new(agent: Arc<Agent>) -> Self {
-        Self {
-            agent,
-            pending_interactions: Mutex::new(HashMap::new()),
-            thread_conversations: Mutex::new(HashMap::new()),
-        }
-    }
-
-    fn record_pending_interaction(&self, thread_id: String, interaction_id: String) {
-        self.pending_interactions
-            .lock()
-            .expect("pending interaction lock poisoned")
-            .insert(thread_id, PendingInteraction { interaction_id });
-    }
-
-    fn validate_and_consume_interaction_response(
-        &self,
-        thread_id: &str,
-        interaction_id: Option<&str>,
-    ) -> Result<(), ResumeValidationError> {
-        let interaction_id = interaction_id
-            .filter(|value| !value.trim().is_empty())
-            .ok_or(ResumeValidationError::MissingInteractionId)?;
-        let mut pending = self
-            .pending_interactions
-            .lock()
-            .expect("pending interaction lock poisoned");
-        let Some(expected) = pending.get(thread_id) else {
-            return Err(ResumeValidationError::NoPendingInteraction);
-        };
-        if expected.interaction_id != interaction_id {
-            return Err(ResumeValidationError::InteractionMismatch);
-        }
-        pending.remove(thread_id);
-        Ok(())
-    }
-
-    fn history_for_thread(
-        &self,
-        thread_id: &str,
-        request_history: Vec<AgentMessage>,
-    ) -> Option<ConversationContext> {
-        let mut conversations = self
-            .thread_conversations
-            .lock()
-            .expect("thread conversation lock poisoned");
-
-        if !request_history.is_empty() {
-            conversations.insert(
-                thread_id.to_string(),
-                ThreadConversationState {
-                    history: request_history.clone(),
-                },
-            );
-            return Some(ConversationContext::new(request_history));
-        }
-
-        conversations.get(thread_id).cloned().and_then(|state| {
-            (!state.history.is_empty()).then(|| ConversationContext::new(state.history))
-        })
-    }
-
-    fn record_completed_turn(
-        &self,
-        thread_id: &str,
-        user_message: AgentMessage,
-        assistant_text: &str,
-    ) {
-        let mut conversations = self
-            .thread_conversations
-            .lock()
-            .expect("thread conversation lock poisoned");
-        let state = conversations.entry(thread_id.to_string()).or_default();
-        if let Some(user_message) = message_without_file_parts(user_message) {
-            state.history.push(user_message);
-        }
-        if !assistant_text.trim().is_empty() {
-            state.history.push(AgentMessage::new(
-                Role::Agent,
-                vec![ContentPart::Text(assistant_text.to_string())],
-            ));
-        }
-    }
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResumeValidationError {
-    MissingInteractionId,
-    NoPendingInteraction,
-    InteractionMismatch,
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-impl ResumeValidationError {
-    fn as_code(self) -> &'static str {
-        match self {
-            Self::MissingInteractionId => "MISSING_INTERACTION_ID",
-            Self::NoPendingInteraction => "NO_PENDING_INTERACTION",
-            Self::InteractionMismatch => "INTERACTION_MISMATCH",
-        }
-    }
-
-    fn message(self) -> &'static str {
-        match self {
-            Self::MissingInteractionId => "interactionResponse must include interactionId",
-            Self::NoPendingInteraction => {
-                "interactionResponse does not match any pending interaction for this thread"
-            }
-            Self::InteractionMismatch => {
-                "interactionResponse interactionId does not match the pending interaction for this thread"
-            }
-        }
+        Self { agent }
     }
 }
 
@@ -256,11 +125,47 @@ pub struct RunAgentInput {
     #[serde(default)]
     pub messages: Vec<RunAgentMessage>,
     #[serde(default)]
-    pub tools: Vec<Value>,
+    pub tools: Vec<RunAgentTool>,
     #[serde(default)]
     pub context: Vec<Value>,
     #[serde(default)]
     pub forwarded_props: Value,
+    #[serde(default)]
+    pub resume: Vec<ResumeEntry>,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunAgentTool {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default = "default_tool_parameters")]
+    pub parameters: Value,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+fn default_tool_parameters() -> Value {
+    serde_json::json!({ "type": "object", "properties": {} })
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeEntry {
+    pub interrupt_id: String,
+    pub status: ResumeStatus,
+    #[serde(default)]
+    pub payload: Option<Value>,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResumeStatus {
+    Resolved,
+    Cancelled,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -276,6 +181,10 @@ pub struct RunAgentMessage {
     pub name: Option<String>,
     #[serde(default)]
     pub tool_calls: Option<Value>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
@@ -299,16 +208,7 @@ impl RunAgentInput {
             .cloned()
     }
 
-    pub fn interaction_response(&self) -> Option<Value> {
-        self.forwarded_prop("interactionResponse", "interaction_response")
-    }
-
-    pub fn app_context(&self) -> Option<Value> {
-        self.forwarded_prop("appContext", "app_context")
-    }
-
     pub fn split_prompt_and_history(&self) -> (AgentMessage, Vec<AgentMessage>) {
-        let interaction_response = self.interaction_response();
         let prompt_index = self
             .messages
             .iter()
@@ -318,22 +218,29 @@ impl RunAgentInput {
                     "assistant" | "system" | "developer"
                 )
             })
-            .or_else(|| (!self.messages.is_empty()).then_some(self.messages.len() - 1));
+            .or_else(|| (!self.messages.is_empty()).then(|| self.messages.len() - 1));
         let mut user_message = prompt_index
             .map(|index| run_agent_message_to_agent_message(&self.messages[index]))
             .unwrap_or_else(|| AgentMessage::user_text(""));
-        if let Some(response) = interaction_response {
+        if !self.resume.is_empty() {
             user_message
                 .parts
                 .push(ContentPart::Data(serde_json::json!({
-                    "interaction_response": response
+                    "ag_ui_resume": self.resume
                 })));
         }
-        if let Some(context) = self.app_context() {
+        if !self.context.is_empty() {
             user_message
                 .parts
                 .push(ContentPart::Data(serde_json::json!({
-                    "app_context": context
+                    "ag_ui_context": self.context
+                })));
+        }
+        if !self.state.is_null() {
+            user_message
+                .parts
+                .push(ContentPart::Data(serde_json::json!({
+                    "ag_ui_state": self.state
                 })));
         }
         let history = self
@@ -345,6 +252,56 @@ impl RunAgentInput {
             .filter_map(message_without_file_parts)
             .collect();
         (user_message, history)
+    }
+
+    pub fn frontend_tool_registry(&self) -> Result<crate::agent::tools::ToolRegistry, String> {
+        const MAX_TOOLS: usize = 32;
+        const MAX_DESCRIPTION_BYTES: usize = 4 * 1024;
+        const MAX_SCHEMA_BYTES: usize = 64 * 1024;
+        if self.tools.len() > MAX_TOOLS {
+            return Err(format!("at most {MAX_TOOLS} frontend tools are allowed"));
+        }
+        let mut registry = crate::agent::tools::ToolRegistry::new();
+        for tool in &self.tools {
+            let name = tool.name.trim();
+            if name.is_empty()
+                || name.len() > 128
+                || !name
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+            {
+                return Err(format!("invalid frontend tool name: {}", tool.name));
+            }
+            if tool
+                .description
+                .as_ref()
+                .is_some_and(|description| description.len() > MAX_DESCRIPTION_BYTES)
+            {
+                return Err(format!("frontend tool '{name}' description is too large"));
+            }
+            if serde_json::to_vec(&tool.parameters)
+                .map_err(|error| error.to_string())?
+                .len()
+                > MAX_SCHEMA_BYTES
+            {
+                return Err(format!("frontend tool '{name}' schema is too large"));
+            }
+            if tool.parameters.get("type").and_then(Value::as_str) != Some("object") {
+                return Err(format!(
+                    "frontend tool '{name}' parameters must be an object JSON Schema"
+                ));
+            }
+            registry.try_register(crate::agent::tools::ToolSpec {
+                name: name.to_string(),
+                description: tool.description.clone(),
+                parameters: tool.parameters.clone(),
+                kind: crate::agent::tools::ToolKind::Frontend,
+                strict: true,
+                parallel_ok: false,
+                executor: crate::agent::tools::ToolExecutor::Frontend,
+            })?;
+        }
+        Ok(registry)
     }
 }
 
@@ -366,30 +323,29 @@ async fn agui_run(
     let thread_id = payload.normalized_thread_id();
     let message_id = format!("msg-{}", Uuid::new_v4());
 
-    let interaction_response = payload.interaction_response();
-    if let Some(response) = interaction_response.as_ref() {
-        if let Err(err) = state
-            .validate_and_consume_interaction_response(&thread_id, extract_interaction_id(response))
-        {
-            return agui_validation_error_response(thread_id, run_id, err).into_response();
-        }
-    }
-
     let (user_message, request_history) = payload.split_prompt_and_history();
-    let history = state.history_for_thread(&thread_id, request_history);
+    let history = (!request_history.is_empty()).then(|| ConversationContext::new(request_history));
+    let frontend_tools = match payload.frontend_tool_registry() {
+        Ok(tools) => tools,
+        Err(message) => {
+            return agui_validation_error_response(
+                thread_id,
+                run_id,
+                "INVALID_FRONTEND_TOOLS",
+                &message,
+            )
+            .into_response();
+        }
+    };
     let request_headers =
         Arc::new(protocol_transport_core::sanitize_header_map(&headers).into_map());
-    let assistant_text = Arc::new(Mutex::new(String::new()));
-    let assistant_text_clone = Arc::clone(&assistant_text);
-    let state_for_trace = Arc::clone(&state);
-    let thread_id_for_trace = thread_id.clone();
-    let user_message_for_trace = user_message.clone();
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    let trace_stream = match state.agent.run_stream(
+    let trace_stream = match state.agent.run_stream_with_additional_tools(
         user_message,
         history,
         Some(cancel_flag.clone()),
         Some(request_headers),
+        frontend_tools,
     ) {
         Ok(stream) => stream,
         Err(err) => {
@@ -404,44 +360,6 @@ async fn agui_run(
         }
     };
 
-    let trace_stream = trace_stream.inspect(move |event| match event {
-        AgentTraceEvent::ContentDelta { delta } => {
-            assistant_text_clone
-                .lock()
-                .expect("assistant text lock poisoned")
-                .push_str(delta);
-        }
-        AgentTraceEvent::InteractionRequested { request } => {
-            state_for_trace.record_pending_interaction(
-                thread_id_for_trace.clone(),
-                request.interaction_id.clone(),
-            );
-            let assistant_text = assistant_text_clone
-                .lock()
-                .expect("assistant text lock poisoned")
-                .clone();
-            state_for_trace.record_completed_turn(
-                &thread_id_for_trace,
-                user_message_for_trace.clone(),
-                &assistant_text,
-            );
-        }
-        AgentTraceEvent::Completed { text, .. } => {
-            let assistant_text = text.clone().unwrap_or_else(|| {
-                assistant_text_clone
-                    .lock()
-                    .expect("assistant text lock poisoned")
-                    .clone()
-            });
-            state_for_trace.record_completed_turn(
-                &thread_id_for_trace,
-                user_message_for_trace.clone(),
-                &assistant_text,
-            );
-        }
-        _ => {}
-    });
-
     ag_ui_sse_response(
         AgUiDriverConfig {
             ctx: IoEventContext {
@@ -451,6 +369,12 @@ async fn agui_run(
             },
             cancel_flag: Some(cancel_flag),
             enrichers: vec![],
+            initial_state: payload.state.clone(),
+            initial_messages: payload
+                .messages
+                .iter()
+                .filter_map(|message| serde_json::to_value(message).ok())
+                .collect(),
         },
         trace_stream,
     )
@@ -470,13 +394,51 @@ fn run_agent_message_to_agent_message_with_files(
     let role = match message.role.as_str() {
         "assistant" => Role::Agent,
         "system" | "developer" => Role::System,
+        "tool" => Role::Tool,
         _ => Role::User,
     };
+    if role == Role::Tool {
+        return AgentMessage::tool_result(
+            message.tool_call_id.clone().unwrap_or_default(),
+            message.name.clone(),
+            message
+                .content
+                .as_ref()
+                .map(|content| match content {
+                    Value::String(content) => content.clone(),
+                    value => value.to_string(),
+                })
+                .unwrap_or_default(),
+            message.error.clone(),
+        );
+    }
     let mut parts = content_value_to_parts(message.content.as_ref(), include_files);
     if let Some(tool_calls) = &message.tool_calls {
-        parts.push(ContentPart::Data(
-            serde_json::json!({ "toolCalls": tool_calls }),
-        ));
+        if let Some(tool_calls) = tool_calls.as_array() {
+            for tool_call in tool_calls {
+                let Some(id) = tool_call.get("id").and_then(Value::as_str) else {
+                    continue;
+                };
+                let function = tool_call.get("function").unwrap_or(tool_call);
+                let Some(name) = function.get("name").and_then(Value::as_str) else {
+                    continue;
+                };
+                let arguments = function
+                    .get("arguments")
+                    .cloned()
+                    .map(|arguments| match arguments {
+                        Value::String(raw) => serde_json::from_str(&raw)
+                            .unwrap_or_else(|_| serde_json::json!({ "_raw": raw })),
+                        value => value,
+                    })
+                    .unwrap_or_else(|| serde_json::json!({}));
+                parts.push(ContentPart::ToolCall {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    arguments,
+                });
+            }
+        }
     }
     if parts.is_empty() && include_files {
         parts.push(ContentPart::Text(String::new()));
@@ -547,24 +509,17 @@ fn inline_file_content_part(item: &Value) -> Option<ContentPart> {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
-fn extract_interaction_id(response: &serde_json::Value) -> Option<&str> {
-    response
-        .get("interactionId")
-        .or_else(|| response.get("interaction_id"))
-        .and_then(serde_json::Value::as_str)
-}
-
-#[cfg(all(not(target_arch = "wasm32"), feature = "event-stream"))]
 fn agui_validation_error_response(
     thread_id: String,
     run_id: String,
-    err: ResumeValidationError,
+    code: &str,
+    message: &str,
 ) -> Response {
     agent_io_sse_stream(futures::stream::iter(vec![
         AgentIoEvent::RunStarted { thread_id, run_id },
         AgentIoEvent::RunError {
-            message: err.message().to_string(),
-            code: Some(err.as_code().to_string()),
+            message: message.to_string(),
+            code: Some(code.to_string()),
         },
     ]))
     .into_response()
@@ -572,6 +527,8 @@ fn agui_validation_error_response(
 
 #[cfg(all(test, not(target_arch = "wasm32"), feature = "event-stream"))]
 mod file_input_tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::agent::MessageContext;
     use llm_client::{ChatContentPart, LlmRequest};
@@ -695,6 +652,8 @@ mod file_input_tests {
             ])),
             name: None,
             tool_calls: None,
+            tool_call_id: None,
+            error: None,
         };
 
         let converted = run_agent_message_to_agent_message(&message);
@@ -702,5 +661,101 @@ mod file_input_tests {
             converted.parts,
             vec![ContentPart::Text("hello".to_string())]
         );
+    }
+
+    #[test]
+    fn test_agui_tool_messages_preserve_provider_correlation() {
+        let input: RunAgentInput = serde_json::from_value(serde_json::json!({
+            "threadId": "thread-tools",
+            "runId": "run-tools",
+            "messages": [
+                { "id": "u1", "role": "user", "content": "Load the incident" },
+                {
+                    "id": "a1",
+                    "role": "assistant",
+                    "toolCalls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "load_incident",
+                            "arguments": "{\"incidentId\":\"INC-1042\"}"
+                        }
+                    }]
+                },
+                {
+                    "id": "tool-1",
+                    "role": "tool",
+                    "toolCallId": "call-1",
+                    "name": "load_incident",
+                    "content": "{\"status\":\"degraded\"}"
+                }
+            ]
+        }))
+        .unwrap();
+
+        let (current, history) = input.split_prompt_and_history();
+        let context = MessageContext::from_runtime_message(
+            current,
+            HashMap::new(),
+            HashMap::new(),
+            false,
+            None,
+        );
+        let messages = crate::agent::llm_orchestrator::build_runtime_messages_with_history(
+            &context,
+            &history,
+            None,
+        );
+
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[1].tool_calls.as_ref().unwrap()[0].id, "call-1");
+        assert_eq!(messages[2].role, "tool");
+        assert_eq!(messages[2].tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(messages[2].name.as_deref(), Some("load_incident"));
+    }
+
+    #[test]
+    fn test_agui_standard_state_context_and_resume_reach_runtime_data() {
+        let input: RunAgentInput = serde_json::from_value(serde_json::json!({
+            "threadId": "thread-resume",
+            "runId": "run-resume",
+            "state": { "incidentId": "INC-1042" },
+            "context": [{ "description": "tenant locale", "value": "en-FI" }],
+            "messages": [],
+            "resume": [{
+                "interruptId": "int-1",
+                "status": "resolved",
+                "payload": { "approved": true }
+            }]
+        }))
+        .unwrap();
+
+        let (current, history) = input.split_prompt_and_history();
+        assert!(history.is_empty());
+        assert!(current.parts.iter().any(|part| matches!(
+            part,
+            ContentPart::Data(value) if value.get("ag_ui_resume").is_some()
+        )));
+        assert!(current.parts.iter().any(|part| matches!(
+            part,
+            ContentPart::Data(value) if value.get("ag_ui_context").is_some()
+        )));
+        assert!(current.parts.iter().any(|part| matches!(
+            part,
+            ContentPart::Data(value) if value.get("ag_ui_state").is_some()
+        )));
+    }
+
+    #[test]
+    fn test_agui_frontend_tools_reject_name_collision() {
+        let input: RunAgentInput = serde_json::from_value(serde_json::json!({
+            "tools": [
+                { "name": "load_incident", "parameters": { "type": "object" } },
+                { "name": "load_incident", "parameters": { "type": "object" } }
+            ]
+        }))
+        .unwrap();
+
+        assert!(input.frontend_tool_registry().is_err());
     }
 }

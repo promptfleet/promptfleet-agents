@@ -1,6 +1,30 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum RunFinishedOutcome {
+    Success,
+    Interrupt { interrupts: Vec<Interrupt> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Interrupt {
+    pub id: String,
+    pub reason: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_schema: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -17,6 +41,8 @@ pub enum AgentIoEvent {
         run_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         result: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        outcome: Option<RunFinishedOutcome>,
     },
     RunError {
         message: String,
@@ -78,6 +104,15 @@ pub enum AgentIoEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         role: Option<String>,
     },
+    StateSnapshot {
+        snapshot: Value,
+    },
+    StateDelta {
+        delta: Vec<Value>,
+    },
+    MessagesSnapshot {
+        messages: Vec<Value>,
+    },
     Custom {
         name: String,
         value: Value,
@@ -104,6 +139,9 @@ impl AgentIoEvent {
             Self::ToolCallArgs { .. } => "TOOL_CALL_ARGS",
             Self::ToolCallEnd { .. } => "TOOL_CALL_END",
             Self::ToolCallResult { .. } => "TOOL_CALL_RESULT",
+            Self::StateSnapshot { .. } => "STATE_SNAPSHOT",
+            Self::StateDelta { .. } => "STATE_DELTA",
+            Self::MessagesSnapshot { .. } => "MESSAGES_SNAPSHOT",
             Self::Custom { .. } => "CUSTOM",
         }
     }

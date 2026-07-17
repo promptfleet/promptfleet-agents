@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import base64
+import asyncio
+import inspect
 import json
 import ssl
 import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Awaitable, Callable, Mapping, Protocol, Sequence
 from urllib import error, parse, request
 
 import truststore
@@ -29,6 +31,19 @@ class HttpTransport(Protocol):
     def post_form(self, url: str, form: Mapping[str, str]) -> tuple[int, Mapping[str, object]]: ...
 
 
+class AsyncJwtSigner(Protocol):
+    @property
+    def key_id(self) -> str: ...
+
+    def sign(self, signing_input: bytes) -> Awaitable[bytes]: ...
+
+
+class AsyncHttpTransport(Protocol):
+    def post_form(
+        self, url: str, form: Mapping[str, str]
+    ) -> Awaitable[tuple[int, Mapping[str, object]]]: ...
+
+
 @dataclass(frozen=True)
 class ServiceAccountClientOptions:
     client_id: str
@@ -38,6 +53,18 @@ class ServiceAccountClientOptions:
     signer: JwtSigner
     oauth_scopes: Sequence[str]
     transport: HttpTransport | None = None
+    clock: Callable[[], float] = time.time
+
+
+@dataclass(frozen=True)
+class AsyncServiceAccountClientOptions:
+    client_id: str
+    oauth_token_url: str
+    oauth_audience: str
+    invoke_token_url: str
+    signer: JwtSigner | AsyncJwtSigner
+    oauth_scopes: Sequence[str]
+    transport: AsyncHttpTransport | None = None
     clock: Callable[[], float] = time.time
 
 
@@ -152,6 +179,152 @@ class PromptFleetServiceAccountClient:
         return token is not None and token.expires_at - self._options.clock() > 30
 
 
+class AsyncPromptFleetServiceAccountClient:
+    """Async service-account client for web frameworks and cloud KMS signers."""
+
+    def __init__(self, options: AsyncServiceAccountClientOptions) -> None:
+        if (
+            not options.client_id
+            or not options.oauth_token_url
+            or not options.oauth_audience
+            or not options.invoke_token_url
+        ):
+            raise ValueError(
+                "client_id, oauth_token_url, oauth_audience, and invoke_token_url are required"
+            )
+        if not options.oauth_scopes:
+            raise ValueError(
+                "oauth_scopes must include the PromptFleet API audience scope"
+            )
+        self._options = options
+        self._transport = options.transport or AsyncUrllibTransport()
+        self._oauth: AccessToken | None = None
+        self._invoke: dict[tuple[str, str, tuple[str, ...]], AccessToken] = {}
+        self._oauth_lock = asyncio.Lock()
+        self._invoke_locks: dict[tuple[str, str, tuple[str, ...]], asyncio.Lock] = {}
+
+    async def get_oauth_access_token(self) -> AccessToken:
+        if self._fresh(self._oauth):
+            return self._oauth
+        async with self._oauth_lock:
+            if self._fresh(self._oauth):
+                return self._oauth
+            self._oauth = await self._request_oauth_access_token()
+            return self._oauth
+
+    async def get_invoke_token(self, requested: InvokeTokenRequest) -> AccessToken:
+        if not requested.audience or not requested.resource or not requested.scopes:
+            raise ValueError("audience, resource, and at least one scope are required")
+        cache_key = (
+            requested.audience,
+            requested.resource,
+            tuple(sorted(requested.scopes)),
+        )
+        cached = self._invoke.get(cache_key)
+        if self._fresh(cached):
+            return cached
+        lock = self._invoke_locks.setdefault(cache_key, asyncio.Lock())
+        async with lock:
+            cached = self._invoke.get(cache_key)
+            if self._fresh(cached):
+                return cached
+            source = await self.get_oauth_access_token()
+            token = await self._post_token(
+                self._options.invoke_token_url,
+                {
+                    "grant_type": TOKEN_EXCHANGE_GRANT,
+                    "subject_token_type": ACCESS_TOKEN_TYPE,
+                    "subject_token": source.access_token,
+                    "audience": requested.audience,
+                    "resource": requested.resource,
+                    "scope": " ".join(requested.scopes),
+                    "requested_token_type": PF_INVOKE_TOKEN_TYPE,
+                },
+                "PromptFleet invoke token",
+            )
+            self._invoke[cache_key] = token
+            return token
+
+    async def authorization_headers(
+        self,
+        requested: InvokeTokenRequest,
+        headers: Mapping[str, str] | None = None,
+    ) -> dict[str, str]:
+        token = await self.get_invoke_token(requested)
+        authenticated = dict(headers or {})
+        authenticated["authorization"] = f"Bearer {token.access_token}"
+        return authenticated
+
+    async def _request_oauth_access_token(self) -> AccessToken:
+        now = int(self._options.clock())
+        header = _encode_json(
+            {"alg": "RS256", "typ": "JWT", "kid": self._options.signer.key_id}
+        )
+        claims = _encode_json(
+            {
+                "iss": self._options.client_id,
+                "sub": self._options.client_id,
+                "aud": self._options.oauth_audience,
+                "iat": now,
+                "exp": now + 60,
+                "jti": str(uuid.uuid4()),
+            }
+        )
+        signing_input = f"{header}.{claims}".encode("ascii")
+        signature = self._options.signer.sign(signing_input)
+        if inspect.isawaitable(signature):
+            signature = await signature
+        assertion = (
+            f"{signing_input.decode('ascii')}.{_base64url(signature)}"
+        )
+        token = await self._post_token(
+            self._options.oauth_token_url,
+            {
+                "grant_type": JWT_BEARER_GRANT,
+                "assertion": assertion,
+                "scope": " ".join(
+                    dict.fromkeys(("openid", *self._options.oauth_scopes))
+                ),
+            },
+            "OAuth token",
+        )
+        return AccessToken(
+            access_token=token.access_token,
+            token_type=token.token_type,
+            expires_at=min(token.expires_at, self._options.clock() + 300),
+            scope=token.scope,
+        )
+
+    async def _post_token(
+        self, url: str, form: Mapping[str, str], label: str
+    ) -> AccessToken:
+        status, body = await self._transport.post_form(url, form)
+        if status < 200 or status >= 300:
+            raise RuntimeError(
+                f"{label} request failed ({status}): {body.get('error', 'unknown error')}"
+            )
+        access_token = body.get("access_token")
+        expires_in = body.get("expires_in")
+        if not isinstance(access_token, str) or not isinstance(
+            expires_in, (int, float)
+        ):
+            raise RuntimeError(f"{label} response is malformed")
+        scope = body.get("scope")
+        return AccessToken(
+            access_token=access_token,
+            token_type=(
+                body.get("token_type")
+                if isinstance(body.get("token_type"), str)
+                else "Bearer"
+            ),
+            expires_at=self._options.clock() + float(expires_in),
+            scope=scope if isinstance(scope, str) else None,
+        )
+
+    def _fresh(self, token: AccessToken | None) -> bool:
+        return token is not None and token.expires_at - self._options.clock() > 30
+
+
 class UrllibTransport:
     def __init__(self, ssl_context: ssl.SSLContext | None = None) -> None:
         self._ssl_context = ssl_context or truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -169,6 +342,18 @@ class UrllibTransport:
                 return response.status, json.loads(response.read())
         except error.HTTPError as exc:
             return exc.code, json.loads(exc.read())
+
+
+class AsyncUrllibTransport:
+    """Async adapter over the verified stdlib transport using a worker thread."""
+
+    def __init__(self, ssl_context: ssl.SSLContext | None = None) -> None:
+        self._transport = UrllibTransport(ssl_context)
+
+    async def post_form(
+        self, url: str, form: Mapping[str, str]
+    ) -> tuple[int, Mapping[str, object]]:
+        return await asyncio.to_thread(self._transport.post_form, url, form)
 
 
 class PemRsaSigner:

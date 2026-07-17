@@ -496,17 +496,46 @@ impl Agent {
         cancel_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
         request_headers: Option<Arc<std::collections::HashMap<String, String>>>,
     ) -> SdkResult<super::trace::AgentTraceStream> {
+        self.run_stream_with_additional_tools(
+            input,
+            history,
+            cancel_flag,
+            request_headers,
+            super::tools::ToolRegistry::new(),
+        )
+    }
+
+    /// Stream an agent run with additional per-request tools.
+    ///
+    /// This is primarily used for AG-UI frontend-declared tools. Existing
+    /// server tool names cannot be shadowed by request input.
+    #[cfg(all(feature = "llm-engine", not(target_arch = "wasm32")))]
+    pub fn run_stream_with_additional_tools(
+        &self,
+        input: agent_core::AgentMessage,
+        history: Option<agent_core::ConversationContext>,
+        cancel_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
+        request_headers: Option<Arc<std::collections::HashMap<String, String>>>,
+        additional_tools: super::tools::ToolRegistry,
+    ) -> SdkResult<super::trace::AgentTraceStream> {
         let runtime = self.stream_runtime.as_ref().ok_or_else(|| {
             SdkError::feature_not_enabled(
                 "llm streaming runtime not configured; call configure_llm_runtime with a stream-capable client",
             )
         })?;
 
+        let mut tools = runtime.tools.clone();
+        for tool in additional_tools.list() {
+            tools
+                .try_register((*tool).clone())
+                .map_err(SdkError::configuration)?;
+        }
+
         Ok(
             super::llm_orchestrator::run_tools_loop_agnostic_with_cancel_and_history_runtime(
                 runtime.llm.clone(),
                 runtime.model.clone(),
-                runtime.tools.clone(),
+                tools,
                 runtime.policy.clone(),
                 input,
                 history,

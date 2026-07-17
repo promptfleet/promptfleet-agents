@@ -1,6 +1,9 @@
+import asyncio
 import ssl
 
 from promptfleet_auth import (
+    AsyncPromptFleetServiceAccountClient,
+    AsyncServiceAccountClientOptions,
     InvokeTokenRequest,
     PromptFleetServiceAccountClient,
     ServiceAccountClientOptions,
@@ -78,3 +81,69 @@ def test_default_http_transport_requires_hostname_and_certificate_verification()
 
     assert context.check_hostname is True
     assert context.verify_mode == ssl.CERT_REQUIRED
+
+
+def test_async_client_single_flights_concurrent_token_requests() -> None:
+    class AsyncSigner:
+        key_id = "provider-key"
+
+        async def sign(self, signing_input: bytes) -> bytes:
+            assert signing_input.count(b".") == 1
+            return b"signature"
+
+    class AsyncTransport:
+        def __init__(self) -> None:
+            self.requests: list[tuple[str, dict[str, str]]] = []
+
+        async def post_form(self, url: str, form: dict[str, str]):
+            self.requests.append((url, dict(form)))
+            await asyncio.sleep(0)
+            if url.endswith("/oauth/v2/token"):
+                return 200, {
+                    "access_token": "oauth-token",
+                    "token_type": "Bearer",
+                    "expires_in": 300,
+                }
+            return 200, {
+                "access_token": "invoke-token",
+                "token_type": "Bearer",
+                "expires_in": 300,
+            }
+
+    async def exercise() -> None:
+        transport = AsyncTransport()
+        client = AsyncPromptFleetServiceAccountClient(
+            AsyncServiceAccountClientOptions(
+                client_id="machine-user-id",
+                oauth_token_url="https://identity.example/oauth/v2/token",
+                oauth_audience="https://identity.example",
+                oauth_scopes=["urn:zitadel:iam:org:project:id:promptfleet:aud"],
+                invoke_token_url="https://api.example/v1/invoke/token",
+                signer=AsyncSigner(),
+                transport=transport,
+                clock=lambda: 1000.0,
+            )
+        )
+        requested = InvokeTokenRequest(
+            "agent-edge-gateway", "agent:a-1", ["agent.invoke"]
+        )
+
+        tokens = await asyncio.gather(
+            client.get_invoke_token(requested),
+            client.get_invoke_token(requested),
+        )
+        headers = await client.authorization_headers(
+            requested, {"x-client": "example"}
+        )
+
+        assert [token.access_token for token in tokens] == [
+            "invoke-token",
+            "invoke-token",
+        ]
+        assert headers == {
+            "x-client": "example",
+            "authorization": "Bearer invoke-token",
+        }
+        assert len(transport.requests) == 2
+
+    asyncio.run(exercise())

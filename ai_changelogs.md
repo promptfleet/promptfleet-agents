@@ -1,5 +1,33 @@
 # AI Changelogs
 
+## 2026-07-18 — Standard AG-UI interrupts, frontend tools, and async auth adapters
+
+### Summary
+
+Completed the standard AG-UI application contract: canonical tool messages and
+correlation, request-declared frontend tools, state/message snapshots, and
+`RUN_FINISHED.outcome` interrupt/resume semantics. Added composable
+resource-bound authentication adapters for Node 20 and Python 3.11, including
+async KMS signing and single-flight token refresh.
+
+### Files modified
+
+- `crates/agent_core` and `crates/agent_sdk` — tool roles/parts, frontend tool
+  registration and collision rejection, canonical request context/state/resume,
+  official interrupt outcomes, and stream snapshots.
+- `sdks/typescript` — authenticated fetch composition for standard clients and
+  Node 20 support.
+- `sdks/python` — Python 3.11 support plus async signer, transport, token cache,
+  and authorization-header APIs.
+
+### Tests
+
+- `cargo test -p pf_agent_sdk --all-features --lib`: **passed** (271 tests).
+- `cargo check --target wasm32-wasip1 -p pf_agent_core`: **passed**.
+- `cargo check --target wasm32-wasip1 -p pf_agent_sdk --no-default-features --features agui-agent,wasm-optimized`: **passed**.
+- `npm test` in `sdks/typescript`: **passed** (3 tests).
+- Python 3.11 isolated environment, `pytest -q` in `sdks/python`: **passed** (4 tests).
+
 ## 2026-07-11 — Inline document and image inputs for agent runs
 
 ### Summary

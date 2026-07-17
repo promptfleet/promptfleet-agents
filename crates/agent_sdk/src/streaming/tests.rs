@@ -25,6 +25,7 @@ mod agent_io_serialization {
             thread_id: "t1".into(),
             run_id: "r1".into(),
             result: Some(json!({"usage": {"total_tokens": 42}})),
+            outcome: Some(crate::streaming::RunFinishedOutcome::Success),
         };
         assert_eq!(wire_type(&e), "RUN_FINISHED");
     }
@@ -955,6 +956,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -974,6 +977,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -991,6 +996,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1009,6 +1016,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1027,6 +1036,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: Some(cancel_flag),
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1073,6 +1084,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: vec![Box::new(TestEnricher)],
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1100,6 +1113,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1151,6 +1166,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1178,6 +1195,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: Some(cancel_flag),
             enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 
@@ -1213,6 +1232,8 @@ mod driver_tests {
             ctx: ctx(),
             cancel_flag: None,
             enrichers: vec![Box::new(CitationEnricher::default())],
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         })
         .drive(events);
 

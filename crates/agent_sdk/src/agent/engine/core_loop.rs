@@ -10,7 +10,7 @@
 
 use crate::agent::llm_invoker::LlmRequestDefaults;
 use crate::agent::tool_context::ToolContext;
-use crate::agent::tools::ToolRegistry;
+use crate::agent::tools::{ToolKind, ToolRegistry};
 use crate::agent::trace::AgentTraceEvent;
 use llm_client::{ChatContentPart, ChatMessage, LlmRequest, ToolChoice, ToolSchema};
 use log::debug;
@@ -170,6 +170,36 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
             for tc in &turn_result.tool_calls {
                 let arguments: serde_json::Value = serde_json::from_str(&tc.arguments_raw)
                     .unwrap_or_else(|_| serde_json::json!({"_raw": tc.arguments_raw}));
+
+                if tools
+                    .get(&tc.name)
+                    .is_some_and(|tool| tool.kind == ToolKind::Frontend)
+                {
+                    on_event(AgentTraceEvent::Completed {
+                        text: if accumulated_text.is_empty() {
+                            None
+                        } else {
+                            Some(accumulated_text.clone())
+                        },
+                        usage: last_usage.clone(),
+                    });
+                    return Ok(EngineResult {
+                        text: if accumulated_text.is_empty() {
+                            None
+                        } else {
+                            Some(accumulated_text)
+                        },
+                        usage: last_usage,
+                        turns_used: turns,
+                        tool_calls_made: total_tool_calls + 1,
+                        stop_signal: Some(serde_json::json!({
+                            "__client_tool_pending": true,
+                            "toolCallId": tc.id,
+                            "toolName": tc.name,
+                            "arguments": arguments,
+                        })),
+                    });
+                }
 
                 let tool_start = std::time::Instant::now();
                 let tool_result = tools

@@ -16,7 +16,7 @@ pub fn role_to_a2a(role: &Role) -> MessageRole {
     match role {
         Role::User => MessageRole::User,
         Role::Agent => MessageRole::Agent,
-        Role::System => MessageRole::User,
+        Role::System | Role::Tool => MessageRole::User,
     }
 }
 
@@ -43,6 +43,26 @@ pub fn content_part_to_a2a(part: ContentPart) -> Part {
                 Part::url(uri)
             }
         }
+        ContentPart::ToolCall {
+            id,
+            name,
+            arguments,
+        } => Part::data(serde_json::json!({
+            "toolCall": { "id": id, "name": name, "arguments": arguments }
+        })),
+        ContentPart::ToolResult {
+            tool_call_id,
+            name,
+            content,
+            error,
+        } => Part::data(serde_json::json!({
+            "toolResult": {
+                "toolCallId": tool_call_id,
+                "name": name,
+                "content": content,
+                "error": error
+            }
+        })),
     }
 }
 

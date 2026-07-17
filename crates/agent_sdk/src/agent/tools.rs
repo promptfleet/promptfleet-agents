@@ -25,6 +25,8 @@ pub enum ToolExecutor {
     WithContext(
         Arc<dyn Fn(serde_json::Value, ToolContext) -> std::pin::Pin<Box<ToolFuture>> + Send + Sync>,
     ),
+    /// Declared by an AG-UI client and executed outside the agent runtime.
+    Frontend,
 }
 
 impl std::fmt::Debug for ToolExecutor {
@@ -33,6 +35,7 @@ impl std::fmt::Debug for ToolExecutor {
             Self::Simple(_) => write!(f, "Simple(..)"),
             #[cfg(feature = "llm-engine")]
             Self::WithContext(_) => write!(f, "WithContext(..)"),
+            Self::Frontend => write!(f, "Frontend"),
         }
     }
 }
@@ -92,6 +95,8 @@ pub enum ToolKind {
     AppAction,
     /// Tool that activates or reads a registered skill.
     Skill,
+    /// Tool declared and executed by the AG-UI frontend.
+    Frontend,
 }
 
 impl ToolKind {
@@ -105,6 +110,7 @@ impl ToolKind {
             Self::Interaction => "interaction",
             Self::AppAction => "app_action",
             Self::Skill => "skill",
+            Self::Frontend => "frontend",
         }
     }
 }
@@ -173,6 +179,15 @@ impl ToolRegistry {
 
     pub fn register(&mut self, tool: ToolSpec) {
         self.tools.insert(tool.name.clone(), tool);
+    }
+
+    /// Register a tool only when its name is not already present.
+    pub fn try_register(&mut self, tool: ToolSpec) -> Result<(), String> {
+        if self.tools.contains_key(&tool.name) {
+            return Err(format!("Tool name collision: {}", tool.name));
+        }
+        self.tools.insert(tool.name.clone(), tool);
+        Ok(())
     }
 
     pub fn get(&self, name: &str) -> Option<&ToolSpec> {
@@ -287,6 +302,12 @@ impl ToolRegistry {
             ToolExecutor::WithContext(exec) => {
                 let context = ctx.unwrap_or_default();
                 (exec)(args, context)
+            }
+            ToolExecutor::Frontend => {
+                return Err(format!(
+                    "Frontend tool '{}' must be executed by the AG-UI client",
+                    name
+                ));
             }
         };
         let out = match fut.await {

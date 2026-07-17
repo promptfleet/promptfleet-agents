@@ -1,5 +1,10 @@
 from .client import (
     AccessToken,
+    AsyncHttpTransport,
+    AsyncJwtSigner,
+    AsyncPromptFleetServiceAccountClient,
+    AsyncServiceAccountClientOptions,
+    AsyncUrllibTransport,
     InvokeTokenRequest,
     JwtSigner,
     PemRsaSigner,
@@ -9,6 +14,11 @@ from .client import (
 
 __all__ = [
     "AccessToken",
+    "AsyncHttpTransport",
+    "AsyncJwtSigner",
+    "AsyncPromptFleetServiceAccountClient",
+    "AsyncServiceAccountClientOptions",
+    "AsyncUrllibTransport",
     "InvokeTokenRequest",
     "JwtSigner",
     "PemRsaSigner",

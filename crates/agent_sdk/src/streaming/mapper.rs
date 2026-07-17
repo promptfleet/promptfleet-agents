@@ -111,6 +111,7 @@ pub fn map_trace_to_agent_io(event: AgentTraceEvent, ctx: &IoEventContext) -> Ve
             thread_id: ctx.thread_id.clone(),
             run_id: ctx.run_id.clone(),
             result: Some(json!({ "usage": usage })),
+            outcome: Some(crate::streaming::RunFinishedOutcome::Success),
         }],
         AgentTraceEvent::ProgressUpdate {
             message,
@@ -159,10 +160,7 @@ pub fn map_trace_to_agent_io(event: AgentTraceEvent, ctx: &IoEventContext) -> Ve
                 }]
             }
         }
-        AgentTraceEvent::InteractionRequested { request } => vec![AgentIoEvent::Custom {
-            name: "interaction_requested".to_string(),
-            value: json!(request),
-        }],
+        AgentTraceEvent::InteractionRequested { .. } => Vec::new(),
         AgentTraceEvent::AppActionRequested { request } => vec![AgentIoEvent::Custom {
             name: "app_action_requested".to_string(),
             value: request,

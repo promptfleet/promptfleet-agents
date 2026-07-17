@@ -9,7 +9,9 @@ use tokio::sync::oneshot;
 
 use crate::agent::trace::AgentTraceEvent;
 
-use super::{AgentIoEvent, IoEventContext, map_trace_to_agent_io};
+use super::{
+    AgentIoEvent, Interrupt, IoEventContext, RunFinishedOutcome, map_trace_to_agent_io,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunStatus {
@@ -57,6 +59,8 @@ pub struct AgUiDriverConfig {
     pub ctx: IoEventContext,
     pub cancel_flag: Option<Arc<AtomicBool>>,
     pub enrichers: Vec<Box<dyn StreamEnricher>>,
+    pub initial_state: serde_json::Value,
+    pub initial_messages: Vec<serde_json::Value>,
 }
 
 pub struct AgUiStreamDriver {
@@ -84,6 +88,9 @@ impl AgUiStreamDriver {
             text_message_ended: false,
             finished: false,
             cancellation_emitted: false,
+            initial_state: self.config.initial_state,
+            initial_messages: self.config.initial_messages,
+            pending_interrupts: Vec::new(),
         }
     }
 }
@@ -100,6 +107,9 @@ pub struct AgUiStream {
     text_message_ended: bool,
     finished: bool,
     cancellation_emitted: bool,
+    initial_state: serde_json::Value,
+    initial_messages: Vec<serde_json::Value>,
+    pending_interrupts: Vec<Interrupt>,
 }
 
 impl AgUiStream {
@@ -208,19 +218,39 @@ impl AgUiStream {
             self.maybe_emit_text_message_end();
         }
 
-        // When the run completes but an interaction was already requested, replace
-        // run_finished with run_input_required so the frontend knows to show the
-        // interaction UI rather than treating the run as done.
+        if let AgentTraceEvent::InteractionRequested { request } = &event {
+            self.pending_interrupts.push(interrupt_from_request(request));
+        }
+
+        // AG-UI interrupts are terminal outcomes. Snapshot the state and messages
+        // needed for replay before emitting the interrupting RUN_FINISHED.
         let mapped = if matches!(event, AgentTraceEvent::Completed { .. })
             && self.summary.status == RunStatus::InputRequired
         {
-            vec![AgentIoEvent::Custom {
-                name: "run_input_required".to_string(),
-                value: serde_json::json!({
-                    "runId": self.ctx.run_id,
-                    "threadId": self.ctx.thread_id,
-                }),
-            }]
+            let mut messages = self.initial_messages.clone();
+            if !self.summary.full_text.trim().is_empty() {
+                messages.push(serde_json::json!({
+                    "id": self.ctx.message_id,
+                    "role": "assistant",
+                    "content": self.summary.full_text,
+                }));
+            }
+            vec![
+                AgentIoEvent::StateSnapshot {
+                    snapshot: self.initial_state.clone(),
+                },
+                AgentIoEvent::MessagesSnapshot { messages },
+                AgentIoEvent::RunFinished {
+                    thread_id: self.ctx.thread_id.clone(),
+                    run_id: self.ctx.run_id.clone(),
+                    result: None,
+                    outcome: Some(RunFinishedOutcome::Interrupt {
+                        interrupts: self.pending_interrupts.clone(),
+                    }),
+                },
+            ]
+        } else if matches!(event, AgentTraceEvent::InteractionRequested { .. }) {
+            Vec::new()
         } else {
             map_trace_to_agent_io(event.clone(), &self.ctx)
         };
@@ -234,6 +264,47 @@ impl AgUiStream {
                 self.pending.push_back(enriched);
             }
         }
+    }
+}
+
+fn interrupt_from_request(request: &crate::interaction::InteractionRequest) -> Interrupt {
+    let response_schema = match request.kind {
+        crate::interaction::InteractionKind::Confirmation => serde_json::json!({
+            "type": "object",
+            "properties": {
+                "approved": { "type": "boolean" }
+            },
+            "required": ["approved"],
+            "additionalProperties": false
+        }),
+        crate::interaction::InteractionKind::Question => serde_json::json!({
+            "type": "object",
+            "properties": {
+                "selectedOptionId": { "type": "string" },
+                "freeText": { "type": "string" }
+            },
+            "anyOf": [
+                { "required": ["selectedOptionId"] },
+                { "required": ["freeText"] }
+            ],
+            "additionalProperties": false
+        }),
+    };
+    let expires_at = request.timeout_ms.and_then(|timeout_ms| {
+        chrono::Duration::try_milliseconds(timeout_ms as i64)
+            .map(|duration| (chrono::Utc::now() + duration).to_rfc3339())
+    });
+    Interrupt {
+        id: request.interaction_id.clone(),
+        reason: match request.kind {
+            crate::interaction::InteractionKind::Confirmation => "confirmation".to_string(),
+            crate::interaction::InteractionKind::Question => "input_required".to_string(),
+        },
+        message: Some(request.question.clone()),
+        tool_call_id: None,
+        response_schema: Some(response_schema),
+        expires_at,
+        metadata: Some(serde_json::json!({ "promptfleet": request })),
     }
 }
 
@@ -406,6 +477,8 @@ mod tests {
             ctx: test_ctx(),
             cancel_flag: None,
             enrichers: vec![],
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         });
         driver
             .drive(stream)
@@ -432,7 +505,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn driver_emits_run_input_required_when_interaction_seen() {
+    async fn driver_emits_standard_interrupt_outcome_with_snapshots() {
         let events = vec![
             interaction_requested_event(),
             AgentTraceEvent::Completed {
@@ -441,22 +514,63 @@ mod tests {
             },
         ];
         let names = collect_event_names(events).await;
-        assert_eq!(names.first().map(String::as_str), Some("RUN_STARTED"));
-        assert!(
-            names.contains(&"interaction_requested".to_string()),
-            "expected interaction_requested, got: {:?}",
-            names
+        assert_eq!(
+            names,
+            vec![
+                "RUN_STARTED",
+                "STATE_SNAPSHOT",
+                "MESSAGES_SNAPSHOT",
+                "RUN_FINISHED"
+            ]
         );
-        assert!(
-            names.contains(&"run_input_required".to_string()),
-            "expected run_input_required, got: {:?}",
-            names
-        );
-        assert!(
-            !names.contains(&"RUN_FINISHED".to_string()),
-            "RUN_FINISHED must not appear when interaction pending, got: {:?}",
-            names
-        );
+    }
+
+    #[tokio::test]
+    async fn driver_interrupt_binds_prompt_and_response_schema() {
+        let stream = futures::stream::iter(vec![
+            interaction_requested_event(),
+            AgentTraceEvent::Completed {
+                text: None,
+                usage: None,
+            },
+        ]);
+        let events = AgUiStreamDriver::new(AgUiDriverConfig {
+            ctx: test_ctx(),
+            cancel_flag: None,
+            enrichers: vec![],
+            initial_state: serde_json::json!({ "incidentId": "INC-1042" }),
+            initial_messages: vec![serde_json::json!({
+                "id": "user-1",
+                "role": "user",
+                "content": "Investigate"
+            })],
+        })
+        .drive(stream)
+        .collect::<Vec<_>>()
+        .await;
+
+        assert!(matches!(
+            &events[1],
+            AgentIoEvent::StateSnapshot { snapshot }
+                if snapshot["incidentId"] == "INC-1042"
+        ));
+        assert!(matches!(
+            &events[2],
+            AgentIoEvent::MessagesSnapshot { messages }
+                if messages.len() == 1 && messages[0]["id"] == "user-1"
+        ));
+        assert!(matches!(
+            &events[3],
+            AgentIoEvent::RunFinished {
+                outcome: Some(super::RunFinishedOutcome::Interrupt { interrupts }),
+                ..
+            } if interrupts.len() == 1
+                && interrupts[0].id == "ix-1"
+                && interrupts[0].reason == "confirmation"
+                && interrupts[0].response_schema.as_ref().is_some_and(|schema| {
+                    schema["required"] == serde_json::json!(["approved"])
+                })
+        ));
     }
 
     #[tokio::test]
@@ -493,6 +607,8 @@ mod tests {
             ctx: test_ctx(),
             cancel_flag: None,
             enrichers: vec![],
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
         });
         let mut agui_stream = driver.drive(stream);
         while agui_stream.next().await.is_some() {}

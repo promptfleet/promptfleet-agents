@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PromptFleetServiceAccountClient, type JwtSigner } from "../src/index.js";
+import {
+  PromptFleetServiceAccountClient,
+  createInvokeFetch,
+  type JwtSigner,
+} from "../src/index.js";
 
 test("exchanges a signed OAuth credential for a resource-bound invoke token and caches it", async () => {
   const requests: Array<{ url: string; form: URLSearchParams }> = [];
@@ -51,4 +55,30 @@ test("rejects an invoke request without resource binding", async () => {
     client.getInvokeToken({ audience: "pf-workload-api", resource: "", scopes: ["workload.invoke"] }),
     /resource/,
   );
+});
+
+test("composable invoke fetch refreshes auth without replacing client headers", async () => {
+  const requests: RequestInit[] = [];
+  const provider = {
+    async getInvokeToken() {
+      return { accessToken: "invoke-token", tokenType: "Bearer", expiresAt: Date.now() + 60_000 };
+    },
+  };
+  const fetch = createInvokeFetch(
+    provider,
+    { audience: "agent-edge-gateway", resource: "agent:a-1", scopes: ["agent.invoke"] },
+    async (_input, init) => {
+      requests.push(init ?? {});
+      return Response.json({ ok: true });
+    },
+  );
+
+  await fetch("https://agent.edge.example/agui/v1/runs", {
+    method: "POST",
+    headers: { "x-client": "example" },
+  });
+
+  const headers = new Headers(requests[0].headers);
+  assert.equal(headers.get("authorization"), "Bearer invoke-token");
+  assert.equal(headers.get("x-client"), "example");
 });

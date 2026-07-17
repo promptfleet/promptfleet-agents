@@ -162,6 +162,8 @@ async fn test_driver_with_test_pipeline() {
         ctx: io_ctx,
         cancel_flag: None,
         enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
     })
     .drive(trace_stream);
 
@@ -222,6 +224,8 @@ async fn test_with_summary_handle_via_pipeline() {
         },
         cancel_flag: None,
         enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
     };
 
     let (event_stream, summary_handle) = AgUiStreamDriver::new(config)
@@ -271,6 +275,8 @@ async fn test_ag_ui_sse_response_with_summary_type_checks() {
         },
         cancel_flag: None,
         enrichers: Vec::new(),
+            initial_state: serde_json::Value::Null,
+            initial_messages: Vec::new(),
     };
 
     let (sse, _handle) = ag_ui_sse_response_with_summary(config, trace_stream);

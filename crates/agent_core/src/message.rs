@@ -2,13 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Universal message role — the three roles every agent protocol needs.
+/// Universal message role used across conversational and tool-calling protocols.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     User,
     Agent,
     System,
+    Tool,
 }
 
 /// Multi-modal content part — text, file, or structured data.
@@ -33,6 +34,21 @@ pub enum ContentPart {
     },
     /// Structured JSON data (tool calls, parameters, etc.).
     Data(serde_json::Value),
+    /// A tool call requested by an agent message.
+    ToolCall {
+        id: String,
+        name: String,
+        arguments: serde_json::Value,
+    },
+    /// A tool execution result correlated to a prior tool call.
+    ToolResult {
+        tool_call_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        content: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
 }
 
 /// Protocol-agnostic agent message.
@@ -74,6 +90,24 @@ impl AgentMessage {
         Self {
             role: Role::System,
             parts: vec![ContentPart::Text(text.into())],
+        }
+    }
+
+    /// Convenience: tool result message.
+    pub fn tool_result(
+        tool_call_id: impl Into<String>,
+        name: Option<String>,
+        content: impl Into<String>,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            role: Role::Tool,
+            parts: vec![ContentPart::ToolResult {
+                tool_call_id: tool_call_id.into(),
+                name,
+                content: content.into(),
+                error,
+            }],
         }
     }
 

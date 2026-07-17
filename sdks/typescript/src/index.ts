@@ -34,6 +34,15 @@ export interface AccessToken {
   scope?: string;
 }
 
+export interface InvokeTokenProvider {
+  getInvokeToken(request: InvokeTokenRequest): Promise<AccessToken>;
+}
+
+export type AuthenticatedFetch = (
+  input: string | URL | globalThis.Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
 type TokenResponse = {
   access_token?: unknown;
   token_type?: unknown;
@@ -93,10 +102,7 @@ export class PromptFleetServiceAccountClient {
     init: RequestInit | undefined,
     request: InvokeTokenRequest,
   ): Promise<Response> {
-    const token = await this.getInvokeToken(request);
-    const headers = new Headers(init?.headers);
-    headers.set("authorization", `Bearer ${token.accessToken}`);
-    return this.#fetch(input, { ...init, headers });
+    return createInvokeFetch(this, request, this.#fetch)(input, init);
   }
 
   async #requestOAuthAccessToken(): Promise<AccessToken> {
@@ -155,6 +161,34 @@ export class PromptFleetServiceAccountClient {
       scope: typeof body.scope === "string" ? body.scope : undefined,
     };
   }
+}
+
+export async function invokeAuthorizationHeaders(
+  provider: InvokeTokenProvider,
+  request: InvokeTokenRequest,
+  headers?: HeadersInit,
+): Promise<Headers> {
+  const token = await provider.getInvokeToken(request);
+  const authenticated = new Headers(headers);
+  authenticated.set("authorization", `Bearer ${token.accessToken}`);
+  return authenticated;
+}
+
+/**
+ * Creates a lazy authenticated fetch suitable for standard clients such as
+ * `@ag-ui/client` HttpAgent and `@a2a-js/sdk`. A fresh resource-bound invoke
+ * token is resolved for every request; the provider performs safe caching and
+ * single-flight refresh.
+ */
+export function createInvokeFetch(
+  provider: InvokeTokenProvider,
+  request: InvokeTokenRequest,
+  fetchImpl: AuthenticatedFetch = globalThis.fetch,
+): AuthenticatedFetch {
+  return async (input, init) => {
+    const headers = await invokeAuthorizationHeaders(provider, request, init?.headers);
+    return fetchImpl(input, { ...init, headers });
+  };
 }
 
 export function createNodePrivateKeySigner(keyId: string, privateKey: string | Buffer | KeyObject): JwtSigner {

@@ -429,23 +429,98 @@ pub(crate) fn build_runtime_messages_with_history(
             agent_core::Role::User => "user",
             agent_core::Role::Agent => "assistant",
             agent_core::Role::System => "system",
+            agent_core::Role::Tool => "tool",
         };
         let mut text_content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut tool_result: Option<(String, Option<String>, String, Option<String>)> = None;
         for p in &m.parts {
-            if let agent_core::ContentPart::Text(t) = p {
-                if !text_content.is_empty() {
-                    text_content.push('\n');
+            match p {
+                agent_core::ContentPart::Text(t) => {
+                    if !text_content.is_empty() {
+                        text_content.push('\n');
+                    }
+                    text_content.push_str(t);
                 }
-                text_content.push_str(t);
+                agent_core::ContentPart::ToolCall {
+                    id,
+                    name,
+                    arguments,
+                } => tool_calls.push(llm_client::ToolCallRequest {
+                    id: id.clone(),
+                    name: name.clone(),
+                    arguments: arguments.clone(),
+                }),
+                agent_core::ContentPart::ToolResult {
+                    tool_call_id,
+                    name,
+                    content,
+                    error,
+                } => {
+                    tool_result = Some((
+                        tool_call_id.clone(),
+                        name.clone(),
+                        content.clone(),
+                        error.clone(),
+                    ));
+                }
+                _ => {}
             }
         }
-        if !text_content.is_empty() {
+
+        if let Some((tool_call_id, name, content, error)) = tool_result {
+            let content = error
+                .map(|error| serde_json::json!({ "content": content, "error": error }).to_string())
+                .unwrap_or(content);
+            messages.push(llm_client::ChatMessage {
+                role: "tool".into(),
+                content: Some(content),
+                tool_call_id: Some(tool_call_id),
+                name,
+                ..Default::default()
+            });
+        } else if !text_content.is_empty() || !tool_calls.is_empty() {
             messages.push(llm_client::ChatMessage {
                 role: role.into(),
-                content: Some(text_content),
+                content: (!text_content.is_empty()).then_some(text_content),
+                tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
                 ..Default::default()
             });
         }
+    }
+
+    if msg_ctx.runtime_message.role == agent_core::Role::Tool {
+        if let Some((tool_call_id, name, content, error)) =
+            msg_ctx.runtime_message.parts.iter().find_map(|part| {
+                let agent_core::ContentPart::ToolResult {
+                    tool_call_id,
+                    name,
+                    content,
+                    error,
+                } = part
+                else {
+                    return None;
+                };
+                Some((
+                    tool_call_id.clone(),
+                    name.clone(),
+                    content.clone(),
+                    error.clone(),
+                ))
+            })
+        {
+            let content = error
+                .map(|error| serde_json::json!({ "content": content, "error": error }).to_string())
+                .unwrap_or(content);
+            messages.push(llm_client::ChatMessage {
+                role: "tool".into(),
+                content: Some(content),
+                tool_call_id: Some(tool_call_id),
+                name,
+                ..Default::default()
+            });
+        }
+        return messages;
     }
 
     let user_text = msg_ctx

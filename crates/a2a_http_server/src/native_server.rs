@@ -23,7 +23,7 @@ use {
     a2a_protocol_core::methods::params::{MessageSendParams, MessageSendResponse},
     a2a_protocol_core::streaming::StreamResponse,
     axum::response::IntoResponse,
-    futures_util::Stream,
+    futures_util::{Stream, StreamExt},
     protocol_transport_core::JsonRpcRequest,
 };
 
@@ -1176,7 +1176,14 @@ impl A2AHttpServer {
                 );
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-        let sse = a2a_sse_stream(a2a_events);
+        let storage_for_stream = storage.clone();
+        let persisted_events = a2a_events.map(move |event| {
+            if let Err(err) = persist_stream_response(storage_for_stream.as_ref(), &event) {
+                error!("failed to persist A2A stream event: {}", err);
+            }
+            event
+        });
+        let sse = a2a_sse_stream(persisted_events);
 
         let mut response = sse.into_response();
         response
@@ -1262,6 +1269,94 @@ fn a2a_sse_stream(
             .interval(Duration::from_secs(15))
             .text(":keepalive"),
     )
+}
+
+#[cfg(feature = "event-stream")]
+fn persist_stream_response(
+    storage: &dyn TaskStorage,
+    event: &StreamResponse,
+) -> a2a_protocol_core::A2AResult<()> {
+    match event {
+        StreamResponse::Task(task) => {
+            if storage.task_exists(&task.id)? {
+                storage.update_task(task.clone())
+            } else {
+                storage.store_task(task.clone())
+            }
+        }
+        StreamResponse::Message(message) => {
+            let Some(task_id) = message.task_id.as_deref() else {
+                return Ok(());
+            };
+            let mut task = storage.get_task(task_id)?.unwrap_or_else(|| {
+                a2a_protocol_core::data::Task::with_id(
+                    task_id.to_string(),
+                    message
+                        .context_id
+                        .clone()
+                        .unwrap_or_else(|| task_id.to_string()),
+                )
+            });
+            task.add_to_history(message.clone());
+            if storage.task_exists(task_id)? {
+                storage.update_task(task)
+            } else {
+                storage.store_task(task)
+            }
+        }
+        StreamResponse::StatusUpdate(update) => {
+            let mut task = storage.get_task(&update.task_id)?.unwrap_or_else(|| {
+                a2a_protocol_core::data::Task::with_id(
+                    update.task_id.clone(),
+                    update.context_id.clone(),
+                )
+            });
+            task.status = update.status.clone();
+            if storage.task_exists(&update.task_id)? {
+                storage.update_task(task)
+            } else {
+                storage.store_task(task)
+            }
+        }
+        StreamResponse::ArtifactUpdate(update) => {
+            let mut task = storage.get_task(&update.task_id)?.unwrap_or_else(|| {
+                a2a_protocol_core::data::Task::with_id(
+                    update.task_id.clone(),
+                    update.context_id.clone(),
+                )
+            });
+            let artifacts = task.artifacts.get_or_insert_with(Vec::new);
+            if let Some(existing) = artifacts
+                .iter_mut()
+                .find(|artifact| artifact.artifact_id == update.artifact.artifact_id)
+            {
+                if update.append == Some(true) {
+                    existing.parts.extend(update.artifact.parts.clone());
+                    if update.artifact.name.is_some() {
+                        existing.name = update.artifact.name.clone();
+                    }
+                    if update.artifact.description.is_some() {
+                        existing.description = update.artifact.description.clone();
+                    }
+                    if update.artifact.metadata.is_some() {
+                        existing.metadata = update.artifact.metadata.clone();
+                    }
+                    if update.artifact.extensions.is_some() {
+                        existing.extensions = update.artifact.extensions.clone();
+                    }
+                } else {
+                    *existing = update.artifact.clone();
+                }
+            } else {
+                artifacts.push(update.artifact.clone());
+            }
+            if storage.task_exists(&update.task_id)? {
+                storage.update_task(task)
+            } else {
+                storage.store_task(task)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

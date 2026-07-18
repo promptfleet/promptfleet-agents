@@ -9,6 +9,7 @@
 use a2a_http_server::{A2AHttpServer, A2AStreamingAppPort, AgentCard};
 use a2a_protocol_core::{
     data::{Message, MessageRole, Part, TaskState, TaskStatus},
+    services::{InMemoryTaskStorage, TaskStorage},
     streaming::{StreamResponse, TaskStatusUpdateEvent},
 };
 use axum::body::Body;
@@ -40,10 +41,17 @@ impl A2AStreamingAppPort for MockStreamingPort {
 }
 
 fn build_server(events: Vec<StreamResponse>) -> axum::Router {
+    build_server_with_storage(events).0
+}
+
+fn build_server_with_storage(
+    events: Vec<StreamResponse>,
+) -> (axum::Router, Arc<InMemoryTaskStorage>) {
     let card = AgentCard::new("test-streaming-agent".to_string());
     let port: Arc<dyn A2AStreamingAppPort> = Arc::new(MockStreamingPort { events });
-    let server = A2AHttpServer::new_with_a2a_methods(card).with_streaming_port(port);
-    server.build_router()
+    let storage = Arc::new(InMemoryTaskStorage::new());
+    let server = A2AHttpServer::new_with_storage(card, storage.clone()).with_streaming_port(port);
+    (server.build_router(), storage)
 }
 
 #[tokio::test]
@@ -85,7 +93,7 @@ async fn streaming_endpoint_returns_sse_with_correct_wire_format() {
         }),
     ];
 
-    let router = build_server(mock_events);
+    let (router, storage) = build_server_with_storage(mock_events);
     let body_str = send_subscribe_body("Hello agent");
 
     let request = Request::builder()
@@ -149,6 +157,21 @@ async fn streaming_endpoint_returns_sse_with_correct_wire_format() {
         "TASK_STATE_COMPLETED"
     );
     assert_eq!(last_data["final_event"], true);
+
+    let persisted = storage
+        .get_task("task-mock")
+        .expect("read persisted task")
+        .expect("stream task should be persisted");
+    assert_eq!(persisted.status.state, TaskState::Completed);
+    assert_eq!(
+        persisted
+            .status
+            .message
+            .as_ref()
+            .map(Message::get_text_content)
+            .as_deref(),
+        Some("Done")
+    );
 }
 
 #[tokio::test]

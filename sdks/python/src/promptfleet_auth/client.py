@@ -14,10 +14,8 @@ from urllib import error, parse, request
 
 import truststore
 
-TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
-JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
-PF_INVOKE_TOKEN_TYPE = "urn:promptfleet:params:oauth:token-type:pf-invoke-jwt"
+CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+DEFAULT_INVOKE_TRUST_TOKEN_URL = "https://issuer.promptfleet.ai/invoke-trust/token"
 
 
 class JwtSigner(Protocol):
@@ -47,11 +45,8 @@ class AsyncHttpTransport(Protocol):
 @dataclass(frozen=True)
 class ServiceAccountClientOptions:
     client_id: str
-    oauth_token_url: str
-    oauth_audience: str
-    invoke_token_url: str
     signer: JwtSigner
-    oauth_scopes: Sequence[str]
+    token_url: str = DEFAULT_INVOKE_TRUST_TOKEN_URL
     transport: HttpTransport | None = None
     clock: Callable[[], float] = time.time
 
@@ -59,18 +54,14 @@ class ServiceAccountClientOptions:
 @dataclass(frozen=True)
 class AsyncServiceAccountClientOptions:
     client_id: str
-    oauth_token_url: str
-    oauth_audience: str
-    invoke_token_url: str
     signer: JwtSigner | AsyncJwtSigner
-    oauth_scopes: Sequence[str]
+    token_url: str = DEFAULT_INVOKE_TRUST_TOKEN_URL
     transport: AsyncHttpTransport | None = None
     clock: Callable[[], float] = time.time
 
 
 @dataclass(frozen=True)
 class InvokeTokenRequest:
-    audience: str
     resource: str
     scopes: Sequence[str]
 
@@ -85,43 +76,31 @@ class AccessToken:
 
 class PromptFleetServiceAccountClient:
     def __init__(self, options: ServiceAccountClientOptions) -> None:
-        if not options.client_id or not options.oauth_token_url or not options.oauth_audience or not options.invoke_token_url:
-            raise ValueError("client_id, oauth_token_url, oauth_audience, and invoke_token_url are required")
-        if not options.oauth_scopes:
-            raise ValueError("oauth_scopes must include the PromptFleet API audience scope")
+        if not options.client_id or not options.token_url or not options.signer.key_id:
+            raise ValueError("client_id, token_url, and a signer with key_id are required")
         self._options = options
         self._transport = options.transport or UrllibTransport()
-        self._oauth: AccessToken | None = None
-        self._invoke: dict[tuple[str, str, tuple[str, ...]], AccessToken] = {}
+        self._invoke: dict[tuple[str, tuple[str, ...]], AccessToken] = {}
         self._lock = threading.Lock()
 
-    def get_oauth_access_token(self) -> AccessToken:
-        with self._lock:
-            if self._fresh(self._oauth):
-                return self._oauth
-            self._oauth = self._request_oauth_access_token()
-            return self._oauth
-
     def get_invoke_token(self, requested: InvokeTokenRequest) -> AccessToken:
-        if not requested.audience or not requested.resource or not requested.scopes:
-            raise ValueError("audience, resource, and at least one scope are required")
-        cache_key = (requested.audience, requested.resource, tuple(sorted(requested.scopes)))
+        if not requested.resource or not requested.scopes:
+            raise ValueError("resource and at least one scope are required")
+        cache_key = (requested.resource, tuple(sorted(requested.scopes)))
         with self._lock:
             cached = self._invoke.get(cache_key)
             if self._fresh(cached):
                 return cached
-            source = self._oauth if self._fresh(self._oauth) else self._request_oauth_access_token()
-            self._oauth = source
+            assertion = self._create_client_assertion()
             token = self._post_token(
-                self._options.invoke_token_url,
+                self._options.token_url,
                 {
-                    "grant_type": TOKEN_EXCHANGE_GRANT,
-                    "subject_token_type": ACCESS_TOKEN_TYPE,
-                    "subject_token": source.access_token,
-                    "audience": requested.audience,
+                    "grant_type": "client_credentials",
+                    "client_id": self._options.client_id,
+                    "client_assertion_type": CLIENT_ASSERTION_TYPE,
+                    "client_assertion": assertion,
                     "resource": requested.resource,
                     "scope": " ".join(requested.scopes),
-                    "requested_token_type": PF_INVOKE_TOKEN_TYPE,
                 },
                 "PromptFleet invoke token",
             )
@@ -131,33 +110,21 @@ class PromptFleetServiceAccountClient:
     def authorization_header(self, requested: InvokeTokenRequest) -> str:
         return f"Bearer {self.get_invoke_token(requested).access_token}"
 
-    def _request_oauth_access_token(self) -> AccessToken:
+    def _create_client_assertion(self) -> str:
         now = int(self._options.clock())
         header = _encode_json({"alg": "RS256", "typ": "JWT", "kid": self._options.signer.key_id})
         claims = _encode_json(
             {
                 "iss": self._options.client_id,
                 "sub": self._options.client_id,
-                "aud": self._options.oauth_audience,
+                "aud": self._options.token_url,
                 "iat": now,
                 "exp": now + 60,
                 "jti": str(uuid.uuid4()),
             }
         )
         signing_input = f"{header}.{claims}".encode("ascii")
-        assertion = f"{signing_input.decode('ascii')}.{_base64url(self._options.signer.sign(signing_input))}"
-        form = {
-            "grant_type": JWT_BEARER_GRANT,
-            "assertion": assertion,
-        }
-        form["scope"] = " ".join(dict.fromkeys(("openid", *self._options.oauth_scopes)))
-        token = self._post_token(self._options.oauth_token_url, form, "OAuth token")
-        return AccessToken(
-            access_token=token.access_token,
-            token_type=token.token_type,
-            expires_at=min(token.expires_at, self._options.clock() + 300),
-            scope=token.scope,
-        )
+        return f"{signing_input.decode('ascii')}.{_base64url(self._options.signer.sign(signing_input))}"
 
     def _post_token(self, url: str, form: Mapping[str, str], label: str) -> AccessToken:
         status, body = self._transport.post_form(url, form)
@@ -185,38 +152,21 @@ class AsyncPromptFleetServiceAccountClient:
     def __init__(self, options: AsyncServiceAccountClientOptions) -> None:
         if (
             not options.client_id
-            or not options.oauth_token_url
-            or not options.oauth_audience
-            or not options.invoke_token_url
+            or not options.token_url
+            or not options.signer.key_id
         ):
             raise ValueError(
-                "client_id, oauth_token_url, oauth_audience, and invoke_token_url are required"
-            )
-        if not options.oauth_scopes:
-            raise ValueError(
-                "oauth_scopes must include the PromptFleet API audience scope"
+                "client_id, token_url, and a signer with key_id are required"
             )
         self._options = options
         self._transport = options.transport or AsyncUrllibTransport()
-        self._oauth: AccessToken | None = None
-        self._invoke: dict[tuple[str, str, tuple[str, ...]], AccessToken] = {}
-        self._oauth_lock = asyncio.Lock()
-        self._invoke_locks: dict[tuple[str, str, tuple[str, ...]], asyncio.Lock] = {}
-
-    async def get_oauth_access_token(self) -> AccessToken:
-        if self._fresh(self._oauth):
-            return self._oauth
-        async with self._oauth_lock:
-            if self._fresh(self._oauth):
-                return self._oauth
-            self._oauth = await self._request_oauth_access_token()
-            return self._oauth
+        self._invoke: dict[tuple[str, tuple[str, ...]], AccessToken] = {}
+        self._invoke_locks: dict[tuple[str, tuple[str, ...]], asyncio.Lock] = {}
 
     async def get_invoke_token(self, requested: InvokeTokenRequest) -> AccessToken:
-        if not requested.audience or not requested.resource or not requested.scopes:
-            raise ValueError("audience, resource, and at least one scope are required")
+        if not requested.resource or not requested.scopes:
+            raise ValueError("resource and at least one scope are required")
         cache_key = (
-            requested.audience,
             requested.resource,
             tuple(sorted(requested.scopes)),
         )
@@ -228,17 +178,16 @@ class AsyncPromptFleetServiceAccountClient:
             cached = self._invoke.get(cache_key)
             if self._fresh(cached):
                 return cached
-            source = await self.get_oauth_access_token()
+            assertion = await self._create_client_assertion()
             token = await self._post_token(
-                self._options.invoke_token_url,
+                self._options.token_url,
                 {
-                    "grant_type": TOKEN_EXCHANGE_GRANT,
-                    "subject_token_type": ACCESS_TOKEN_TYPE,
-                    "subject_token": source.access_token,
-                    "audience": requested.audience,
+                    "grant_type": "client_credentials",
+                    "client_id": self._options.client_id,
+                    "client_assertion_type": CLIENT_ASSERTION_TYPE,
+                    "client_assertion": assertion,
                     "resource": requested.resource,
                     "scope": " ".join(requested.scopes),
-                    "requested_token_type": PF_INVOKE_TOKEN_TYPE,
                 },
                 "PromptFleet invoke token",
             )
@@ -255,7 +204,7 @@ class AsyncPromptFleetServiceAccountClient:
         authenticated["authorization"] = f"Bearer {token.access_token}"
         return authenticated
 
-    async def _request_oauth_access_token(self) -> AccessToken:
+    async def _create_client_assertion(self) -> str:
         now = int(self._options.clock())
         header = _encode_json(
             {"alg": "RS256", "typ": "JWT", "kid": self._options.signer.key_id}
@@ -264,7 +213,7 @@ class AsyncPromptFleetServiceAccountClient:
             {
                 "iss": self._options.client_id,
                 "sub": self._options.client_id,
-                "aud": self._options.oauth_audience,
+                "aud": self._options.token_url,
                 "iat": now,
                 "exp": now + 60,
                 "jti": str(uuid.uuid4()),
@@ -274,25 +223,8 @@ class AsyncPromptFleetServiceAccountClient:
         signature = self._options.signer.sign(signing_input)
         if inspect.isawaitable(signature):
             signature = await signature
-        assertion = (
+        return (
             f"{signing_input.decode('ascii')}.{_base64url(signature)}"
-        )
-        token = await self._post_token(
-            self._options.oauth_token_url,
-            {
-                "grant_type": JWT_BEARER_GRANT,
-                "assertion": assertion,
-                "scope": " ".join(
-                    dict.fromkeys(("openid", *self._options.oauth_scopes))
-                ),
-            },
-            "OAuth token",
-        )
-        return AccessToken(
-            access_token=token.access_token,
-            token_type=token.token_type,
-            expires_at=min(token.expires_at, self._options.clock() + 300),
-            scope=token.scope,
         )
 
     async def _post_token(

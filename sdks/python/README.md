@@ -7,17 +7,13 @@ After PromptFleet activates the first registered public key, use the service acc
 ```python
 client = PromptFleetServiceAccountClient(
     ServiceAccountClientOptions(
-        client_id="machine-user-id",
-        oauth_token_url="https://identity.example/oauth/v2/token",
-        oauth_audience="https://identity.example",
-        oauth_scopes=["urn:zitadel:iam:org:project:id:YOUR_PROMPTFLEET_PROJECT_ID:aud"],
-        invoke_token_url="https://api.promptfleet.ai/v1/invoke/token",
+        client_id="svc:example",
         signer=kms_signer,
     )
 )
 
 token = client.get_invoke_token(
-    InvokeTokenRequest("pf-workload-api", "workload:wld-123", ["workload.invoke"])
+    InvokeTokenRequest("https://api.promptfleet.ai/workloads", ["workload.invoke"])
 )
 ```
 
@@ -29,7 +25,7 @@ single-flight per resource, and `authorization_headers()` composes directly
 with standard `httpx`, A2A, or AG-UI clients without exposing a bearer token to
 browser code.
 
-`oauth_audience` is the ZITADEL custom-domain origin used in the signed assertion, not the token endpoint URL. `oauth_scopes` must include the PromptFleet API project-audience scope shown by your platform administrator. The client uses the RFC 7523 JWT-bearer grant, adds the required `openid` scope, and refreshes the source token within five minutes even if ZITADEL reports a longer lifetime.
+The client uses OAuth `client_credentials` with RFC 7523 `private_key_jwt`. The assertion audience is the PromptFleet token endpoint; the returned five-minute access token is bound to the exact protected-resource URI. No identity-provider-specific project scope is exposed.
 
 The default HTTP transport verifies TLS hostnames and certificate chains using
 the operating system trust store through PyCA `truststore`, including managed
@@ -47,8 +43,7 @@ python -m pip install -e '.[pem]'
 export PF_SERVICE_ACCOUNT_CLIENT_ID='...'
 export PF_SERVICE_ACCOUNT_KEY_ID='...'
 export PF_SERVICE_ACCOUNT_PRIVATE_KEY_FILE='/protected/path/private-key.pem'
-export PF_OAUTH_PROJECT_SCOPE='urn:zitadel:iam:org:project:id:...:aud'
 export PF_AGENT_EDGE_URL='https://my-agent.edge.promptfleet.ai/jsonrpc'
-export PF_AGENT_RESOURCE='agent:A-...'
+export PF_AGENT_RESOURCE='https://my-agent.edge.promptfleet.ai'
 python examples/invoke_agent.py
 ```

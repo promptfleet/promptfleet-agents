@@ -27,13 +27,8 @@ def required(name: str) -> str:
 client = PromptFleetServiceAccountClient(
     ServiceAccountClientOptions(
         client_id=required("PF_SERVICE_ACCOUNT_CLIENT_ID"),
-        oauth_token_url=os.environ.get(
-            "PF_OAUTH_TOKEN_URL", "https://auth.promptfleet.ai/oauth/v2/token"
-        ),
-        oauth_audience=os.environ.get("PF_OAUTH_AUDIENCE", "https://auth.promptfleet.ai"),
-        oauth_scopes=[required("PF_OAUTH_PROJECT_SCOPE")],
-        invoke_token_url=os.environ.get(
-            "PF_INVOKE_TOKEN_URL", "https://api.promptfleet.ai/v1/invoke/token"
+        token_url=os.environ.get(
+            "PF_OAUTH_TOKEN_URL", "https://issuer.promptfleet.ai/invoke-trust/token"
         ),
         signer=PemRsaSigner(
             required("PF_SERVICE_ACCOUNT_KEY_ID"),
@@ -43,7 +38,6 @@ client = PromptFleetServiceAccountClient(
 )
 
 invoke_request = InvokeTokenRequest(
-    audience=os.environ.get("PF_INVOKE_AUDIENCE", "agent-edge-gateway"),
     resource=required("PF_AGENT_RESOURCE"),
     scopes=["agent.invoke"],
 )

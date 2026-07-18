@@ -1,9 +1,7 @@
 import { createPrivateKey, KeyObject, randomUUID, sign as nodeSign } from "node:crypto";
 
-const TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
-const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
-const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
-const PF_INVOKE_TOKEN_TYPE = "urn:promptfleet:params:oauth:token-type:pf-invoke-jwt";
+const CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+export const DEFAULT_INVOKE_TRUST_TOKEN_URL = "https://issuer.promptfleet.ai/invoke-trust/token";
 
 export interface JwtSigner {
   readonly keyId: string;
@@ -12,17 +10,13 @@ export interface JwtSigner {
 
 export interface ServiceAccountClientOptions {
   clientId: string;
-  oauthTokenUrl: string;
-  oauthAudience: string;
-  invokeTokenUrl: string;
+  tokenUrl?: string;
   signer: JwtSigner;
-  oauthScopes: readonly string[];
   fetch?: typeof globalThis.fetch;
   clock?: () => number;
 }
 
 export interface InvokeTokenRequest {
-  audience: string;
   resource: string;
   scopes: readonly string[];
 }
@@ -54,38 +48,23 @@ export class PromptFleetServiceAccountClient {
   readonly #options: ServiceAccountClientOptions;
   readonly #fetch: typeof globalThis.fetch;
   readonly #clock: () => number;
-  #oauth?: AccessToken;
   readonly #invoke = new Map<string, AccessToken>();
-  #oauthPending?: Promise<AccessToken>;
   readonly #invokePending = new Map<string, Promise<AccessToken>>();
 
   constructor(options: ServiceAccountClientOptions) {
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#clock = options.clock ?? Date.now;
-    if (!options.clientId || !options.oauthTokenUrl || !options.oauthAudience || !options.invokeTokenUrl) {
-      throw new Error("clientId, oauthTokenUrl, oauthAudience, and invokeTokenUrl are required");
+    if (!options.clientId || !options.signer?.keyId) {
+      throw new Error("clientId and a signer with keyId are required");
     }
-    if (!options.oauthScopes?.length) {
-      throw new Error("oauthScopes must include the PromptFleet API audience scope");
-    }
-  }
-
-  async getOAuthAccessToken(): Promise<AccessToken> {
-    if (isFresh(this.#oauth, this.#clock())) return this.#oauth;
-    if (this.#oauthPending) return this.#oauthPending;
-    this.#oauthPending = this.#requestOAuthAccessToken().finally(() => {
-      this.#oauthPending = undefined;
-    });
-    this.#oauth = await this.#oauthPending;
-    return this.#oauth;
   }
 
   async getInvokeToken(request: InvokeTokenRequest): Promise<AccessToken> {
-    if (!request.audience || !request.resource || request.scopes.length === 0) {
-      throw new Error("audience, resource, and at least one scope are required");
+    if (!request.resource || request.scopes.length === 0) {
+      throw new Error("resource and at least one scope are required");
     }
-    const key = JSON.stringify([request.audience, request.resource, [...request.scopes].sort()]);
+    const key = JSON.stringify([request.resource, [...request.scopes].sort()]);
     const cached = this.#invoke.get(key);
     if (isFresh(cached, this.#clock())) return cached;
     const pending = this.#invokePending.get(key);
@@ -105,13 +84,14 @@ export class PromptFleetServiceAccountClient {
     return createInvokeFetch(this, request, this.#fetch)(input, init);
   }
 
-  async #requestOAuthAccessToken(): Promise<AccessToken> {
+  async #requestInvokeToken(request: InvokeTokenRequest): Promise<AccessToken> {
+    const tokenUrl = this.#options.tokenUrl ?? DEFAULT_INVOKE_TRUST_TOKEN_URL;
     const nowSeconds = Math.floor(this.#clock() / 1000);
     const header = encodeJson({ alg: "RS256", typ: "JWT", kid: this.#options.signer.keyId });
     const claims = encodeJson({
       iss: this.#options.clientId,
       sub: this.#options.clientId,
-      aud: this.#options.oauthAudience,
+      aud: tokenUrl,
       iat: nowSeconds,
       exp: nowSeconds + 60,
       jti: randomUUID(),
@@ -120,27 +100,14 @@ export class PromptFleetServiceAccountClient {
     const signature = await this.#options.signer.sign(new TextEncoder().encode(signingInput));
     const assertion = `${signingInput}.${base64Url(signature)}`;
     const form = new URLSearchParams({
-      grant_type: JWT_BEARER_GRANT,
-      assertion,
-    });
-    const scopes = new Set(["openid", ...this.#options.oauthScopes]);
-    form.set("scope", [...scopes].join(" "));
-    const token = await this.#postToken(this.#options.oauthTokenUrl, form, "OAuth token");
-    return { ...token, expiresAt: Math.min(token.expiresAt, this.#clock() + 300_000) };
-  }
-
-  async #requestInvokeToken(request: InvokeTokenRequest): Promise<AccessToken> {
-    const source = await this.getOAuthAccessToken();
-    const form = new URLSearchParams({
-      grant_type: TOKEN_EXCHANGE_GRANT,
-      subject_token_type: ACCESS_TOKEN_TYPE,
-      subject_token: source.accessToken,
-      audience: request.audience,
+      grant_type: "client_credentials",
+      client_id: this.#options.clientId,
+      client_assertion_type: CLIENT_ASSERTION_TYPE,
+      client_assertion: assertion,
       resource: request.resource,
       scope: request.scopes.join(" "),
-      requested_token_type: PF_INVOKE_TOKEN_TYPE,
     });
-    return this.#postToken(this.#options.invokeTokenUrl, form, "PromptFleet invoke token");
+    return this.#postToken(tokenUrl, form, "PromptFleet invoke token");
   }
 
   async #postToken(url: string, form: URLSearchParams, label: string): Promise<AccessToken> {

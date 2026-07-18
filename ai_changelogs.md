@@ -8,13 +8,16 @@ Completed the standard AG-UI application contract: canonical tool messages and
 correlation, request-declared frontend tools, state/message snapshots, and
 `RUN_FINISHED.outcome` interrupt/resume semantics. Added composable
 resource-bound authentication adapters for Node 20 and Python 3.11, including
-async KMS signing and single-flight token refresh.
+async KMS signing and single-flight token refresh. Interrupt snapshots now
+retain assistant tool calls and correlated pending tool results, and canonical
+resume entries replace the pending result before the resumed LLM turn.
 
 ### Files modified
 
 - `crates/agent_core` and `crates/agent_sdk` — tool roles/parts, frontend tool
   registration and collision rejection, canonical request context/state/resume,
-  official interrupt outcomes, and stream snapshots.
+  official interrupt outcomes, replay-complete stream snapshots, and resolved
+  interaction results in resumed model history.
 - `sdks/typescript` — authenticated fetch composition for standard clients and
   Node 20 support.
 - `sdks/python` — Python 3.11 support plus async signer, transport, token cache,
@@ -22,7 +25,9 @@ async KMS signing and single-flight token refresh.
 
 ### Tests
 
-- `cargo test -p pf_agent_sdk --all-features --lib`: **passed** (271 tests).
+- `cargo test -p pf_agent_sdk --all-features --lib`: **passed** (273 tests).
+- `cargo test -p pf_agent_sdk --features event-stream`: **passed** (227 unit,
+  1 A2A integration, and 5 streaming seam tests).
 - `cargo check --target wasm32-wasip1 -p pf_agent_core`: **passed**.
 - `cargo check --target wasm32-wasip1 -p pf_agent_sdk --no-default-features --features agui-agent,wasm-optimized`: **passed**.
 - `npm test` in `sdks/typescript`: **passed** (3 tests).

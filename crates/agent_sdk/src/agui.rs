@@ -209,8 +209,8 @@ impl RunAgentInput {
     }
 
     pub fn split_prompt_and_history(&self) -> (AgentMessage, Vec<AgentMessage>) {
-        let prompt_index = self
-            .messages
+        let messages = self.messages_with_resolved_resumes();
+        let prompt_index = messages
             .iter()
             .rposition(|message| {
                 !matches!(
@@ -218,9 +218,9 @@ impl RunAgentInput {
                     "assistant" | "system" | "developer"
                 )
             })
-            .or_else(|| (!self.messages.is_empty()).then(|| self.messages.len() - 1));
+            .or_else(|| (!messages.is_empty()).then(|| messages.len() - 1));
         let mut user_message = prompt_index
-            .map(|index| run_agent_message_to_agent_message(&self.messages[index]))
+            .map(|index| run_agent_message_to_agent_message(&messages[index]))
             .unwrap_or_else(|| AgentMessage::user_text(""));
         if !self.resume.is_empty() {
             user_message
@@ -243,8 +243,7 @@ impl RunAgentInput {
                     "ag_ui_state": self.state
                 })));
         }
-        let history = self
-            .messages
+        let history = messages
             .iter()
             .enumerate()
             .filter(|(index, _)| Some(*index) != prompt_index)
@@ -252,6 +251,35 @@ impl RunAgentInput {
             .filter_map(message_without_file_parts)
             .collect();
         (user_message, history)
+    }
+
+    fn messages_with_resolved_resumes(&self) -> Vec<RunAgentMessage> {
+        let mut messages = self.messages.clone();
+        for resume in &self.resume {
+            let Some(message) = messages.iter_mut().rev().find(|message| {
+                message.role == "tool"
+                    && message.content.as_ref().is_some_and(|content| {
+                        content
+                            .get("interactionId")
+                            .or_else(|| content.get("interaction_id"))
+                            .and_then(Value::as_str)
+                            == Some(resume.interrupt_id.as_str())
+                    })
+            }) else {
+                continue;
+            };
+            let status = match resume.status {
+                ResumeStatus::Resolved => "resolved",
+                ResumeStatus::Cancelled => "cancelled",
+            };
+            message.content = Some(serde_json::json!({
+                "interaction_id": resume.interrupt_id,
+                "status": status,
+                "response": resume.payload,
+            }));
+            message.error = None;
+        }
+        messages
     }
 
     pub fn frontend_tool_registry(&self) -> Result<crate::agent::tools::ToolRegistry, String> {
@@ -744,6 +772,64 @@ mod file_input_tests {
             part,
             ContentPart::Data(value) if value.get("ag_ui_state").is_some()
         )));
+    }
+
+    #[test]
+    fn test_agui_resume_replaces_pending_tool_result_with_resolution() {
+        let input: RunAgentInput = serde_json::from_value(serde_json::json!({
+            "threadId": "thread-resume-tool",
+            "runId": "run-resume-tool",
+            "messages": [
+                { "id": "u1", "role": "user", "content": "Deploy it" },
+                {
+                    "id": "a1",
+                    "role": "assistant",
+                    "toolCalls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "ask_confirmation",
+                            "arguments": { "question": "Proceed?" }
+                        }
+                    }]
+                },
+                {
+                    "id": "t1",
+                    "role": "tool",
+                    "toolCallId": "call-1",
+                    "name": "ask_confirmation",
+                    "content": {
+                        "interaction_id": "int-1",
+                        "status": "interaction_pending"
+                    }
+                }
+            ],
+            "resume": [{
+                "interruptId": "int-1",
+                "status": "resolved",
+                "payload": { "selectedOptionId": "yes" }
+            }]
+        }))
+        .unwrap();
+
+        let (current, history) = input.split_prompt_and_history();
+        let resolved_content = current.parts.iter().find_map(|part| match part {
+            ContentPart::ToolResult { content, .. } => Some(content),
+            _ => None,
+        });
+
+        assert!(
+            history.iter().any(|message| message.parts.iter().any(|part| matches!(
+                part,
+                ContentPart::ToolCall { id, .. } if id == "call-1"
+            )))
+                && resolved_content.is_some_and(|content| {
+                    let value: Value = serde_json::from_str(content).expect("resolved tool result");
+                    value["status"] == "resolved"
+                        && value["response"]["selectedOptionId"] == "yes"
+                }),
+            "resume must retain the assistant tool call and replace the pending tool result"
+        );
     }
 
     #[test]

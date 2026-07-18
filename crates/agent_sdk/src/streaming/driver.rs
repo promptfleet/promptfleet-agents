@@ -89,7 +89,12 @@ impl AgUiStreamDriver {
             finished: false,
             cancellation_emitted: false,
             initial_state: self.config.initial_state,
-            initial_messages: self.config.initial_messages,
+            snapshot_messages: self.config.initial_messages,
+            snapshot_turn_active: false,
+            snapshot_turn_index: 0,
+            snapshot_assistant_content: String::new(),
+            snapshot_tool_calls: Vec::new(),
+            snapshot_tool_results: Vec::new(),
             pending_interrupts: Vec::new(),
         }
     }
@@ -108,7 +113,12 @@ pub struct AgUiStream {
     finished: bool,
     cancellation_emitted: bool,
     initial_state: serde_json::Value,
-    initial_messages: Vec<serde_json::Value>,
+    snapshot_messages: Vec<serde_json::Value>,
+    snapshot_turn_active: bool,
+    snapshot_turn_index: u32,
+    snapshot_assistant_content: String,
+    snapshot_tool_calls: Vec<serde_json::Value>,
+    snapshot_tool_results: Vec<serde_json::Value>,
     pending_interrupts: Vec<Interrupt>,
 }
 
@@ -206,8 +216,118 @@ impl AgUiStream {
         });
     }
 
+    fn begin_snapshot_turn(&mut self) {
+        if self.snapshot_turn_active {
+            self.finish_snapshot_turn();
+        }
+        self.snapshot_turn_active = true;
+        self.snapshot_turn_index += 1;
+    }
+
+    fn finish_snapshot_turn(&mut self) {
+        if !self.snapshot_turn_active {
+            return;
+        }
+        if !self.snapshot_assistant_content.is_empty() || !self.snapshot_tool_calls.is_empty() {
+            let message_id = if self.snapshot_turn_index == 1 {
+                self.ctx.message_id.clone()
+            } else {
+                format!("{}-turn-{}", self.ctx.message_id, self.snapshot_turn_index)
+            };
+            let content = if self.snapshot_assistant_content.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String(std::mem::take(
+                    &mut self.snapshot_assistant_content,
+                ))
+            };
+            self.snapshot_messages.push(serde_json::json!({
+                "id": message_id,
+                "role": "assistant",
+                "content": content,
+                "toolCalls": std::mem::take(&mut self.snapshot_tool_calls),
+            }));
+        } else {
+            self.snapshot_assistant_content.clear();
+            self.snapshot_tool_calls.clear();
+        }
+        self.snapshot_messages
+            .append(&mut self.snapshot_tool_results);
+        self.snapshot_turn_active = false;
+    }
+
+    fn capture_snapshot_event(&mut self, event: &AgentTraceEvent) {
+        match event {
+            AgentTraceEvent::TurnStarted { .. } => self.begin_snapshot_turn(),
+            AgentTraceEvent::ContentDelta { delta } => {
+                if !self.snapshot_turn_active {
+                    self.begin_snapshot_turn();
+                }
+                self.snapshot_assistant_content.push_str(delta);
+            }
+            AgentTraceEvent::ToolCallStarted { id, name, .. } => {
+                if !self.snapshot_turn_active {
+                    self.begin_snapshot_turn();
+                }
+                self.snapshot_tool_calls.push(serde_json::json!({
+                    "id": id,
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": {},
+                    },
+                }));
+            }
+            AgentTraceEvent::ToolCallArgsCompleted {
+                id,
+                name,
+                arguments,
+                ..
+            } => {
+                if let Some(tool_call) = self
+                    .snapshot_tool_calls
+                    .iter_mut()
+                    .find(|tool_call| tool_call["id"].as_str() == Some(id.as_str()))
+                {
+                    tool_call["function"]["name"] = serde_json::json!(name);
+                    tool_call["function"]["arguments"] = arguments.clone();
+                }
+            }
+            AgentTraceEvent::ToolCallCompleted {
+                id,
+                name,
+                result,
+                success,
+                ..
+            } => {
+                let result_message = serde_json::json!({
+                    "id": format!("{}-tool-{}", self.ctx.message_id, id),
+                    "role": "tool",
+                    "toolCallId": id,
+                    "name": name,
+                    "content": result,
+                    "error": if *success {
+                        serde_json::Value::Null
+                    } else {
+                        serde_json::Value::String(result.to_string())
+                    },
+                });
+                if self.snapshot_turn_active {
+                    self.snapshot_tool_results.push(result_message);
+                } else {
+                    self.snapshot_messages.push(result_message);
+                }
+            }
+            AgentTraceEvent::TurnCompleted { .. } | AgentTraceEvent::Completed { .. } => {
+                self.finish_snapshot_turn();
+            }
+            _ => {}
+        }
+    }
+
     fn enqueue_events(&mut self, event: AgentTraceEvent) {
         self.update_summary(&event);
+        self.capture_snapshot_event(&event);
         if matches!(event, AgentTraceEvent::ContentDelta { .. }) {
             self.maybe_emit_text_message_start();
         }
@@ -227,19 +347,13 @@ impl AgUiStream {
         let mapped = if matches!(event, AgentTraceEvent::Completed { .. })
             && self.summary.status == RunStatus::InputRequired
         {
-            let mut messages = self.initial_messages.clone();
-            if !self.summary.full_text.trim().is_empty() {
-                messages.push(serde_json::json!({
-                    "id": self.ctx.message_id,
-                    "role": "assistant",
-                    "content": self.summary.full_text,
-                }));
-            }
             vec![
                 AgentIoEvent::StateSnapshot {
                     snapshot: self.initial_state.clone(),
                 },
-                AgentIoEvent::MessagesSnapshot { messages },
+                AgentIoEvent::MessagesSnapshot {
+                    messages: self.snapshot_messages.clone(),
+                },
                 AgentIoEvent::RunFinished {
                     thread_id: self.ctx.thread_id.clone(),
                     run_id: self.ctx.run_id.clone(),
@@ -571,6 +685,82 @@ mod tests {
                     schema["required"] == serde_json::json!(["approved"])
                 })
         ));
+    }
+
+    #[tokio::test]
+    async fn test_driver_interrupt_snapshot_preserves_tool_call_and_pending_result() {
+        let stream = futures::stream::iter(vec![
+            AgentTraceEvent::TurnStarted {
+                turn: 1,
+                response_id: None,
+                model: None,
+            },
+            AgentTraceEvent::ToolCallStarted {
+                index: 0,
+                id: "call-1".to_string(),
+                name: "ask_confirmation".to_string(),
+                arguments: serde_json::Value::Null,
+            },
+            AgentTraceEvent::ToolCallArgsCompleted {
+                index: 0,
+                id: "call-1".to_string(),
+                name: "ask_confirmation".to_string(),
+                arguments: serde_json::json!({ "question": "Proceed?" }),
+            },
+            AgentTraceEvent::ToolCallCompleted {
+                index: 0,
+                id: "call-1".to_string(),
+                name: "ask_confirmation".to_string(),
+                result: serde_json::json!({
+                    "interaction_id": "ix-1",
+                    "status": "interaction_pending"
+                }),
+                duration_ms: 1,
+                success: true,
+            },
+            interaction_requested_event(),
+            AgentTraceEvent::TurnCompleted {
+                turn: 1,
+                finish_reason: Some("tool_calls".to_string()),
+            },
+            AgentTraceEvent::Completed {
+                text: None,
+                usage: None,
+            },
+        ]);
+        let events = AgUiStreamDriver::new(AgUiDriverConfig {
+            ctx: test_ctx(),
+            cancel_flag: None,
+            enrichers: vec![],
+            initial_state: serde_json::Value::Null,
+            initial_messages: vec![serde_json::json!({
+                "id": "user-1",
+                "role": "user",
+                "content": "Proceed with care"
+            })],
+        })
+        .drive(stream)
+        .collect::<Vec<_>>()
+        .await;
+        let messages = events
+            .iter()
+            .find_map(|event| match event {
+                AgentIoEvent::MessagesSnapshot { messages } => Some(messages),
+                _ => None,
+            })
+            .expect("messages snapshot");
+
+        assert!(
+            messages.len() == 3
+                && messages[1]["role"] == "assistant"
+                && messages[1]["toolCalls"][0]["id"] == "call-1"
+                && messages[1]["toolCalls"][0]["function"]["arguments"]["question"]
+                    == "Proceed?"
+                && messages[2]["role"] == "tool"
+                && messages[2]["toolCallId"] == "call-1"
+                && messages[2]["content"]["interaction_id"] == "ix-1",
+            "interrupt snapshot must preserve the assistant tool call and its pending result: {messages:?}"
+        );
     }
 
     #[tokio::test]

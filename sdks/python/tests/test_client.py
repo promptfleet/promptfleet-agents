@@ -1,5 +1,8 @@
 import asyncio
+from io import BytesIO
 import ssl
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 from promptfleet_auth import (
     AsyncPromptFleetServiceAccountClient,
@@ -71,6 +74,55 @@ def test_default_http_transport_requires_hostname_and_certificate_verification()
 
     assert context.check_hostname is True
     assert context.verify_mode == ssl.CERT_REQUIRED
+
+
+def test_default_http_transport_sends_sdk_identity_and_json_accept_headers() -> None:
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self) -> bytes:
+            return b'{"access_token":"token","expires_in":300}'
+
+    with patch("promptfleet_auth.client.request.urlopen", return_value=Response()) as send:
+        status, _body = UrllibTransport().post_form(
+            "https://issuer.promptfleet.ai/invoke-trust/token",
+            {"grant_type": "client_credentials"},
+        )
+
+    outgoing = send.call_args.args[0]
+    assert status == 200
+    assert outgoing.get_header("User-agent") == (
+        "promptfleet-service-account-auth-python/0.1"
+    )
+    assert outgoing.get_header("Accept") == "application/json"
+
+
+def test_default_http_transport_normalizes_non_json_http_error() -> None:
+    denied = HTTPError(
+        "https://issuer.promptfleet.ai/invoke-trust/token",
+        403,
+        "Forbidden",
+        {"content-type": "text/plain"},
+        BytesIO(b"error code: 1010\n"),
+    )
+
+    with patch("promptfleet_auth.client.request.urlopen", side_effect=denied):
+        status, body = UrllibTransport().post_form(
+            "https://issuer.promptfleet.ai/invoke-trust/token",
+            {"grant_type": "client_credentials"},
+        )
+
+    assert status == 403
+    assert body == {
+        "error": "http_error_403",
+        "error_description": "error code: 1010\n",
+    }
 
 
 def test_async_client_single_flights_concurrent_token_requests() -> None:

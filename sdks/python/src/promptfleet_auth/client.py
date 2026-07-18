@@ -16,6 +16,7 @@ import truststore
 
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 DEFAULT_INVOKE_TRUST_TOKEN_URL = "https://issuer.promptfleet.ai/invoke-trust/token"
+SDK_USER_AGENT = "promptfleet-service-account-auth-python/0.1"
 
 
 class JwtSigner(Protocol):
@@ -267,13 +268,27 @@ class UrllibTransport:
             url,
             data=body,
             method="POST",
-            headers={"content-type": "application/x-www-form-urlencoded"},
+            headers={
+                "accept": "application/json",
+                "content-type": "application/x-www-form-urlencoded",
+                "user-agent": SDK_USER_AGENT,
+            },
         )
         try:
             with request.urlopen(outgoing, timeout=30, context=self._ssl_context) as response:
                 return response.status, json.loads(response.read())
         except error.HTTPError as exc:
-            return exc.code, json.loads(exc.read())
+            raw_body = exc.read()
+            try:
+                body = json.loads(raw_body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {
+                    "error": f"http_error_{exc.code}",
+                    "error_description": raw_body[:500].decode(
+                        "utf-8", errors="replace"
+                    ),
+                }
+            return exc.code, body
 
 
 class AsyncUrllibTransport:

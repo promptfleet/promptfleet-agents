@@ -682,6 +682,20 @@ mod core_loop_tests {
         reg
     }
 
+    fn frontend_tools() -> ToolRegistry {
+        let mut reg = ToolRegistry::new();
+        reg.register(ToolSpec {
+            name: "render_a2ui".to_string(),
+            description: Some("Render an A2UI surface".to_string()),
+            parameters: serde_json::json!({"type":"object"}),
+            kind: ToolKind::Frontend,
+            strict: false,
+            parallel_ok: false,
+            executor: ToolExecutor::Frontend,
+        });
+        reg
+    }
+
     #[tokio::test]
     async fn core_loop_simple_text() {
         let invoker = MockTurnInvoker::new(vec![TurnResult {
@@ -738,6 +752,61 @@ mod core_loop_tests {
             ev.iter()
                 .any(|e| matches!(e, AgentTraceEvent::Completed { .. }))
         );
+    }
+
+    #[tokio::test]
+    async fn core_loop_frontend_tool_closes_turn_before_run() {
+        let invoker = MockTurnInvoker::new(vec![TurnResult {
+            content: String::new(),
+            tool_calls: vec![ToolCallInfo {
+                index: 0,
+                id: "call_a2ui".into(),
+                name: "render_a2ui".into(),
+                arguments_raw: r#"{"surfaceId":"ops"}"#.into(),
+            }],
+            finish_reason: Some("tool_calls".into()),
+            usage: None,
+        }]);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured_events = events.clone();
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("Render operations".into()),
+            ..Default::default()
+        }];
+
+        let result = core_loop::execute(
+            &invoker,
+            "test",
+            &frontend_tools(),
+            &EngineConfig::default(),
+            &mut messages,
+            &move |event| captured_events.lock().unwrap().push(event),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("frontend tool run should finish for client execution");
+
+        assert_eq!(
+            result
+                .stop_signal
+                .as_ref()
+                .and_then(|signal| signal.get("__client_tool_pending"))
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+        let events = events.lock().unwrap();
+        let turn_finished = events
+            .iter()
+            .position(|event| matches!(event, AgentTraceEvent::TurnCompleted { turn: 1, .. }))
+            .expect("turn must finish");
+        let run_finished = events
+            .iter()
+            .position(|event| matches!(event, AgentTraceEvent::Completed { .. }))
+            .expect("run must finish");
+        assert!(turn_finished < run_finished);
     }
 
     #[tokio::test]

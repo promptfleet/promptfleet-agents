@@ -175,6 +175,14 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                     .get(&tc.name)
                     .is_some_and(|tool| tool.kind == ToolKind::Frontend)
                 {
+                    // A frontend tool ends this server-side turn even though its
+                    // result will be supplied by the AG-UI client. Close the turn
+                    // before closing the run so protocol consumers never observe
+                    // RUN_FINISHED with an active STEP_STARTED lifecycle.
+                    on_event(AgentTraceEvent::TurnCompleted {
+                        turn: turns,
+                        finish_reason: turn_result.finish_reason.clone(),
+                    });
                     on_event(AgentTraceEvent::Completed {
                         text: if accumulated_text.is_empty() {
                             None

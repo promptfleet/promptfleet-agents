@@ -54,6 +54,148 @@ use {
     web_time::Instant,
 };
 
+#[cfg(feature = "observability")]
+struct A2aRequestTelemetry {
+    obs: observability::Obs,
+    span_guard: Option<observability::SpanGuard>,
+    started_at: Instant,
+    method: String,
+    stream_context: Option<TraceContext>,
+    previous_context: Option<TraceContext>,
+    context_restored: bool,
+}
+
+#[cfg(feature = "observability")]
+impl A2aRequestTelemetry {
+    fn start(obs: &Option<observability::Obs>, headers: &HeaderMap, method: &str) -> Option<Self> {
+        let obs = obs.clone()?;
+        let mut propagation_headers = std::collections::HashMap::<String, String>::new();
+        for (key, value) in headers.iter() {
+            if let Ok(value) = value.to_str() {
+                propagation_headers.insert(key.as_str().to_lowercase(), value.to_string());
+            }
+        }
+
+        let peer = propagation_headers
+            .get("x-a2a-peer-service")
+            .map(String::as_str)
+            .unwrap_or("unknown");
+        let parent = observability::Obs::extract_context(&propagation_headers)
+            .ok()
+            .flatten()
+            .unwrap_or_else(W3CTraceContext::new_root);
+        let previous_context = get_current_context();
+        let span_guard = if let Some(otel) = obs.otel_plugin() {
+            Some(otel.start_span_with_w3c_context(
+                span::A2A_SERVER,
+                &parent,
+                &[
+                    (attr::COMPONENT, "a2a_server"),
+                    (attr::OPERATION, method),
+                    (attr::PEER_SERVICE, peer),
+                    (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                    (attr::RPC_METHOD, method),
+                    (attr::PF_KIND, value::KIND_A2A),
+                ],
+            ))
+        } else {
+            Some(obs.span(
+                span::A2A_SERVER,
+                &[
+                    (attr::COMPONENT, "a2a_server"),
+                    (attr::OPERATION, method),
+                    (attr::PEER_SERVICE, peer),
+                    (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
+                    (attr::RPC_METHOD, method),
+                    (attr::PF_KIND, value::KIND_A2A),
+                ],
+            ))
+        };
+        let stream_context = span_guard.as_ref().map(|guard| TraceContext {
+            trace_id: parent.trace_id.clone(),
+            span_id: guard.span_id().to_string(),
+            parent_span_id: Some(parent.parent_id.clone()),
+            sampled: parent.is_sampled(),
+        });
+        if let Some(context) = stream_context.clone() {
+            set_current_context(context);
+        }
+
+        Some(Self {
+            obs,
+            span_guard,
+            started_at: Instant::now(),
+            method: method.to_string(),
+            stream_context,
+            previous_context,
+            context_restored: false,
+        })
+    }
+
+    fn stream_context(&self) -> Option<TraceContext> {
+        self.stream_context.clone()
+    }
+
+    fn restore_context(&mut self) {
+        if self.context_restored {
+            return;
+        }
+        match self.previous_context.take() {
+            Some(context) => set_current_context(context),
+            None => clear_current_context(),
+        }
+        self.context_restored = true;
+    }
+
+    fn finish(&mut self, status: &'static str, outcome: &'static str, span_status: SpanStatus) {
+        let Some(guard) = self.span_guard.take() else {
+            self.restore_context();
+            return;
+        };
+        guard.add_attribute(attr::STATUS, status);
+        guard.add_attribute(attr::PF_OUTCOME, outcome);
+        guard.set_status(span_status);
+        self.obs.metric(
+            metric::A2A_REQUESTS_TOTAL,
+            1.0,
+            &[
+                (attr::COMPONENT, "a2a_server"),
+                (attr::OPERATION, self.method.as_str()),
+                (attr::STATUS, status),
+            ],
+        );
+        self.obs.metric(
+            metric::A2A_LATENCY_MS,
+            self.started_at.elapsed().as_secs_f64() * 1000.0,
+            &[
+                (attr::COMPONENT, "a2a_server"),
+                (attr::OPERATION, self.method.as_str()),
+                (attr::STATUS, status),
+            ],
+        );
+        drop(guard);
+        if let Err(err) = self.obs.maybe_flush() {
+            warn!("observability:flush_failed error={}", err);
+        }
+        self.restore_context();
+    }
+}
+
+#[cfg(feature = "observability")]
+impl Drop for A2aRequestTelemetry {
+    fn drop(&mut self) {
+        if self.span_guard.is_some() {
+            self.finish(
+                value::STATUS_CANCELLED,
+                value::OUTCOME_CANCELLED,
+                SpanStatus::Cancelled,
+            );
+        } else {
+            self.restore_context();
+        }
+    }
+}
+
 /// **A2A HTTP Server** - Native implementation using Axum
 ///
 /// Wraps an A2AProtocol instance to provide HTTP transport.
@@ -758,6 +900,9 @@ impl A2AHttpServer {
             method, id, agent_id
         );
 
+        #[cfg(feature = "observability")]
+        let mut request_telemetry = A2aRequestTelemetry::start(&self.obs, &headers, &method);
+
         #[cfg(feature = "event-stream")]
         if method == crate::method::SEND_STREAMING_MESSAGE {
             if let JsonRpcIncoming::Request(req) = &incoming {
@@ -765,74 +910,16 @@ impl A2AHttpServer {
                     let prop_headers =
                         protocol_transport_core::sanitize_header_map(&headers).into_map();
                     return self
-                        .handle_send_streaming_message(req.clone(), prop_headers)
+                        .handle_send_streaming_message(
+                            req.clone(),
+                            prop_headers,
+                            #[cfg(feature = "observability")]
+                            request_telemetry.take(),
+                        )
                         .await;
                 }
             }
         }
-
-        // Observability: extract context and start span (best-effort).
-        #[cfg(feature = "observability")]
-        let (span_guard, start_time, prev_ctx) = {
-            let mut h = std::collections::HashMap::<String, String>::new();
-            for (k, v) in headers.iter() {
-                if let Ok(v) = v.to_str() {
-                    h.insert(k.as_str().to_lowercase(), v.to_string());
-                }
-            }
-
-            let peer = h
-                .get("x-a2a-peer-service")
-                .map(|s| s.as_str())
-                .unwrap_or("unknown");
-
-            let parent = observability::Obs::extract_context(&h)
-                .ok()
-                .flatten()
-                .unwrap_or_else(W3CTraceContext::new_root);
-
-            let prev = get_current_context();
-
-            let span_guard = self.obs.as_ref().and_then(|obs| {
-                if let Some(otel) = obs.otel_plugin() {
-                    Some(otel.start_span_with_w3c_context(
-                        span::A2A_SERVER,
-                        &parent,
-                        &[
-                            (attr::COMPONENT, "a2a_server"),
-                            (attr::OPERATION, method.as_str()),
-                            (attr::PEER_SERVICE, peer),
-                            (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
-                            (attr::RPC_METHOD, method.as_str()),
-                            (attr::PF_KIND, value::KIND_A2A),
-                        ],
-                    ))
-                } else {
-                    Some(obs.span(
-                        span::A2A_SERVER,
-                        &[
-                            (attr::COMPONENT, "a2a_server"),
-                            (attr::OPERATION, method.as_str()),
-                            (attr::PEER_SERVICE, peer),
-                            (attr::RPC_SYSTEM, value::RPC_SYSTEM_JSONRPC),
-                            (attr::RPC_METHOD, method.as_str()),
-                            (attr::PF_KIND, value::KIND_A2A),
-                        ],
-                    ))
-                }
-            });
-
-            if let Some(g) = &span_guard {
-                set_current_context(TraceContext {
-                    trace_id: parent.trace_id.clone(),
-                    span_id: g.span_id().to_string(),
-                    parent_span_id: Some(parent.parent_id.clone()),
-                    sampled: parent.is_sampled(),
-                });
-            }
-
-            (span_guard, Instant::now(), prev)
-        };
 
         debug!(
             "Delegating to A2A protocol from Axum handler for agent: {} method: {}",
@@ -1040,57 +1127,15 @@ impl A2AHttpServer {
 
         #[cfg(feature = "observability")]
         {
-            if let Some(obs) = &self.obs {
-                let duration_ms = start_time.elapsed().as_secs_f64() * 1000.0;
-                let status = if response.error.is_some() {
-                    value::STATUS_ERROR
+            if let Some(telemetry) = request_telemetry.as_mut() {
+                if response.error.is_some() {
+                    telemetry.finish(
+                        value::STATUS_ERROR,
+                        value::OUTCOME_ERROR,
+                        SpanStatus::Error,
+                    );
                 } else {
-                    value::STATUS_OK
-                };
-                let outcome = if response.error.is_some() {
-                    value::OUTCOME_ERROR
-                } else {
-                    value::OUTCOME_OK
-                };
-
-                if let Some(g) = &span_guard {
-                    g.add_attribute(attr::STATUS, status);
-                    g.add_attribute(attr::PF_OUTCOME, outcome);
-                    g.set_status(if status == value::STATUS_OK {
-                        SpanStatus::Ok
-                    } else {
-                        SpanStatus::Error
-                    });
-                }
-
-                obs.metric(
-                    metric::A2A_REQUESTS_TOTAL,
-                    1.0,
-                    &[
-                        (attr::COMPONENT, "a2a_server"),
-                        (attr::OPERATION, method.as_str()),
-                        (attr::STATUS, status),
-                    ],
-                );
-                obs.metric(
-                    metric::A2A_LATENCY_MS,
-                    duration_ms,
-                    &[
-                        (attr::COMPONENT, "a2a_server"),
-                        (attr::OPERATION, method.as_str()),
-                        (attr::STATUS, status),
-                    ],
-                );
-
-                drop(span_guard);
-
-                if let Err(err) = obs.maybe_flush() {
-                    warn!("observability:flush_failed error={}", err);
-                }
-
-                match prev_ctx {
-                    Some(ctx) => set_current_context(ctx),
-                    None => clear_current_context(),
+                    telemetry.finish(value::STATUS_OK, value::OUTCOME_OK, SpanStatus::Ok);
                 }
             }
         }
@@ -1109,6 +1154,7 @@ impl A2AHttpServer {
         self: Arc<Self>,
         request: JsonRpcRequest,
         request_headers: std::collections::HashMap<String, String>,
+        #[cfg(feature = "observability")] mut telemetry: Option<A2aRequestTelemetry>,
     ) -> Result<Response<Body>, StatusCode> {
         let storage = self
             .task_storage
@@ -1183,6 +1229,45 @@ impl A2AHttpServer {
             }
             event
         });
+        #[cfg(feature = "observability")]
+        let observed_events = {
+            use async_stream::stream;
+            let stream_context = telemetry
+                .as_ref()
+                .and_then(A2aRequestTelemetry::stream_context);
+            if let Some(telemetry) = telemetry.as_mut() {
+                telemetry.restore_context();
+            }
+            stream! {
+                let mut persisted_events = Box::pin(persisted_events);
+                loop {
+                    let next_event = if let Some(context) = stream_context.clone() {
+                        with_context_future(context, persisted_events.next()).await
+                    } else {
+                        persisted_events.next().await
+                    };
+                    let Some(event) = next_event else {
+                        if let Some(telemetry) = telemetry.as_mut() {
+                            telemetry.finish(
+                                value::STATUS_ERROR,
+                                value::OUTCOME_ERROR,
+                                SpanStatus::Error,
+                            );
+                        }
+                        break;
+                    };
+                    if let Some((status, outcome, span_status)) = stream_terminal_status(&event) {
+                        if let Some(telemetry) = telemetry.as_mut() {
+                            telemetry.finish(status, outcome, span_status);
+                        }
+                    }
+                    yield event;
+                }
+            }
+        };
+        #[cfg(feature = "observability")]
+        let sse = a2a_sse_stream(observed_events);
+        #[cfg(not(feature = "observability"))]
         let sse = a2a_sse_stream(persisted_events);
 
         let mut response = sse.into_response();
@@ -1269,6 +1354,34 @@ fn a2a_sse_stream(
             .interval(Duration::from_secs(15))
             .text(":keepalive"),
     )
+}
+
+#[cfg(all(feature = "event-stream", feature = "observability"))]
+fn stream_terminal_status(
+    event: &StreamResponse,
+) -> Option<(&'static str, &'static str, SpanStatus)> {
+    use a2a_protocol_core::data::TaskState;
+
+    match event {
+        StreamResponse::StatusUpdate(update) => match update.status.state {
+            TaskState::Completed => Some((value::STATUS_OK, value::OUTCOME_OK, SpanStatus::Ok)),
+            TaskState::Canceled => Some((
+                value::STATUS_CANCELLED,
+                value::OUTCOME_CANCELLED,
+                SpanStatus::Cancelled,
+            )),
+            TaskState::Failed | TaskState::Rejected => Some((
+                value::STATUS_ERROR,
+                value::OUTCOME_ERROR,
+                SpanStatus::Error,
+            )),
+            _ => None,
+        },
+        StreamResponse::ArtifactUpdate(update) if update.last_chunk == Some(true) => {
+            Some((value::STATUS_OK, value::OUTCOME_OK, SpanStatus::Ok))
+        }
+        _ => None,
+    }
 }
 
 #[cfg(feature = "event-stream")]

@@ -1,5 +1,27 @@
 # AI Changelogs
 
+## 2026-07-19 — A2A streaming server observability lifecycle
+
+### Summary
+
+Extended the native A2A server request span across `SendStreamingMessage` SSE
+execution. Streaming now propagates the server trace context while the agent
+stream is polled, records terminal success/error/cancellation status, emits the
+standard A2A request metrics, flushes the completed span, and closes abandoned
+client streams as cancelled instead of omitting the run entirely.
+
+### Files modified
+
+- `crates/a2a_http_server/src/native_server.rs` — shared request telemetry
+  lifecycle for JSON-RPC and streaming A2A execution.
+- `crates/a2a_http_server/tests/streaming_integration.rs` — regression coverage
+  proving the A2A server trace context remains active during SSE stream polling.
+
+### Tests
+
+- `cargo test -p a2a_http_server --features 'event-stream observability' --test streaming_integration`: **passed** (4 tests).
+- `cargo check --target wasm32-wasip1 -p a2a_http_server --features 'event-stream observability'`: **passed**.
+
 ## 2026-07-18 — Standard AG-UI interrupts, frontend tools, and async auth adapters
 
 ### Summary

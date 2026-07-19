@@ -174,6 +174,84 @@ async fn streaming_endpoint_returns_sse_with_correct_wire_format() {
     );
 }
 
+#[cfg(feature = "observability")]
+#[tokio::test]
+async fn test_streaming_endpoint_propagates_a2a_server_trace_context_while_polled() {
+    use observability::{TraceContext, get_current_context};
+    use std::sync::Mutex;
+
+    struct TraceCapturingStreamingPort {
+        seen: Arc<Mutex<Option<TraceContext>>>,
+    }
+
+    impl A2AStreamingAppPort for TraceCapturingStreamingPort {
+        fn handle_streaming_task(
+            &self,
+            _task_id: String,
+            _message: Message,
+            _request_headers: std::collections::HashMap<String, String>,
+        ) -> Result<
+            Pin<Box<dyn futures_util::Stream<Item = StreamResponse> + Send>>,
+            a2a_protocol_core::A2AError,
+        > {
+            let seen = Arc::clone(&self.seen);
+            Ok(Box::pin(futures_util::stream::once(async move {
+                *seen.lock().expect("trace capture lock poisoned") = get_current_context();
+                StreamResponse::StatusUpdate(TaskStatusUpdateEvent {
+                    id: json!("trace-stream"),
+                    task_id: "task-trace".into(),
+                    context_id: "ctx-trace".into(),
+                    status: TaskStatus::new(TaskState::Completed),
+                })
+            })))
+        }
+    }
+
+    let seen = Arc::new(Mutex::new(None));
+    let card = AgentCard::new("trace-streaming-agent".to_string());
+    let storage = Arc::new(InMemoryTaskStorage::new());
+    let port: Arc<dyn A2AStreamingAppPort> = Arc::new(TraceCapturingStreamingPort {
+        seen: Arc::clone(&seen),
+    });
+    let mut obs_config = observability::ObservabilityConfig::default();
+    obs_config.otel.enabled = true;
+    obs_config.otel.otlp_endpoint = "http://otel:4317".to_string();
+    let obs = observability::Obs::init(obs_config).expect("test observability");
+    let router = A2AHttpServer::new_with_storage(card, storage)
+        .with_streaming_port(port)
+        .with_observability(obs)
+        .build_router();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/jsonrpc")
+        .header("content-type", "application/json")
+        .header(
+            "traceparent",
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+        )
+        .body(Body::from(send_subscribe_body("trace me")))
+        .unwrap();
+    let response = router.oneshot(request).await.expect("stream response");
+    SseCollector::from_response(response)
+        .with_timeout(Duration::from_secs(5))
+        .collect_all()
+        .await
+        .expect("collect traced stream");
+
+    let context = seen
+        .lock()
+        .expect("trace capture lock poisoned")
+        .clone()
+        .expect("stream poll trace context");
+    assert_eq!(context.trace_id, "0af7651916cd43dd8448eb211c80319c");
+    assert_eq!(
+        context.parent_span_id.as_deref(),
+        Some("b7ad6b7169203331")
+    );
+    assert_ne!(context.span_id, "b7ad6b7169203331");
+}
+
 #[tokio::test]
 async fn streaming_capability_reflected_in_agent_card() {
     let router = build_server(vec![]);

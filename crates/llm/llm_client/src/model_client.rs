@@ -210,41 +210,96 @@ impl HttpModelClient {
                 )))
             })?;
 
-        let mut builder = client.post(&url);
-        for (k, v) in self.make_headers()? {
-            builder = builder.header(&k, &v);
-        }
-        builder = builder.header("accept", "text/event-stream");
+        let headers = self.make_headers()?;
+        let mut rate_limit_retries = 0_u32;
 
-        let response = builder.json(&payload).send().await.map_err(|e| {
-            log::warn!("HttpModelClient::post_sse connection error: {}", e);
-            LlmError::Transport(TransportError::Network(e.to_string()))
-        })?;
+        loop {
+            let mut builder = client.post(&url);
+            for (key, value) in &headers {
+                builder = builder.header(key.as_str(), value.as_str());
+            }
+            builder = builder.header("accept", "text/event-stream");
 
-        let status = response.status().as_u16();
-        log::debug!("HttpModelClient::post_sse status={}", status);
+            let response = builder.json(&payload).send().await.map_err(|e| {
+                log::warn!("HttpModelClient::post_sse connection error: {}", e);
+                LlmError::Transport(TransportError::Network(e.to_string()))
+            })?;
 
-        if status >= 400 {
-            let body = response.bytes().await.ok().map(|b| b.to_vec());
+            let status = response.status().as_u16();
+            log::debug!("HttpModelClient::post_sse status={}", status);
+
+            if status < 400 {
+                return Ok(response);
+            }
+
+            let response_headers = response
+                .headers()
+                .iter()
+                .filter_map(|(key, value)| {
+                    value
+                        .to_str()
+                        .ok()
+                        .map(|value| (key.as_str().to_string(), value.to_string()))
+                })
+                .collect::<HashMap<_, _>>();
+            let body = response.bytes().await.ok().map(|bytes| bytes.to_vec());
             let preview = body
                 .as_ref()
-                .map(|b| String::from_utf8_lossy(b).to_string())
+                .map(|bytes| String::from_utf8_lossy(bytes).to_string())
                 .unwrap_or_default();
+
+            if status == 429 && rate_limit_retries < 6 {
+                let delay = rate_limit_retry_delay(&response_headers, rate_limit_retries);
+                rate_limit_retries += 1;
+                log::warn!(
+                    "HttpModelClient::post_sse rate limited; retry={}/6 delay_ms={} body={}",
+                    rate_limit_retries,
+                    delay.as_millis(),
+                    preview
+                );
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+
             log::warn!(
-                "HttpModelClient::post_sse error status={} body={}",
+                "HttpModelClient::post_sse error status={} body={} headers={:?}",
                 status,
-                preview
+                preview,
+                response_headers
             );
             return Err(LlmError::Transport(TransportError::Http {
                 status,
-                message: format!("HTTP {} error", status),
+                message: if preview.is_empty() {
+                    format!("HTTP {status} error")
+                } else {
+                    format!("HTTP {status} error: {preview}")
+                },
                 body,
-                headers: None,
+                headers: Some(response_headers),
             }));
         }
-
-        Ok(response)
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn rate_limit_retry_delay(
+    headers: &HashMap<String, String>,
+    retry_index: u32,
+) -> std::time::Duration {
+    if let Some(milliseconds) = headers
+        .get("x-ms-retry-after-ms")
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        return std::time::Duration::from_millis(milliseconds.min(60_000));
+    }
+    if let Some(seconds) = headers
+        .get("retry-after")
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        return std::time::Duration::from_secs(seconds.min(60));
+    }
+
+    std::time::Duration::from_secs(1_u64.checked_shl(retry_index.min(5)).unwrap_or(32))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -397,12 +452,14 @@ mod transport_integration_tests {
     use crate::error::LlmError;
     use axum::{
         Router,
+        extract::State,
         http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
         response::Response,
         routing::post,
     };
     use protocol_transport_core::TransportError;
     use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::{net::TcpListener, task::JoinHandle};
 
     async fn spawn_server(router: Router) -> (String, JoinHandle<()>) {
@@ -450,6 +507,22 @@ mod transport_integration_tests {
         let mut response = Response::new("upstream unavailable".to_string());
         *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
         response
+    }
+
+    async fn sse_rate_limited_then_ok(
+        State(attempts): State<Arc<AtomicUsize>>,
+    ) -> Response<String> {
+        let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+        if attempt < 2 {
+            let mut response = Response::new("rate limited".to_string());
+            *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+            response
+                .headers_mut()
+                .insert("retry-after", HeaderValue::from_static("0"));
+            response
+        } else {
+            Response::new("data: [DONE]\n\n".to_string())
+        }
     }
 
     async fn anthropic_shaped_bad_gateway() -> Response<String> {
@@ -546,18 +619,34 @@ mod transport_integration_tests {
                 headers,
             }) => {
                 assert_eq!(status, 503);
-                assert_eq!(message, "HTTP 503 error");
+                assert!(message.contains("upstream unavailable"));
                 assert!(
                     String::from_utf8_lossy(&body.expect("body should be preserved"))
                         .contains("upstream unavailable")
                 );
-                assert!(
-                    headers.is_none(),
-                    "post_sse currently normalizes HTTP errors with no headers"
-                );
+                assert!(headers.is_some(), "post_sse must preserve HTTP headers");
             }
             other => panic!("expected HTTP transport error, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_post_sse_retries_429_without_consuming_an_agent_turn() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route("/sse-rate-limit", post(sse_rate_limited_then_ok))
+            .with_state(attempts.clone());
+        let (base_url, server) = spawn_server(app).await;
+        let client = build_client(base_url);
+
+        let response = client
+            .post_sse("/sse-rate-limit", json!({"stream": true}))
+            .await
+            .expect("rate-limited request should recover");
+        server.abort();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 
     #[tokio::test]

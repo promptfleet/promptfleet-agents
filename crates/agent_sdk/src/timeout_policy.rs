@@ -26,7 +26,7 @@ pub struct TimeoutPolicy {
     /// Total activation budget for cold-start retries (ms). Default: 60_000.
     pub activation_budget_ms: u64,
     /// Wall-clock ceiling for LLM execution loops (ms).
-    /// `Some(120_000)` = 2 min default. `None` = unlimited.
+    /// `None` = unlimited. A wall-clock ceiling is opt-in.
     pub wall_clock_ms: Option<u64>,
 }
 
@@ -44,18 +44,18 @@ impl TimeoutPolicy {
             first_byte_ms: 45_000,
             idle_ms: 90_000,
             activation_budget_ms: 60_000,
-            wall_clock_ms: Some(120_000),
+            wall_clock_ms: None,
         }
     }
 
-    /// RPC (non-streaming) defaults. Total wall-clock 30s, no idle.
+    /// RPC (non-streaming) transport defaults with no execution wall-clock ceiling.
     pub fn rpc_default() -> Self {
         Self {
             connect_ms: 10_000,
             first_byte_ms: 30_000,
             idle_ms: 30_000,
             activation_budget_ms: 60_000,
-            wall_clock_ms: Some(30_000),
+            wall_clock_ms: None,
         }
     }
 
@@ -90,13 +90,13 @@ mod tests {
         assert_eq!(p.first_byte_ms, 45_000);
         assert_eq!(p.idle_ms, 90_000);
         assert_eq!(p.activation_budget_ms, 60_000);
-        assert_eq!(p.wall_clock_ms, Some(120_000));
+        assert_eq!(p.wall_clock_ms, None);
     }
 
     #[test]
     fn rpc_default_values() {
         let p = TimeoutPolicy::rpc_default();
-        assert_eq!(p.wall_clock_ms, Some(30_000));
+        assert_eq!(p.wall_clock_ms, None);
     }
 
     #[test]

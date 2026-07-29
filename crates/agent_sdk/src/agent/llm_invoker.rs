@@ -157,8 +157,8 @@ pub struct LlmRequestDefaults {
 pub struct LlmPolicy {
     /// When true, require a finalization checkpoint turn when the model would otherwise stop.
     pub finalize_required: bool,
-    /// Stop after this many consecutive tool failures.
-    pub max_failed_tool_calls: usize,
+    /// Stop after this many consecutive tool failures; `None` disables.
+    pub max_failed_tool_calls: Option<usize>,
     /// Cap total LLM turns; `None` means no limit.
     pub max_turns: Option<usize>,
     /// Cap total tool invocations; `None` means no limit.
@@ -187,11 +187,11 @@ impl Default for LlmPolicy {
     fn default() -> Self {
         Self {
             finalize_required: true,
-            max_failed_tool_calls: 5,
+            max_failed_tool_calls: None,
             max_turns: None,
             max_tool_calls: None,
-            max_no_progress_turns: Some(3),
-            wall_clock_timeout_ms: Some(120_000),
+            max_no_progress_turns: None,
+            wall_clock_timeout_ms: None,
             checkpoint_mode: CheckpointMode::TaskObservable,
             checkpoint_allow_message_response: false,
             checkpoint_mirror_internal_state_to_task_meta: true,
@@ -209,7 +209,12 @@ mod tests {
     fn llm_policy_default() {
         let p = LlmPolicy::default();
         assert!(p.finalize_required);
-        assert_eq!(p.max_failed_tool_calls, 5);
+        assert_eq!(p.max_failed_tool_calls, None);
+        assert_eq!(p.max_turns, None);
+        assert_eq!(p.max_tool_calls, None);
+        assert_eq!(p.max_no_progress_turns, None);
+        assert_eq!(p.wall_clock_timeout_ms, None);
+        assert_eq!(p.max_context_tokens, None);
     }
 
     #[test]

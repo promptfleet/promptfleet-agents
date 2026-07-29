@@ -78,7 +78,7 @@ pub trait LlmTurnInvoker: Send + Sync {
 /// [`LlmPolicy`](crate::agent::llm_invoker::LlmPolicy).
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// Maximum LLM turns before the loop stops. `None` = unlimited. Default: 10.
+    /// Maximum LLM turns before the loop stops. `None` = unlimited (the default).
     pub max_turns: Option<usize>,
     /// Maximum total tool calls across all turns. `None` = unlimited.
     pub max_tool_calls: Option<usize>,
@@ -95,9 +95,9 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            max_turns: Some(10),
+            max_turns: None,
             max_tool_calls: None,
-            wall_clock_timeout_ms: Some(120_000),
+            wall_clock_timeout_ms: None,
             max_context_tokens: None,
             request_defaults: None,
         }
@@ -293,11 +293,11 @@ impl ToolEngine {
     ) -> AgentTraceStream {
         use super::invokers::StreamingTurnInvoker;
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<AgentTraceEvent>();
         let tx_for_delta = tx.clone();
         let tx_for_tools = tx.clone();
         let delta_sink: Arc<dyn Fn(AgentTraceEvent) + Send + Sync> = Arc::new(move |event| {
-            let _ = tx_for_delta.try_send(event);
+            let _ = tx_for_delta.send(event);
         });
         let invoker = StreamingTurnInvoker::new(self.llm.clone(), delta_sink);
 
@@ -307,10 +307,10 @@ impl ToolEngine {
 
         tokio::spawn(async move {
             let on_event = |event: AgentTraceEvent| {
-                let _ = tx.try_send(event);
+                let _ = tx.send(event);
             };
             let event_sink: Arc<dyn Fn(AgentTraceEvent) + Send + Sync> = Arc::new(move |event| {
-                let _ = tx_for_tools.try_send(event);
+                let _ = tx_for_tools.send(event);
             });
             let _ = super::core_loop::execute(
                 &invoker,
@@ -396,9 +396,9 @@ impl ToolEngineBuilder {
         let model = self.model.ok_or("ToolEngineBuilder: `model` is required")?;
 
         let config = EngineConfig {
-            max_turns: self.max_turns.or(Some(10)),
+            max_turns: self.max_turns,
             max_tool_calls: self.max_tool_calls,
-            wall_clock_timeout_ms: self.wall_clock_timeout_ms.or(Some(120_000)),
+            wall_clock_timeout_ms: self.wall_clock_timeout_ms,
             max_context_tokens: self.max_context_tokens,
             request_defaults: self.request_defaults,
         };

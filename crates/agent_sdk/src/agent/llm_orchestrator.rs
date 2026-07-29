@@ -174,14 +174,14 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
     use crate::agent::engine::{StreamingTurnInvoker, core_loop};
     use crate::agent::trace::AgentTraceEvent;
 
-    let (tx, rx) = tokio::sync::mpsc::channel::<AgentTraceEvent>(64);
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<AgentTraceEvent>();
     let tx_for_delta = tx.clone();
     let tx_for_tools = tx.clone();
     let cancel_flag = cancel_flag.unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
     let cancel_flag_for_task = cancel_flag.clone();
 
     let delta_sink: Arc<dyn Fn(AgentTraceEvent) + Send + Sync> = Arc::new(move |event| {
-        let _ = tx_for_delta.try_send(event);
+        let _ = tx_for_delta.send(event);
     });
     let invoker = StreamingTurnInvoker::new(llm, delta_sink);
 
@@ -200,7 +200,7 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
         let (effective_system_message, retained_history) = match prepared_history {
             Some(Ok(prepared)) => (prepared.system_message, Some(prepared.retained_history)),
             Some(Err(err)) => {
-                let _ = tx.try_send(AgentTraceEvent::Failed {
+                let _ = tx.send(AgentTraceEvent::Failed {
                     message: err.to_string(),
                 });
                 return;
@@ -226,10 +226,10 @@ pub(crate) fn run_tools_loop_stream_with_skills_and_history_runtime(
         let config = policy_to_engine_config(&policy, request_defaults.as_ref());
 
         let on_event = |event: AgentTraceEvent| {
-            let _ = tx.try_send(event);
+            let _ = tx.send(event);
         };
         let event_sink: Arc<dyn Fn(AgentTraceEvent) + Send + Sync> = Arc::new(move |event| {
-            let _ = tx_for_tools.try_send(event);
+            let _ = tx_for_tools.send(event);
         });
         let _ = core_loop::execute(
             &invoker,
@@ -621,11 +621,38 @@ pub(crate) fn policy_to_engine_config(
     request_defaults: Option<&LlmRequestDefaults>,
 ) -> crate::agent::engine::EngineConfig {
     crate::agent::engine::EngineConfig {
-        max_turns: Some(policy.max_turns.unwrap_or(10)),
+        max_turns: policy.max_turns,
         max_tool_calls: policy.max_tool_calls,
         wall_clock_timeout_ms: policy.wall_clock_timeout_ms,
         max_context_tokens: policy.max_context_tokens,
         request_defaults: request_defaults.cloned(),
+    }
+}
+
+#[cfg(test)]
+mod policy_config_tests {
+    use super::*;
+
+    #[test]
+    fn test_policy_to_engine_config_omitted_max_turns_is_unlimited() {
+        let config = policy_to_engine_config(&LlmPolicy::default(), None);
+
+        assert_eq!(config.max_turns, None);
+        assert_eq!(config.max_tool_calls, None);
+        assert_eq!(config.wall_clock_timeout_ms, None);
+        assert_eq!(config.max_context_tokens, None);
+    }
+
+    #[test]
+    fn test_policy_to_engine_config_explicit_max_turns_is_preserved() {
+        let policy = LlmPolicy {
+            max_turns: Some(17),
+            ..Default::default()
+        };
+
+        let config = policy_to_engine_config(&policy, None);
+
+        assert_eq!(config.max_turns, Some(17));
     }
 }
 
@@ -888,6 +915,38 @@ pub(crate) async fn execute_runtime(
             }
         }
     }
+}
+
+/// Execute the protocol-neutral runtime loop with the SDK's default history
+/// policy.
+pub async fn execute_runtime_default_history(
+    llm: Arc<dyn LlmInvoker>,
+    model: &str,
+    tools: &ToolRegistry,
+    policy: &LlmPolicy,
+    msg_ctx: &MessageContext,
+    task_ctx: Option<TaskContext>,
+    system_message: Option<&str>,
+    request_defaults: Option<&LlmRequestDefaults>,
+    skill_context: Option<&crate::agent::skill::SkillContext>,
+    skill_summary: Option<&str>,
+) -> SdkResult<RuntimeResponse> {
+    let history_runtime = crate::agent::history_policy::default_runtime();
+    execute_runtime(
+        llm,
+        model,
+        tools,
+        policy,
+        msg_ctx,
+        task_ctx,
+        system_message,
+        request_defaults,
+        skill_context,
+        skill_summary,
+        history_runtime.as_ref(),
+        None,
+    )
+    .await
 }
 
 async fn attach_continuation_update(
@@ -1683,6 +1742,87 @@ mod stream_tests {
             matches!(last, AgentTraceEvent::Failed { message } if message.contains("Turn limit")),
             "expected Failed with turn limit, got {:?}",
             last
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stream_default_policy_allows_more_than_ten_turns() {
+        let mut turns = Vec::new();
+        for turn in 1..=11 {
+            turns.push(vec![
+                llm_client::StreamEvent::StreamStart {
+                    id: None,
+                    model: None,
+                },
+                llm_client::StreamEvent::ToolCallStart {
+                    index: 0,
+                    id: format!("c{turn}"),
+                    name: "echo".into(),
+                },
+                llm_client::StreamEvent::ToolCallDelta {
+                    index: 0,
+                    arguments_delta: "{}".into(),
+                },
+                llm_client::StreamEvent::Done {
+                    finish_reason: Some("tool_calls".into()),
+                    usage: None,
+                },
+            ]);
+        }
+        turns.push(vec![
+            llm_client::StreamEvent::StreamStart {
+                id: None,
+                model: None,
+            },
+            llm_client::StreamEvent::ContentDelta {
+                delta: "done".into(),
+            },
+            llm_client::StreamEvent::Done {
+                finish_reason: Some("stop".into()),
+                usage: None,
+            },
+        ]);
+
+        let mut tools = ToolRegistry::new();
+        tools.register(ToolSpec {
+            name: "echo".to_string(),
+            description: Some("Echo the input".to_string()),
+            parameters: serde_json::json!({"type":"object"}),
+            kind: crate::agent::tools::ToolKind::Function,
+            strict: false,
+            parallel_ok: false,
+            executor: ToolExecutor::Simple(Arc::new(|args| {
+                Box::pin(async move {
+                    tokio::task::yield_now().await;
+                    Ok(serde_json::json!({"echoed": args}))
+                })
+            })),
+        });
+
+        let mut stream = run_tools_loop_stream(
+            scenario_invoker(turns),
+            "gpt-4".into(),
+            tools,
+            LlmPolicy::default(),
+            test_msg_ctx("test"),
+            None,
+            None,
+            None,
+        );
+
+        let mut events = Vec::new();
+        while let Some(event) = stream.next().await {
+            events.push(event);
+        }
+
+        assert!(
+            matches!(
+                events.last(),
+                Some(AgentTraceEvent::Completed { text, .. })
+                    if text.as_deref() == Some("done")
+            ),
+            "expected completion after 12 turns, got {:?}",
+            events.last()
         );
     }
 

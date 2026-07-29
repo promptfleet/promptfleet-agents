@@ -82,17 +82,6 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
                 });
             }
         }
-        if let Some(max_tc) = config.max_tool_calls {
-            if total_tool_calls >= max_tc {
-                on_event(AgentTraceEvent::Failed {
-                    message: format!("Tool call limit reached ({})", max_tc),
-                });
-                return Err(EngineError::ToolCallLimit {
-                    count: total_tool_calls,
-                });
-            }
-        }
-
         // ── Build LLM request ───────────────────────────────────────
         let tool_schemas = build_tool_schemas(tools);
 
@@ -168,6 +157,19 @@ pub(crate) async fn execute<F: Fn(AgentTraceEvent)>(
             messages.push(assistant_msg);
 
             for tc in &turn_result.tool_calls {
+                if config
+                    .max_tool_calls
+                    .is_some_and(|max_tool_calls| total_tool_calls >= max_tool_calls)
+                {
+                    let max_tool_calls = config.max_tool_calls.expect("checked as present");
+                    on_event(AgentTraceEvent::Failed {
+                        message: format!("Tool call limit reached ({max_tool_calls})"),
+                    });
+                    return Err(EngineError::ToolCallLimit {
+                        count: total_tool_calls,
+                    });
+                }
+
                 let arguments: serde_json::Value = serde_json::from_str(&tc.arguments_raw)
                     .unwrap_or_else(|_| serde_json::json!({"_raw": tc.arguments_raw}));
 

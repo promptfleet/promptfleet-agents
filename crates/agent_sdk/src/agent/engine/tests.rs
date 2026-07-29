@@ -252,9 +252,79 @@ mod tool_engine_tests {
         )));
     }
 
+    #[tokio::test]
+    async fn engine_run_stream_preserves_terminal_event_after_large_buffered_burst() {
+        let mut turns = (0..20)
+            .map(|index| {
+                vec![
+                    llm_client::StreamEvent::ToolCallStart {
+                        index: 0,
+                        id: format!("call_{index}"),
+                        name: "echo".into(),
+                    },
+                    llm_client::StreamEvent::ToolCallDelta {
+                        index: 0,
+                        arguments_delta: "{}".into(),
+                    },
+                    llm_client::StreamEvent::Done {
+                        finish_reason: Some("tool_calls".into()),
+                        usage: None,
+                    },
+                ]
+            })
+            .collect::<Vec<_>>();
+        turns.push(vec![
+            llm_client::StreamEvent::ContentDelta {
+                delta: "finished".into(),
+            },
+            llm_client::StreamEvent::Done {
+                finish_reason: Some("stop".into()),
+                usage: None,
+            },
+        ]);
+        let engine = ToolEngine::new(
+            scenario_invoker(turns),
+            "test-model",
+            echo_tools(),
+            EngineConfig::default(),
+        );
+
+        let mut stream = engine.run_stream("System", "Run many tools");
+        tokio::task::yield_now().await;
+        let mut events = Vec::new();
+        while let Some(event) = stream.next().await {
+            events.push(event);
+        }
+
+        assert!(events.len() > 64, "expected a burst larger than the old queue");
+        assert!(matches!(
+            events.last(),
+            Some(AgentTraceEvent::Completed { text, .. })
+                if text.as_deref() == Some("finished")
+        ));
+    }
+
     // =====================================================================
     // Builder tests
     // =====================================================================
+
+    #[test]
+    fn test_engine_config_default_has_no_turn_limit() {
+        assert_eq!(EngineConfig::default().max_turns, None);
+    }
+
+    #[test]
+    fn test_engine_builder_omitted_max_turns_is_unlimited() {
+        let invoker: Arc<dyn LlmStreamInvoker> = scenario_invoker(vec![]);
+
+        let engine = ToolEngine::builder()
+            .llm(invoker)
+            .model("test")
+            .build()
+            .expect("builder should succeed");
+
+        assert_eq!(engine.config.max_turns, None);
+    }
 
     #[tokio::test]
     async fn engine_builder_works() {
@@ -279,6 +349,8 @@ mod tool_engine_tests {
             .timeout_ms(10_000)
             .build()
             .expect("builder should succeed");
+
+        assert_eq!(engine.config.max_turns, Some(5));
 
         let result = engine
             .run_text("Sys", "User")
@@ -1085,5 +1157,102 @@ mod core_loop_tests {
             "messages should be preserved for adapter use: {:?}",
             messages
         );
+    }
+
+    #[tokio::test]
+    async fn core_loop_tool_limit_allows_final_synthesis_turn() {
+        let invoker = MockTurnInvoker::new(vec![
+            TurnResult {
+                content: String::new(),
+                tool_calls: vec![ToolCallInfo {
+                    index: 0,
+                    id: "c1".into(),
+                    name: "echo".into(),
+                    arguments_raw: "{}".into(),
+                }],
+                finish_reason: Some("tool_calls".into()),
+                usage: None,
+            },
+            TurnResult {
+                content: "finished".into(),
+                tool_calls: vec![],
+                finish_reason: Some("stop".into()),
+                usage: None,
+            },
+        ]);
+        let config = EngineConfig {
+            max_tool_calls: Some(1),
+            ..Default::default()
+        };
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("test".into()),
+            ..Default::default()
+        }];
+
+        let result = core_loop::execute(
+            &invoker,
+            "test",
+            &echo_tools(),
+            &config,
+            &mut messages,
+            &|_| {},
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("the tool-call cap must still allow a final text turn");
+
+        assert_eq!(result.text.as_deref(), Some("finished"));
+        assert_eq!(result.tool_calls_made, 1);
+    }
+
+    #[tokio::test]
+    async fn core_loop_tool_limit_stops_before_exceeding_multi_call_response() {
+        let invoker = MockTurnInvoker::new(vec![TurnResult {
+            content: String::new(),
+            tool_calls: vec![
+                ToolCallInfo {
+                    index: 0,
+                    id: "c1".into(),
+                    name: "echo".into(),
+                    arguments_raw: "{}".into(),
+                },
+                ToolCallInfo {
+                    index: 1,
+                    id: "c2".into(),
+                    name: "echo".into(),
+                    arguments_raw: "{}".into(),
+                },
+            ],
+            finish_reason: Some("tool_calls".into()),
+            usage: None,
+        }]);
+        let config = EngineConfig {
+            max_tool_calls: Some(1),
+            ..Default::default()
+        };
+        let mut messages = vec![ChatMessage {
+            role: "user".into(),
+            content: Some("test".into()),
+            ..Default::default()
+        }];
+
+        let error = core_loop::execute(
+            &invoker,
+            "test",
+            &echo_tools(),
+            &config,
+            &mut messages,
+            &|_| {},
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect_err("the second tool call must not execute");
+
+        assert!(matches!(error, EngineError::ToolCallLimit { count: 1 }));
     }
 }
